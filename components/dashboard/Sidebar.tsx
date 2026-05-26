@@ -3,12 +3,12 @@
 import Link from "next/link";
 
 import {
-  LayoutDashboard,
-  ShoppingBag,
-  Package,
-  Factory,
-  DollarSign,
-  Users,
+LayoutDashboard,
+ShoppingBag,
+Package,
+Factory,
+DollarSign,
+ClipboardList,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -45,7 +45,12 @@ export default function Sidebar() {
       icono: DollarSign,
     },
 
-
+    {
+     nombre: "Productos Pendientes",
+     ruta: "/productos-pendientes",
+     icono: ClipboardList,
+    },
+    
   ];
 
   return (
