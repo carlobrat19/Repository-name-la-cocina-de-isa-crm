@@ -145,32 +145,38 @@ useState(
     } = await supabase
       .from("pedidos")
       .insert([
-        {
-          cliente,
-          telefono,
-          direccion,
+{
+cliente,
 
-          fecha_pedido:
-            fechaCreacion,
+telefono,
 
-          fecha_entrega:
-            fechaEntrega,
+direccion,
 
-          estado,
+fecha_pedido:
+fechaCreacion,
 
-          pago_estado:
-            pagoEstado,
+fecha_entrega:
+fechaEntrega,
 
-          forma_pago:
-            formaPago,
+estado,
 
-          total: totalPedido,
+pago_estado:
+pagoEstado,
 
-          observaciones,
+forma_pago:
+formaPago,
 
-          codigo: "",
-        },
-      ])
+total:
+totalPedido,
+
+observaciones,
+
+vendedor,
+
+codigo:
+"",
+},
+])
       .select();
 
     // ERROR PEDIDO
