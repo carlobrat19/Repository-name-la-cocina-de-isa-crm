@@ -45,11 +45,6 @@ export default function Sidebar() {
       icono: DollarSign,
     },
 
-    {
-      nombre: "Clientes",
-      ruta: "/clientes",
-      icono: Users,
-    },
 
   ];
 
