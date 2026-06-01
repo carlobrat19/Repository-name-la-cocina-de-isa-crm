@@ -18,7 +18,7 @@ const [saldo,setSaldo]=
 useState(0);
 
 const [filtro,setFiltro]=
-useState("Todo");
+useState("Mes");
 
 const [desde,setDesde]=
 useState("");
