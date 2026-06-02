@@ -692,15 +692,22 @@ codigo:
         <div className="flex items-center gap-3 mt-4 mb-6">
 
   <input
-    type="checkbox"
-    checked={requiereEnvio}
-    onChange={(e)=>
-      setRequiereEnvio(
-        e.target.checked
-      )
-    }
-    className="h-5 w-5"
-  />
+  type="checkbox"
+  checked={requiereEnvio}
+  onChange={(e)=>
+    setRequiereEnvio(
+      e.target.checked
+    )
+  }
+  className="
+    h-5
+    w-5
+    accent-blue-600
+    cursor-pointer
+    border
+    border-black
+  "
+/>
 
   <label className="font-bold">
 
@@ -709,7 +716,7 @@ codigo:
   </label>
 
 </div>
-<div>
+<div> 
 
 <p className="
 mb-2
