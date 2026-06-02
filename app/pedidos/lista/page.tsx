@@ -338,7 +338,7 @@ fechaEntregaFiltro,
             {/* BUSCADOR */}
             <input
               type="text"
-              placeholder="Buscar cliente o código"
+              placeholder="Buscar"
               value={busqueda}
               onChange={(e) =>
                 setBusqueda(
@@ -346,6 +346,7 @@ fechaEntregaFiltro,
                 )
               }
               className="
+              w-36
               bg-white
               text-gray-800
               placeholder-gray-400
