@@ -567,6 +567,7 @@ e.target.value
 }
 
 className="
+w-40
 bg-white
 text-gray-800
 border
