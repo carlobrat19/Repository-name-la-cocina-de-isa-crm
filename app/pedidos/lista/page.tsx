@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 
+
 import { supabase } from "../../../lib/supabase";
 
 export default function ListaPedidosPage() {
@@ -30,7 +31,10 @@ export default function ListaPedidosPage() {
     useState("Todos");
 
   const [vendedorFiltro, setVendedorFiltro] =
-useState("Todos");
+    useState("Todos");
+
+  const [envioFiltro, setEnvioFiltro] =
+    useState("Todos");
 
   // NUEVOS FILTROS FECHA
   const [fechaPedidoFiltro, setFechaPedidoFiltro] =
@@ -220,8 +224,7 @@ useState("Todos");
                 fechaPedidoFiltro;
           const coincideVendedor =
 
-vendedorFiltro ===
-"Todos"
+vendedorFiltro === "Todos"
 
 ?
 
@@ -231,14 +234,41 @@ true
 
 pedido.vendedor ===
 vendedorFiltro;
-          const coincideFechaEntrega =
 
-            fechaEntregaFiltro === ""
+const coincideEnvio =
 
-              ? true
+envioFiltro ===
+"Todos"
 
-              : pedido.fecha_entrega ===
-                fechaEntregaFiltro;
+?
+
+true
+
+:
+
+envioFiltro ===
+"Con envío"
+
+?
+
+pedido.requiere_envio === true
+
+:
+
+pedido.requiere_envio === false;
+
+const coincideFechaEntrega =
+
+fechaEntregaFiltro === ""
+
+?
+
+true
+
+:
+
+pedido.fecha_entrega ===
+fechaEntregaFiltro;
 
           return (
 
@@ -249,6 +279,8 @@ coincideEstado
 coincidePago
 &&
 coincideVendedor
+&&
+coincideEnvio
 &&
 coincideFechaPedido
 &&
