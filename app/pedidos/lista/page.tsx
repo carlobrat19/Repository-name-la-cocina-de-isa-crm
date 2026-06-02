@@ -333,7 +333,7 @@ fechaEntregaFiltro,
         {/* FILTROS */}
         <div className="bg-white rounded-[35px] shadow-2xl border border-gray-200 p-6">
 
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-8 gap-2">
 
             {/* BUSCADOR */}
             <input
