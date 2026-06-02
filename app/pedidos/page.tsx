@@ -44,7 +44,9 @@ export default function PedidosPage() {
   const [vendedor,setVendedor]=
 useState(
 "REDES"
-);  
+);
+const [requiereEnvio,setRequiereEnvio]=
+useState(false);  
 
   // OBTENER PRODUCTOS
   async function obtenerProductos() {
@@ -172,6 +174,8 @@ totalPedido,
 observaciones,
 
 vendedor,
+requiere_envio:
+requiereEnvio,
 
 codigo:
 "",
@@ -685,6 +689,26 @@ codigo:
           />
 
         </div>
+        <div className="flex items-center gap-3 mt-4 mb-6">
+
+  <input
+    type="checkbox"
+    checked={requiereEnvio}
+    onChange={(e)=>
+      setRequiereEnvio(
+        e.target.checked
+      )
+    }
+    className="h-5 w-5"
+  />
+
+  <label className="font-bold">
+
+    Requiere envío
+
+  </label>
+
+</div>
 <div>
 
 <p className="
