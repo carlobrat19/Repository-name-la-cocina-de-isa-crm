@@ -689,31 +689,37 @@ codigo:
           />
 
         </div>
-        <div className="flex items-center gap-3 mt-4 mb-6">
+        <div className="mb-6">
 
-  <input
-  type="checkbox"
-  checked={requiereEnvio}
-  onChange={(e)=>
-    setRequiereEnvio(
-      e.target.checked
-    )
-  }
-  className="
-    h-5
-    w-5
-    accent-blue-600
-    cursor-pointer
-    border
-    border-black
-  "
-/>
-
-  <label className="font-bold">
-
+  <p className="font-bold mb-2">
     Requiere envío
+  </p>
 
-  </label>
+  <select
+    value={requiereEnvio ? "SI" : "NO"}
+    onChange={(e) =>
+      setRequiereEnvio(
+        e.target.value === "SI"
+      )
+    }
+    className="
+      w-full
+      border
+      border-gray-300
+      p-4
+      rounded-2xl
+      bg-white
+    "
+  >
+    <option value="NO">
+      No
+    </option>
+
+    <option value="SI">
+      Sí
+    </option>
+
+  </select>
 
 </div>
 <div> 
