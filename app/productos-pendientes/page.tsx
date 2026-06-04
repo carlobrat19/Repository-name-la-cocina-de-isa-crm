@@ -9,6 +9,7 @@ export default function ProductosPendientesPage() {
 const [fechaInicio,setFechaInicio]=useState("");
 const [fechaFin,setFechaFin]=useState("");
 const [vendedor,setVendedor]=useState("Todos");
+const [envioFiltro,setEnvioFiltro]=useState("Todos")
 
 const [productos,setProductos]=
 useState<any[]>([]);
@@ -25,6 +26,7 @@ id,
 fecha_entrega,
 estado,
 vendedor,
+requiere_envio,
 
 pedido_detalle(
 cantidad,
@@ -75,7 +77,29 @@ vendedor
 );
 
 }
+if(
+envioFiltro==="Con envío"
+){
 
+query=
+query.eq(
+"requiere_envio",
+true
+);
+
+}
+
+if(
+envioFiltro==="Sin envío"
+){
+
+query=
+query.eq(
+"requiere_envio",
+false
+);
+
+}
 const {
 data,
 error
@@ -182,7 +206,8 @@ cargarPendientes();
 },[
 fechaInicio,
 fechaFin,
-vendedor
+vendedor,
+envioFiltro
 ]);
 
 return(
@@ -326,7 +351,39 @@ RENATA
 </option>
 
 </select>
+<select
 
+value={
+envioFiltro
+}
+
+onChange={
+(e)=>
+setEnvioFiltro(
+e.target.value
+)
+}
+
+className="
+p-4
+rounded-2xl
+"
+
+>
+
+<option>
+Todos
+</option>
+
+<option>
+Con envío
+</option>
+
+<option>
+Sin envío
+</option>
+
+</select>
 </div>
 
 <div
