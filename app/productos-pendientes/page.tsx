@@ -9,7 +9,7 @@ export default function ProductosPendientesPage() {
 const [fechaInicio,setFechaInicio]=useState("");
 const [fechaFin,setFechaFin]=useState("");
 const [vendedor,setVendedor]=useState("Todos");
-const [envioFiltro,setEnvioFiltro]=useState("Todos")
+const [envioFiltro,setEnvioFiltro]=useState("Todos");
 
 const [productos,setProductos]=
 useState<any[]>([]);
@@ -256,7 +256,7 @@ Consolidado de productos pendientes de entrega
 <div
 className="
 grid
-md:grid-cols-3
+md:grid-cols-4
 gap-4
 mb-8
 "
