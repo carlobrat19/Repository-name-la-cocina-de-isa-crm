@@ -291,13 +291,14 @@ coincideFechaEntrega
       );
 
     }, [
-      pedidos,
-busqueda,
-estadoFiltro,
-pagoFiltro,
-vendedorFiltro,
-fechaPedidoFiltro,
-fechaEntregaFiltro,
+       pedidos,
+  busqueda,
+  estadoFiltro,
+  pagoFiltro,
+  vendedorFiltro,
+  envioFiltro,
+  fechaPedidoFiltro,
+  fechaEntregaFiltro
     ]);
 
   return (
@@ -559,43 +560,34 @@ RENATA
           </div>
           <select
 
-              value={envioFiltro}
+  value={envioFiltro}
 
-              onChange={(e)=>
-              setEnvioFiltro(
-              e.target.value
-             )
-            }
+  onChange={(e)=>
+    setEnvioFiltro(
+      e.target.value
+    )
+  }
 
-              className="
-              w-32
-              bg-white
-              text-gray-800
-              border
-              border-gray-300
-              rounded-2xl
-              p-4
-              font-semibold
-              shadow-sm
-              focus:ring-2
-              focus:ring-blue-500
-            " 
+  className="
+  bg-white
+  text-gray-800
+  border
+  border-gray-300
+  rounded-2xl
+  p-4
+  font-semibold
+  shadow-sm
+  focus:ring-2
+  focus:ring-blue-500
+  "
 
-             >
+>
 
-             <option>
-              Todos
-            </option>
+  <option>Todos</option>
+  <option>Con envío</option>
+  <option>Sin envío</option>
 
-            <option>
-             Con envío
-            </option>
-
-            <option>
-             Sin envío
-            </option>
-
-           </select>
+</select>
 
         </div>
 
