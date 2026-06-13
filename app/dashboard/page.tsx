@@ -157,7 +157,7 @@ ascending:false
           (a, b) =>
             b.total - a.total
         )
-        .slice(0, 5);
+        .slice(0, 10);
 
     setTopProductos(
       ranking
