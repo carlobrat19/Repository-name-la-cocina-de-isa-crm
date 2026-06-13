@@ -952,7 +952,44 @@ router.refresh();
     </div>
 
   </div>
+      {/* OBSERVACIONES */}
 
+<div className="
+  bg-gray-100
+  rounded-3xl
+  p-4
+  mt-4
+">
+
+  <p className="
+    text-xs
+    uppercase
+    font-black
+    text-gray-500
+    mb-2
+  ">
+    Observaciones
+  </p>
+
+  <div
+    className="
+      w-full
+      bg-white
+      border
+      border-gray-300
+      rounded-2xl
+      p-4
+      text-gray-900
+      min-h-[80px]
+    "
+  >
+
+    {pedido?.observaciones ||
+      "Sin observaciones"}
+
+  </div>
+
+</div>
 </div>
 
           {/* PRODUCTOS */}
