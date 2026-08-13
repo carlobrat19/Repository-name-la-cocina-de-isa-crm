@@ -135,9 +135,33 @@ useState(false);
   // GUARDAR PEDIDO
   async function guardarPedido() {
 
-    if (carrito.length === 0) {
+    if (!cliente.trim() || carrito.length === 0) {
       alert("Agrega productos");
       return;
+    }
+
+    // Un pedido siempre intenta vincularse a una ficha CRM. Con teléfono se evita
+    // crear duplicados cuando la venta llega desde WhatsApp o redes sociales.
+    let clienteId: string | null = null;
+    if (telefono.trim()) {
+      const { data: clienteExistente } = await supabase
+        .from("clientes")
+        .select("id")
+        .eq("telefono", telefono.trim())
+        .maybeSingle();
+      clienteId = clienteExistente?.id || null;
+    }
+    if (!clienteId) {
+      const { data: clienteNuevo, error: clienteError } = await supabase
+        .from("clientes")
+        .insert({ nombre: cliente.trim(), telefono: telefono.trim() || null, canal_origen: "Manual" })
+        .select("id")
+        .single();
+      if (clienteError) {
+        alert(`No se pudo crear la ficha del cliente: ${clienteError.message}`);
+        return;
+      }
+      clienteId = clienteNuevo.id;
     }
 
     // GUARDAR PEDIDO
@@ -170,6 +194,15 @@ formaPago,
 
 total:
 totalPedido,
+
+cliente_id:
+clienteId,
+
+saldo_pendiente:
+pagoEstado === "Pagado" ? 0 : totalPedido,
+
+canal_origen:
+"Manual",
 
 observaciones,
 
@@ -253,6 +286,28 @@ codigo:
       );
       return;
     }
+
+    // Mantiene disponible el historial de cobranza y evita que un pago total
+    // quede solamente como texto en el pedido.
+    if (pagoEstado === "Pagado") {
+      await supabase.from("pagos").insert({
+        pedido_id: pedidoId,
+        cliente_id: clienteId,
+        monto: totalPedido,
+        metodo: formaPago,
+      });
+    }
+
+    await supabase.from("movimientos_inventario").insert(
+      carrito.map((item) => ({
+        producto_id: item.id,
+        pedido_id: pedidoId,
+        tipo: "Salida",
+        cantidad: -Number(item.cantidad),
+        costo_unitario: Number(item.precio),
+        motivo: `Venta ${codigoERP}`,
+      }))
+    );
 
     // MENSAJE
     alert(

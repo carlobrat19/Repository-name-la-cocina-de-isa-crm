@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Sidebar from "@/components/dashboard/Sidebar";
 import { supabase } from "@/lib/supabase";
 
 export default function ProductosPendientesPage() {
@@ -220,11 +219,8 @@ min-h-screen
 "
 >
 
-<Sidebar/>
-
 <div
 className="
-ml-[280px]
 w-full
 p-10
 "

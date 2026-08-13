@@ -1,36 +1,26 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# La Cocina de Isa CRM
 
-## Getting Started
+CRM comercial para administrar clientes, pedidos, cobros, producción, reportes y la futura atención omnicanal de La Cocina de Isa.
 
-First, run the development server:
+## Activación inicial
+
+1. Cree o seleccione el proyecto de Supabase y copie `.env.example` a `.env.local`.
+2. Coloque la URL del proyecto y la clave pública de Supabase.
+3. En **Supabase SQL Editor**, ejecute [la migración CRM](supabase/migrations/001_crm_comercial.sql). Es aditiva y conserva las tablas actuales.
+4. Inicie la aplicación:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abra [http://localhost:3000](http://localhost:3000). Los módulos nuevos están en Clientes, Conversaciones, Cobros y FEL, Reportes e Integraciones.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Integraciones externas
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Meta / WhatsApp**: cree una app Business en Meta Developers y use `https://TU-DOMINIO/api/webhooks/meta` como callback. Configure `META_VERIFY_TOKEN`, `META_APP_SECRET`, `META_ACCESS_TOKEN` y `META_WHATSAPP_PHONE_NUMBER_ID` solo en variables privadas. El webhook valida la firma y guarda los eventos recibidos en `integration_events`.
+- **FEL Guatemala**: seleccione un certificador y configure `FEL_PROVIDER`, `FEL_API_URL` y `FEL_API_KEY`. La ruta `POST /api/fel/emitir` registra la factura y queda intencionalmente pendiente de un adaptador específico del certificador; no genera documentos fiscales simulados.
+- **Vercel**: conecte el repositorio, copie las variables de `.env.local` en Project Settings → Environment Variables y despliegue. Nunca exponga `SUPABASE_SERVICE_ROLE_KEY`, `META_APP_SECRET`, tokens de Meta ni claves FEL como `NEXT_PUBLIC_*`.
 
-## Learn More
+## Seguridad antes de producción
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+La aplicación actual todavía no tiene autenticación de Supabase. Antes de ponerla a disposición de terceros, implemente usuarios y roles y active RLS con políticas por rol para todas las tablas, incluidas las nuevas. Las integraciones de Meta y FEL se ejecutan exclusivamente en el servidor para no enviar secretos al navegador.

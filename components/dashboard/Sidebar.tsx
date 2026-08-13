@@ -9,6 +9,11 @@ Package,
 Factory,
 DollarSign,
 ClipboardList,
+UsersRound,
+MessagesSquare,
+BarChart3,
+Landmark,
+PlugZap,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -25,6 +30,12 @@ export default function Sidebar() {
       nombre: "Pedidos",
       ruta: "/pedidos/lista",
       icono: ShoppingBag,
+    },
+
+    {
+      nombre: "Clientes",
+      ruta: "/clientes",
+      icono: UsersRound,
     },
 
     {
@@ -49,6 +60,30 @@ export default function Sidebar() {
      nombre: "Productos Pendientes",
      ruta: "/productos-pendientes",
      icono: ClipboardList,
+    },
+
+    {
+      nombre: "Conversaciones",
+      ruta: "/conversaciones",
+      icono: MessagesSquare,
+    },
+
+    {
+      nombre: "Cobros y FEL",
+      ruta: "/finanzas",
+      icono: Landmark,
+    },
+
+    {
+      nombre: "Reportes",
+      ruta: "/reportes",
+      icono: BarChart3,
+    },
+
+    {
+      nombre: "Integraciones",
+      ruta: "/integraciones",
+      icono: PlugZap,
     },
     
   ];
