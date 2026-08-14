@@ -250,7 +250,7 @@ export default function DetallePedidoPage() {
         (detalle) =>
           `<tr><td>${detalle.productos?.nombre || "Producto"}</td><td class="c">${detalle.cantidad || 0}</td><td class="m">${dinero(detalle.precio)}</td><td class="m">${dinero(Number(detalle.precio || 0) * Number(detalle.cantidad || 0))}</td></tr>`,
       )
-      .join("");
+      .join("") + `<tr><td colspan="3" class="m"><b>Productos</b></td><td class="m">${dinero(subtotal)}</td></tr>${envio > 0 ? `<tr><td colspan="3" class="m"><b>Envío</b></td><td class="m">${dinero(envio)}</td></tr>` : ""}<tr><td colspan="3" class="m"><b>Total pedido</b></td><td class="m"><b>${dinero(total)}</b></td></tr><tr><td colspan="3" class="m">Estado de pago: ${pedido.pago_estado || "Pendiente"}</td><td class="m">Pagado: ${dinero(abonado)}</td></tr><tr><td colspan="3" class="m"><b>Saldo por cobrar</b></td><td class="m"><b>${dinero(saldo)}</b></td></tr>`;
     const ventana = window.open("", "_blank", "width=900,height=700");
     if (!ventana) return;
     ventana.document.write(
