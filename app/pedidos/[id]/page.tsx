@@ -96,6 +96,8 @@ const etiquetaEstado = (estado?: string | null) =>
     : estado === "En Ruta"
       ? "bg-sky-100 text-sky-700"
       : "bg-amber-100 text-amber-800";
+const ESTADOS_PEDIDO = ["Pendiente", "Producción", "Empaquetado", "En Ruta", "Entregado", "Cancelado"];
+const ESTADOS_PAGO = ["Pendiente", "Pago parcial", "Pagado"];
 
 export default function DetallePedidoPage() {
   const { id } = useParams<{ id: string }>();
@@ -109,6 +111,7 @@ export default function DetallePedidoPage() {
   const [editando, setEditando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [facturando, setFacturando] = useState(false);
+  const [actualizandoEstado, setActualizandoEstado] = useState(false);
   const [cargando, setCargando] = useState(true);
 
   const cargarPedido = useCallback(async () => {
@@ -270,8 +273,22 @@ export default function DetallePedidoPage() {
     setPedido((actual) => (actual ? { ...actual, [campo]: valor } : actual));
   }
 
+  async function actualizarEstadoRapido(campo: "estado" | "pago_estado", valor: string) {
+    if (!pedido) return;
+    if (campo === "estado" && valor === "Cancelado" && !window.confirm("¿Confirmas que deseas cancelar este pedido? No se podrá emitir FEL mientras esté cancelado.")) return;
+    setActualizandoEstado(true);
+    const pagoCompleto = campo === "pago_estado" && valor === "Pagado";
+    const saldoNuevo = pagoCompleto ? 0 : campo === "pago_estado" && valor === "Pendiente" ? total : undefined;
+    const { error } = await supabase.from("pedidos").update({ [campo]: valor, ...(saldoNuevo !== undefined ? { saldo_pendiente: saldoNuevo } : {}) }).eq("id", pedido.id);
+    if (!error && pagoCompleto && pagos.length === 0) await supabase.from("pagos").insert({ pedido_id: pedido.id, cliente_id: pedido.cliente_id, monto: total, metodo: pedido.forma_pago || "Efectivo" });
+    setActualizandoEstado(false);
+    if (error) { alert(`No se pudo actualizar: ${error.message}`); return; }
+    await cargarPedido();
+  }
+
   async function emitirFEL() {
     if (!pedido?.cliente_id) return;
+    if (pedido.estado === "Cancelado") { alert("No puedes emitir FEL de un pedido cancelado."); return; }
     if (!pagoConfirmado) { alert("Marca el pedido como Pagado antes de emitir FEL."); return; }
     if (!datosFiscalesCompletos) { alert("Completa NIT, razón social y dirección fiscal antes de emitir FEL."); return; }
     if (!window.confirm("¿Confirmas que deseas preparar la emisión FEL de este pedido? Una factura certificada no se edita.")) return;
@@ -615,6 +632,15 @@ export default function DetallePedidoPage() {
             </section>
           </div>
           <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="font-bold text-slate-950">Estado del pedido</h2>
+              <p className="mt-1 text-xs text-slate-500">Actualiza la operación y el pago sin editar todo el pedido.</p>
+              <div className="mt-4 space-y-3">
+                <label className="block text-xs font-bold text-slate-600">Pedido<select value={pedido.estado || "Pendiente"} disabled={actualizandoEstado} onChange={(event) => void actualizarEstadoRapido("estado", event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800">{ESTADOS_PEDIDO.map((estado) => <option key={estado}>{estado}</option>)}</select></label>
+                <label className="block text-xs font-bold text-slate-600">Pago<select value={pedido.pago_estado || "Pendiente"} disabled={actualizandoEstado || pedido.estado === "Cancelado"} onChange={(event) => void actualizarEstadoRapido("pago_estado", event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 disabled:bg-slate-100">{ESTADOS_PAGO.map((estado) => <option key={estado}>{estado}</option>)}</select></label>
+              </div>
+              {pedido.estado === "Cancelado" && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">Pedido cancelado: la emisión FEL está bloqueada.</p>}
+            </section>
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="bg-slate-950 p-5 text-white">
                 <div className="flex items-center gap-2">
