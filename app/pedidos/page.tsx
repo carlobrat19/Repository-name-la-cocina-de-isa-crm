@@ -105,6 +105,7 @@ export default function PedidosPage() {
   const [fechaEntrega, setFechaEntrega] = useState("");
   const [estado, setEstado] = useState("Pendiente");
   const [pagoEstado, setPagoEstado] = useState("Pendiente");
+  const [abonoInicial, setAbonoInicial] = useState(0);
   const [formaPago, setFormaPago] = useState("Efectivo");
   const [observaciones, setObservaciones] = useState("");
   const [vendedor, setVendedor] = useState("REDES");
@@ -282,8 +283,8 @@ export default function PedidosPage() {
     }
     setGuardando(true);
     try {
-      const abonoInicial = pagoEstado === "Pago parcial" ? Number(window.prompt(`Abono inicial (total ${formatMoney(totalPedido)}):`, "") || 0) : pagoEstado === "Pagado" ? totalPedido : 0;
-      if (pagoEstado === "Pago parcial" && (!Number.isFinite(abonoInicial) || abonoInicial <= 0 || abonoInicial >= totalPedido)) throw new Error("Ingresa un abono válido menor al total");
+      const abono = pagoEstado === "Pago parcial" ? abonoInicial : pagoEstado === "Pagado" ? totalPedido : 0;
+      if (pagoEstado === "Pago parcial" && (!Number.isFinite(abono) || abono <= 0 || abono >= totalPedido)) throw new Error("Ingresa un abono válido menor al total");
       let clientePedidoId = clienteId;
       let clienteExistente: Cliente | null = null;
       if (!clientePedidoId) {
@@ -336,7 +337,7 @@ export default function PedidosPage() {
             : null,
           zona_entrega: requiereEnvio ? zonaEntrega.trim() || null : null,
           cliente_id: clientePedidoId,
-          saldo_pendiente: Math.max(0, totalPedido - abonoInicial),
+          saldo_pendiente: Math.max(0, totalPedido - abono),
           canal_origen: "Manual",
           observaciones: observaciones.trim() || null,
           vendedor,
@@ -367,13 +368,13 @@ export default function PedidosPage() {
         );
       if (detalleError) throw detalleError;
 
-      if (abonoInicial > 0) {
+      if (abono > 0) {
         const { error } = await supabase
           .from("pagos")
           .insert({
             pedido_id: pedidoData.id,
           cliente_id: clientePedidoId,
-            monto: abonoInicial,
+            monto: abono,
             metodo: formaPago,
           });
         if (error) throw error;
@@ -754,9 +755,11 @@ export default function PedidosPage() {
                     className={fieldClass}
                   >
                     <option>Pendiente</option>
+                    <option>Pago parcial</option>
                     <option>Pagado</option>
                   </select>
                 </div>
+                {pagoEstado === "Pago parcial" && <div><InputLabel>Abono inicial</InputLabel><input type="number" min="0" step="0.01" value={abonoInicial || ""} onChange={(event) => setAbonoInicial(Math.max(0, Number(event.target.value) || 0))} placeholder="0.00" className={fieldClass} /><p className="mt-1 text-xs text-slate-500">Saldo al crear: {formatMoney(Math.max(0, totalPedido - abonoInicial))}</p></div>}
                 <div>
                   <InputLabel>Forma de pago</InputLabel>
                   <select
