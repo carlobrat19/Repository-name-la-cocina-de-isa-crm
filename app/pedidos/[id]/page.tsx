@@ -546,6 +546,20 @@ router.refresh();
     window.open(url, "_blank");
   }
 
+  function imprimirPedido() {
+    const ventana = window.open("", "_blank", "width=900,height=720");
+    if (!ventana) return alert("Permite las ventanas emergentes para imprimir el pedido.");
+
+    const escapar = (valor: unknown) => String(valor ?? "").replace(/[&<>'"]/g, (caracter) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[caracter] || caracter);
+    const filas = detalles.map((item: { productos?: { nombre?: string } | null; nombre?: string; cantidad?: number | string | null; precio?: number | string | null }) => `<tr><td><strong>${escapar(item.productos?.nombre || item.nombre)}</strong></td><td class="center">${escapar(item.cantidad)}</td><td class="money">Q${Number(item.precio || 0).toFixed(2)}</td><td class="money">Q${(Number(item.cantidad || 0) * Number(item.precio || 0)).toFixed(2)}</td></tr>`).join("");
+    const fecha = pedido.fecha_entrega ? new Date(`${pedido.fecha_entrega}T12:00:00`).toLocaleDateString("es-GT", { day: "2-digit", month: "long", year: "numeric" }) : "Por confirmar";
+
+    ventana.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Pedido ${escapar(pedido.codigo)}</title><style>
+      @page { size: A4; margin: 15mm; } * { box-sizing:border-box; } body { color:#172033; font:14px Arial,sans-serif; margin:0; } .top { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #f97316; padding-bottom:18px; } .brand { color:#f97316; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; } h1 { font-size:30px; margin:6px 0 0; } .code { border:1px solid #fed7aa; background:#fff7ed; border-radius:10px; padding:10px 14px; color:#9a3412; font-weight:800; } .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:24px 0; } .box { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px; } .label { color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; } .value { margin-top:5px; font-size:15px; font-weight:700; line-height:1.45; } table { width:100%; border-collapse:collapse; margin-top:18px; } th { background:#172033; color:#fff; font-size:11px; letter-spacing:.5px; padding:11px; text-align:left; text-transform:uppercase; } td { border-bottom:1px solid #e2e8f0; padding:12px 10px; } .center { text-align:center; } .money { text-align:right; white-space:nowrap; } .total { display:flex; justify-content:flex-end; margin-top:20px; } .total div { min-width:210px; background:#172033; border-radius:10px; color:#fff; padding:14px 18px; } .total b { display:block; font-size:11px; color:#cbd5e1; text-transform:uppercase; } .total strong { display:block; font-size:25px; margin-top:4px; } .notes { margin-top:28px; border-top:1px solid #e2e8f0; padding-top:15px; color:#475569; } .footer { margin-top:34px; color:#94a3b8; font-size:11px; text-align:center; } @media print { body { print-color-adjust:exact; -webkit-print-color-adjust:exact; } }
+    </style></head><body><section class="top"><div><p class="brand">La Cocina de Isa · Pedido</p><h1>Comprobante de pedido</h1></div><div class="code">${escapar(pedido.codigo || "PEDIDO")}</div></section><section class="grid"><div class="box"><div class="label">Cliente</div><div class="value">${escapar(pedido.cliente || "Sin nombre")}<br>${escapar(pedido.telefono || "Sin teléfono")}</div></div><div class="box"><div class="label">Entrega</div><div class="value">${escapar(fecha)}<br>${escapar(pedido.hora_entrega || "Hora por confirmar")}</div></div><div class="box"><div class="label">Dirección</div><div class="value">${escapar(pedido.direccion || "Recoger en tienda")}</div></div><div class="box"><div class="label">Estado y pago</div><div class="value">${escapar(pedido.estado || "Pendiente")} · ${escapar(pedido.pago_estado || "Pendiente")}<br>${escapar(pedido.forma_pago || "")}</div></div></section><table><thead><tr><th>Producto</th><th class="center">Cant.</th><th class="money">Precio</th><th class="money">Subtotal</th></tr></thead><tbody>${filas}</tbody></table><div class="total"><div><b>Total del pedido</b><strong>Q${totalPedido.toFixed(2)}</strong></div></div>${pedido.observaciones ? `<section class="notes"><span class="label">Notas</span><br>${escapar(pedido.observaciones)}</section>` : ""}<p class="footer">Gracias por elegir La Cocina de Isa · Generado ${new Date().toLocaleString("es-GT")}</p><script>window.onload=()=>window.print();<\/script></body></html>`);
+    ventana.document.close();
+  }
+
   // =========================
   // LOADING
   // =========================
@@ -1348,9 +1362,7 @@ router.refresh();
             </button>
 
             <button
-              onClick={() =>
-                window.print()
-              }
+            onClick={imprimirPedido}
               className="bg-black hover:bg-gray-900 text-white py-4 rounded-2xl font-black transition-all shadow-lg"
             >
               Imprimir Pedido
