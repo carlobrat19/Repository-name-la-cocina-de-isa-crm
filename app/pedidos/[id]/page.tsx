@@ -278,9 +278,12 @@ export default function DetallePedidoPage() {
     if (campo === "estado" && valor === "Cancelado" && !window.confirm("¿Confirmas que deseas cancelar este pedido? No se podrá emitir FEL mientras esté cancelado.")) return;
     setActualizandoEstado(true);
     const pagoCompleto = campo === "pago_estado" && valor === "Pagado";
-    const saldoNuevo = pagoCompleto ? 0 : campo === "pago_estado" && valor === "Pendiente" ? total : undefined;
+    const pagoParcial = campo === "pago_estado" && valor === "Pago parcial";
+    const montoParcial = pagoParcial ? Number(window.prompt(`Abono recibido (saldo actual ${dinero(saldo)}):`, "") || 0) : 0;
+    if (pagoParcial && (!Number.isFinite(montoParcial) || montoParcial <= 0 || montoParcial > saldo)) return;
+    const saldoNuevo = pagoCompleto ? 0 : pagoParcial ? Math.max(0, saldo - montoParcial) : campo === "pago_estado" && valor === "Pendiente" ? total : undefined;
     const { error } = await supabase.from("pedidos").update({ [campo]: valor, ...(saldoNuevo !== undefined ? { saldo_pendiente: saldoNuevo } : {}) }).eq("id", pedido.id);
-    if (!error && pagoCompleto && pagos.length === 0) await supabase.from("pagos").insert({ pedido_id: pedido.id, cliente_id: pedido.cliente_id, monto: total, metodo: pedido.forma_pago || "Efectivo" });
+    if (!error && (pagoCompleto || pagoParcial)) await supabase.from("pagos").insert({ pedido_id: pedido.id, cliente_id: pedido.cliente_id, monto: pagoCompleto ? saldo : montoParcial, metodo: pedido.forma_pago || "Efectivo" });
     setActualizandoEstado(false);
     if (error) { alert(`No se pudo actualizar: ${error.message}`); return; }
     await cargarPedido();

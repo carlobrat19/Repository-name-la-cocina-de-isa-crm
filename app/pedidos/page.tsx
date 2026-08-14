@@ -282,6 +282,8 @@ export default function PedidosPage() {
     }
     setGuardando(true);
     try {
+      const abonoInicial = pagoEstado === "Pago parcial" ? Number(window.prompt(`Abono inicial (total ${formatMoney(totalPedido)}):`, "") || 0) : pagoEstado === "Pagado" ? totalPedido : 0;
+      if (pagoEstado === "Pago parcial" && (!Number.isFinite(abonoInicial) || abonoInicial <= 0 || abonoInicial >= totalPedido)) throw new Error("Ingresa un abono válido menor al total");
       let clientePedidoId = clienteId;
       let clienteExistente: Cliente | null = null;
       if (!clientePedidoId) {
@@ -334,7 +336,7 @@ export default function PedidosPage() {
             : null,
           zona_entrega: requiereEnvio ? zonaEntrega.trim() || null : null,
           cliente_id: clientePedidoId,
-          saldo_pendiente: pagoEstado === "Pagado" ? 0 : totalPedido,
+          saldo_pendiente: Math.max(0, totalPedido - abonoInicial),
           canal_origen: "Manual",
           observaciones: observaciones.trim() || null,
           vendedor,
@@ -365,13 +367,13 @@ export default function PedidosPage() {
         );
       if (detalleError) throw detalleError;
 
-      if (pagoEstado === "Pagado") {
+      if (abonoInicial > 0) {
         const { error } = await supabase
           .from("pagos")
           .insert({
             pedido_id: pedidoData.id,
           cliente_id: clientePedidoId,
-            monto: totalPedido,
+            monto: abonoInicial,
             metodo: formaPago,
           });
         if (error) throw error;
