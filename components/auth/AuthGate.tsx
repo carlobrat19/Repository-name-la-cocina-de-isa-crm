@@ -5,12 +5,15 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 export type RolCrm = "Administrador" | "Ventas" | "Producción" | "Reparto" | "Caja" | "Sin acceso";
+export type ModuloCrm = "dashboard" | "pedidos" | "clientes" | "conversaciones" | "productos" | "produccion" | "pendientes" | "cobros_fel" | "flujo_caja" | "reportes" | "integraciones";
 
 type AuthContextValue = {
+  id: string | null;
   email: string | null;
   rol: RolCrm | null;
+  modulos: ModuloCrm[];
   listo: boolean;
-  puedeVer: (roles: RolCrm[]) => boolean;
+  puedeVer: (modulo: ModuloCrm) => boolean;
   salir: () => Promise<void>;
 };
 
@@ -26,7 +29,9 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
+  const [id, setId] = useState<string | null>(null);
   const [rol, setRol] = useState<RolCrm | null>(null);
+  const [modulos, setModulos] = useState<ModuloCrm[]>([]);
   const [listo, setListo] = useState(false);
   const esAcceso = pathname.startsWith("/acceso");
 
@@ -36,14 +41,18 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!activo) return;
       if (!session) {
-        setEmail(null); setRol(null); setListo(true);
+        setId(null); setEmail(null); setRol(null); setModulos([]); setListo(true);
         if (!esAcceso) router.replace("/acceso");
         return;
       }
-      const { data: perfil } = await supabase.from("perfiles_crm").select("rol, activo").eq("id", session.user.id).maybeSingle();
+      const [{ data: perfil }, { data: permisos }] = await Promise.all([
+        supabase.from("perfiles_crm").select("rol, activo").eq("id", session.user.id).maybeSingle(),
+        supabase.from("permisos_usuario_crm").select("modulo").eq("user_id", session.user.id),
+      ]);
       if (!activo) return;
       const rolPerfil = perfil?.activo ? perfil.rol as RolCrm : "Sin acceso";
-      setEmail(session.user.email ?? null); setRol(rolPerfil); setListo(true);
+      setId(session.user.id); setEmail(session.user.email ?? null); setRol(rolPerfil);
+      setModulos((permisos ?? []).map((permiso) => permiso.modulo as ModuloCrm)); setListo(true);
       if (!esAcceso && (!perfil || !perfil.activo || rolPerfil === "Sin acceso")) router.replace("/acceso?sin_acceso=1");
       if (esAcceso && perfil?.activo && rolPerfil !== "Sin acceso") router.replace("/dashboard");
     }
@@ -53,10 +62,10 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   }, [esAcceso, router]);
 
   const value = useMemo<AuthContextValue>(() => ({
-    email, rol, listo,
-    puedeVer: (roles) => rol === "Administrador" || (rol ? roles.includes(rol) : false),
+    id, email, rol, modulos, listo,
+    puedeVer: (modulo) => rol === "Administrador" || modulos.includes(modulo),
     salir: async () => { await supabase.auth.signOut(); router.replace("/acceso"); },
-  }), [email, rol, listo, router]);
+  }), [id, email, rol, modulos, listo, router]);
 
   if (!esAcceso && !listo) return <div className="grid min-h-screen place-items-center bg-slate-950 text-sm font-semibold text-slate-300">Cargando CRM…</div>;
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
