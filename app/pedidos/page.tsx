@@ -44,6 +44,17 @@ type Cliente = {
   direccion?: string | null;
 };
 
+type DireccionCliente = {
+  id: string;
+  etiqueta?: string | null;
+  direccion: string;
+  departamento?: string | null;
+  municipio?: string | null;
+  zona?: string | null;
+  referencia?: string | null;
+  principal?: boolean | null;
+};
+
 const VENDEDORES = ["REDES", "LUCIA", "CARLO", "ISA", "MONICA", "RENATA"];
 const ESTADOS = [
   "Pendiente",
@@ -98,6 +109,7 @@ export default function PedidosPage() {
   const [direccionFiscal, setDireccionFiscal] = useState("");
   const [coincidenciasClientes, setCoincidenciasClientes] = useState<Cliente[]>([]);
   const [buscandoClientes, setBuscandoClientes] = useState(false);
+  const [direccionesCliente, setDireccionesCliente] = useState<DireccionCliente[]>([]);
   const [direccion, setDireccion] = useState("");
   const [fechaCreacion, setFechaCreacion] = useState(() =>
     new Date().toISOString().slice(0, 10),
@@ -158,7 +170,7 @@ export default function PedidosPage() {
     setBuscandoClientes(false);
   }
 
-  function seleccionarCliente(clienteExistente: Cliente) {
+  async function seleccionarCliente(clienteExistente: Cliente) {
     setClienteId(clienteExistente.id);
     setCliente(clienteExistente.nombre || "");
     setTelefono(clienteExistente.telefono || "");
@@ -167,6 +179,22 @@ export default function PedidosPage() {
     setCorreoFiscal(clienteExistente.email || "");
     setDireccionFiscal(clienteExistente.direccion || "");
     setCoincidenciasClientes([]);
+    const { data, error } = await supabase
+      .from("cliente_direcciones")
+      .select("id, etiqueta, direccion, departamento, municipio, zona, referencia, principal")
+      .eq("cliente_id", clienteExistente.id)
+      .order("principal", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (error) console.error(error);
+    setDireccionesCliente((data || []) as DireccionCliente[]);
+  }
+
+  function usarDireccionGuardada(direccionGuardada: DireccionCliente) {
+    setDireccion(direccionGuardada.direccion || "");
+    setDepartamentoEntrega(direccionGuardada.departamento || "");
+    setMunicipioEntrega(direccionGuardada.municipio || "");
+    setZonaEntrega(direccionGuardada.zona || "");
+    setRequiereEnvio(true);
   }
 
   useEffect(() => {
@@ -241,6 +269,7 @@ export default function PedidosPage() {
     setCorreoFiscal("");
     setDireccionFiscal("");
     setCoincidenciasClientes([]);
+    setDireccionesCliente([]);
     setDireccion("");
     setFechaCreacion(new Date().toISOString().slice(0, 10));
     setFechaEntrega("");
@@ -465,7 +494,7 @@ export default function PedidosPage() {
                     autoComplete="off"
                     className={fieldClass}
                   />
-                  {(buscandoClientes || coincidenciasClientes.length > 0) && <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">{buscandoClientes ? <p className="px-3 py-3 text-xs text-slate-500">Buscando clientes…</p> : coincidenciasClientes.map((clienteExistente) => <button key={clienteExistente.id} type="button" onMouseDown={(event) => { event.preventDefault(); seleccionarCliente(clienteExistente); }} className="block w-full border-b border-slate-100 px-3 py-3 text-left last:border-0 hover:bg-orange-50"><span className="block text-sm font-bold text-slate-900">{clienteExistente.nombre}</span><span className="mt-0.5 block text-xs text-slate-500">{clienteExistente.telefono || "Sin teléfono"}{clienteExistente.nit ? ` · NIT ${clienteExistente.nit}` : ""}</span></button>)}</div>}
+                  {(buscandoClientes || coincidenciasClientes.length > 0) && <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">{buscandoClientes ? <p className="px-3 py-3 text-xs text-slate-500">Buscando clientes…</p> : coincidenciasClientes.map((clienteExistente) => <button key={clienteExistente.id} type="button" onMouseDown={(event) => { event.preventDefault(); void seleccionarCliente(clienteExistente); }} className="block w-full border-b border-slate-100 px-3 py-3 text-left last:border-0 hover:bg-orange-50"><span className="block text-sm font-bold text-slate-900">{clienteExistente.nombre}</span><span className="mt-0.5 block text-xs text-slate-500">{clienteExistente.telefono || "Sin teléfono"}{clienteExistente.nit ? ` · NIT ${clienteExistente.nit}` : ""}</span></button>)}</div>}
                 </div>
                 <div>
                   <InputLabel>Teléfono</InputLabel>
@@ -626,6 +655,37 @@ export default function PedidosPage() {
                   </span>
                 </button>
               </div>
+              {clienteId && direccionesCliente.length > 0 && (
+                <div className="mb-5 rounded-xl border border-orange-200 bg-orange-50 p-3">
+                  <p className="text-xs font-black text-orange-900">
+                    Direcciones guardadas del cliente
+                  </p>
+                  <p className="mt-1 text-xs text-orange-700">
+                    Selecciona una para completar la entrega.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {direccionesCliente.map((direccionGuardada) => (
+                      <button
+                        key={direccionGuardada.id}
+                        type="button"
+                        onClick={() => usarDireccionGuardada(direccionGuardada)}
+                        className="rounded-lg border border-orange-200 bg-white px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:border-orange-400"
+                      >
+                        <span className="block text-orange-700">
+                          {direccionGuardada.etiqueta || "Dirección"}
+                          {direccionGuardada.principal ? " · Principal" : ""}
+                        </span>
+                        <span className="mt-1 block">{direccionGuardada.direccion}</span>
+                        <span className="mt-1 block text-slate-500">
+                          {[direccionGuardada.departamento, direccionGuardada.municipio, direccionGuardada.zona]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="md:col-span-2">
                   <InputLabel>
