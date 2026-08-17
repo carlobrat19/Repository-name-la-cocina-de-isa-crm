@@ -1,500 +1,55 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
+const ETAPAS = ["Pendiente", "Producción", "Empaquetado", "En Ruta", "Entregado"] as const;
+type Etapa = (typeof ETAPAS)[number];
+type Detalle = { cantidad: number | string | null; productos: { nombre: string | null; categoria: string | null } | null };
+type Pedido = { id: string; codigo: string | null; cliente: string | null; fecha_entrega: string | null; estado: string | null; vendedor: string | null; requiere_envio: boolean | null; pedido_detalle: Detalle[] | null };
+type Resumen = { nombre: string; categoria: string | null; total: number; porEtapa: Record<Etapa, number>; proximaEntrega: string | null; pedidos: number };
+const estilo: Record<Etapa, string> = { Pendiente: "border-amber-200 bg-amber-50 text-amber-800", Producción: "border-blue-200 bg-blue-50 text-blue-800", Empaquetado: "border-violet-200 bg-violet-50 text-violet-800", "En Ruta": "border-orange-200 bg-orange-50 text-orange-800", Entregado: "border-emerald-200 bg-emerald-50 text-emerald-800" };
+const estadoPedido = (estado: string | null): Etapa => ETAPAS.includes(estado as Etapa) ? estado as Etapa : "Pendiente";
+const fechaHumana = (fecha: string | null) => fecha ? new Intl.DateTimeFormat("es-GT", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${fecha}T12:00:00`)) : "Sin fecha";
+
 export default function ProductosPendientesPage() {
-
-const [fechaInicio,setFechaInicio]=useState("");
-const [fechaFin,setFechaFin]=useState("");
-const [vendedor,setVendedor]=useState("Todos");
-const [envioFiltro,setEnvioFiltro]=useState("Todos");
-
-const [productos,setProductos]=
-useState<any[]>([]);
-
-async function cargarPendientes(){
-
-let query=
-supabase
-
-.from("pedidos")
-
-.select(`
-id,
-fecha_entrega,
-estado,
-vendedor,
-requiere_envio,
-
-pedido_detalle(
-cantidad,
-productos(
-nombre
-)
-)
-
-`)
-
-.eq(
-"estado",
-"Pendiente"
-);
-
-if(
-fechaInicio
-){
-
-query=
-query.gte(
-"fecha_entrega",
-fechaInicio
-);
-
-}
-
-if(
-fechaFin
-){
-
-query=
-query.lte(
-"fecha_entrega",
-fechaFin
-);
-
-}
-
-if(
-vendedor!=="Todos"
-){
-
-query=
-query.eq(
-"vendedor",
-vendedor
-);
-
-}
-if(
-envioFiltro==="Con envío"
-){
-
-query=
-query.eq(
-"requiere_envio",
-true
-);
-
-}
-
-if(
-envioFiltro==="Sin envío"
-){
-
-query=
-query.eq(
-"requiere_envio",
-false
-);
-
-}
-const {
-data,
-error
-}
-=
-await query;
-
-if(error){
-
-console.log(error);
-
-return;
-
-}
-
-const resumen:any=
-{};
-
-(data||[])
-.forEach(
-(pedido:any)=>{
-
-pedido
-.pedido_detalle
-?.forEach(
-(item:any)=>{
-
-const nombre=
-item
-.productos
-?.nombre;
-
-if(
-!nombre
-)
-return;
-
-resumen[
-nombre
-]=
-(
-resumen[
-nombre
-]
-||
-0
-)
-
-+
-
-Number(
-item.cantidad
-||
-0
-);
-
-}
-
-);
-
-}
-
-);
-
-const resultado=
-
-Object
-.entries(
-resumen
-)
-
-.map(
-([
-nombre,
-cantidad
-])=>({
-
-nombre,
-
-cantidad,
-
-})
-)
-
-.sort(
-(a:any,b:any)=>
-
-b.cantidad
--
-a.cantidad
-
-);
-
-setProductos(
-resultado
-);
-
-}
-
-useEffect(()=>{
-
-cargarPendientes();
-
-},[
-fechaInicio,
-fechaFin,
-vendedor,
-envioFiltro
-]);
-
-return(
-
-<div
-className="
-flex
-bg-gray-100
-min-h-screen
-"
->
-
-<div
-className="
-w-full
-p-10
-"
->
-
-<h1
-className="
-text-5xl
-font-black
-"
->
-
-Productos Pendientes
-
-</h1>
-
-<p
-className="
-text-gray-500
-mt-2
-mb-8
-"
->
-
-Consolidado de productos pendientes de entrega
-
-</p>
-
-<div
-className="
-grid
-md:grid-cols-4
-gap-4
-mb-8
-"
->
-
-<input
-type="date"
-
-value={
-fechaInicio
-}
-
-onChange={
-(e)=>
-setFechaInicio(
-e.target.value
-)
-}
-
-className="
-p-4
-rounded-2xl
-"
-/>
-
-<input
-type="date"
-
-value={
-fechaFin
-}
-
-onChange={
-(e)=>
-setFechaFin(
-e.target.value
-)
-}
-
-className="
-p-4
-rounded-2xl
-"
-/>
-
-<select
-
-value={
-vendedor
-}
-
-onChange={
-(e)=>
-setVendedor(
-e.target.value
-)
-}
-
-className="
-p-4
-rounded-2xl
-"
-
->
-
-<option>
-Todos
-</option>
-
-<option>
-REDES
-</option>
-
-<option>
-LUCIA
-</option>
-
-<option>
-CARLO
-</option>
-
-<option>
-ISA
-</option>
-
-<option>
-MONICA
-</option>
-
-<option>
-RENATA
-</option>
-
-</select>
-<select
-
-value={
-envioFiltro
-}
-
-onChange={
-(e)=>
-setEnvioFiltro(
-e.target.value
-)
-}
-
-className="
-p-4
-rounded-2xl
-"
-
->
-
-<option>
-Todos
-</option>
-
-<option>
-Con envío
-</option>
-
-<option>
-Sin envío
-</option>
-
-</select>
-</div>
-
-<div
-className="
-bg-white
-rounded-3xl
-shadow-xl
-overflow-hidden
-"
->
-
-<table
-className="
-w-full
-"
->
-
-<thead>
-
-<tr
-className="
-border-b
-"
->
-
-<th
-className="
-text-left
-p-6
-"
->
-
-Producto
-
-</th>
-
-<th
-className="
-text-right
-p-6
-"
->
-
-Cantidad Pendiente
-
-</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-{
-productos.map(
-(
-item
-)=>(
-
-<tr
-key={
-item.nombre
-}
-
-className="
-border-b
-"
->
-
-<td
-className="
-p-6
-font-bold
-"
->
-
-{
-item.nombre
-}
-
-</td>
-
-<td
-className="
-p-6
-text-right
-text-2xl
-font-black
-"
->
-
-{
-item.cantidad
-}
-
-</td>
-
-</tr>
-
-)
-
-)
-
-}
-
-</tbody>
-
-</table>
-
-</div>
-
-</div>
-
-</div>
-
-);
-
+  const [pedidos, setPedidos] = useState<Pedido[]>([]); const [cargando, setCargando] = useState(true); const [error, setError] = useState("");
+  const [busqueda, setBusqueda] = useState(""); const [fechaInicio, setFechaInicio] = useState(""); const [fechaFin, setFechaFin] = useState("");
+  const [estado, setEstado] = useState<Etapa | "Todos">("Pendiente"); const [vendedor, setVendedor] = useState("Todos"); const [envio, setEnvio] = useState("Todos");
+
+  async function cargar() {
+    setCargando(true); setError("");
+    const { data, error: consultaError } = await supabase.from("pedidos").select("id,codigo,cliente,fecha_entrega,estado,vendedor,requiere_envio,pedido_detalle(cantidad,productos(nombre,categoria))").order("fecha_entrega", { ascending: true }).limit(500);
+    if (consultaError) { console.error(consultaError); setError("No se pudo cargar la planificación. Intenta actualizar."); setCargando(false); return; }
+    setPedidos((data || []) as unknown as Pedido[]); setCargando(false);
+  }
+  useEffect(() => { const timer = window.setTimeout(() => void cargar(), 0); return () => window.clearTimeout(timer); }, []);
+
+  const vendedores = useMemo(() => Array.from(new Set(pedidos.map((pedido) => pedido.vendedor).filter(Boolean))).sort() as string[], [pedidos]);
+  const filtrados = useMemo(() => pedidos.filter((pedido) => {
+    const texto = `${pedido.codigo || ""} ${pedido.cliente || ""} ${pedido.vendedor || ""} ${(pedido.pedido_detalle || []).map((item) => item.productos?.nombre || "").join(" ")}`.toLowerCase();
+    return texto.includes(busqueda.trim().toLowerCase()) && (estado === "Todos" || estadoPedido(pedido.estado) === estado) && (vendedor === "Todos" || pedido.vendedor === vendedor) && (envio === "Todos" || (envio === "Con envío" ? pedido.requiere_envio : !pedido.requiere_envio)) && (!fechaInicio || (pedido.fecha_entrega || "") >= fechaInicio) && (!fechaFin || (pedido.fecha_entrega || "") <= fechaFin);
+  }), [pedidos, busqueda, estado, vendedor, envio, fechaInicio, fechaFin]);
+  const metricas = useMemo(() => Object.fromEntries(ETAPAS.map((etapa) => [etapa, pedidos.filter((pedido) => estadoPedido(pedido.estado) === etapa).length])) as Record<Etapa, number>, [pedidos]);
+  const productos = useMemo(() => {
+    const resumen = new Map<string, Resumen>();
+    filtrados.forEach((pedido) => (pedido.pedido_detalle || []).forEach((detalle) => {
+      const nombre = detalle.productos?.nombre || "Producto eliminado"; const actual = resumen.get(nombre) || { nombre, categoria: detalle.productos?.categoria || null, total: 0, porEtapa: { Pendiente: 0, Producción: 0, Empaquetado: 0, "En Ruta": 0, Entregado: 0 }, proximaEntrega: pedido.fecha_entrega, pedidos: 0 };
+      const cantidad = Number(detalle.cantidad || 0); const etapa = estadoPedido(pedido.estado); actual.total += cantidad; actual.porEtapa[etapa] += cantidad; actual.pedidos += 1;
+      if (pedido.fecha_entrega && (!actual.proximaEntrega || pedido.fecha_entrega < actual.proximaEntrega)) actual.proximaEntrega = pedido.fecha_entrega; resumen.set(nombre, actual);
+    }));
+    return Array.from(resumen.values()).sort((a, b) => b.total - a.total || a.nombre.localeCompare(b.nombre));
+  }, [filtrados]);
+  const unidades = productos.reduce((total, producto) => total + producto.total, 0); const hoy = new Date().toISOString().slice(0, 10); const entregasHoy = filtrados.filter((pedido) => pedido.fecha_entrega === hoy).length;
+  const limpiar = () => { setBusqueda(""); setFechaInicio(""); setFechaFin(""); setEstado("Pendiente"); setVendedor("Todos"); setEnvio("Todos"); };
+
+  return <main className="min-h-screen bg-slate-100 px-4 py-7 sm:px-7 lg:px-10"><div className="mx-auto max-w-[1600px]">
+    <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-orange-600">Planificación de cocina</p><h1 className="mt-2 text-4xl font-black text-slate-950">Productos pendientes</h1><p className="mt-2 text-sm text-slate-600">Consolida cantidades por producto, prioridad de entrega y estado operativo.</p></div><div className="flex gap-3"><Link href="/produccion" className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800">Ver producción</Link><button onClick={() => void cargar()} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white">Actualizar</button></div></header>
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{ETAPAS.map((etapa) => <button key={etapa} onClick={() => setEstado(etapa)} className={`rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 ${estilo[etapa]} ${estado === etapa ? "ring-2 ring-slate-950 ring-offset-2" : ""}`}><p className="text-xs font-bold uppercase">{etapa}</p><p className="mt-2 text-3xl font-black">{metricas[etapa]}</p><p className="mt-1 text-xs">pedidos</p></button>)}</section>
+    <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><div className="grid gap-3 xl:grid-cols-[minmax(220px,1.3fr)_repeat(5,minmax(130px,.45fr))_auto]"><input value={busqueda} onChange={(event) => setBusqueda(event.target.value)} placeholder="Buscar producto, pedido o cliente" className="min-w-0 rounded-xl border border-slate-200 px-4 py-3 text-sm"/><input type="date" value={fechaInicio} onChange={(event) => setFechaInicio(event.target.value)} aria-label="Fecha de entrega desde" className="rounded-xl border border-slate-200 px-3 py-3 text-sm"/><input type="date" value={fechaFin} onChange={(event) => setFechaFin(event.target.value)} aria-label="Fecha de entrega hasta" className="rounded-xl border border-slate-200 px-3 py-3 text-sm"/><select value={estado} onChange={(event) => setEstado(event.target.value as Etapa | "Todos")} className="rounded-xl border border-slate-200 px-3 py-3 text-sm"><option value="Todos">Todos los estados</option>{ETAPAS.map((etapa) => <option key={etapa}>{etapa}</option>)}</select><select value={vendedor} onChange={(event) => setVendedor(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-3 text-sm"><option>Todos</option>{vendedores.map((nombre) => <option key={nombre}>{nombre}</option>)}</select><select value={envio} onChange={(event) => setEnvio(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-3 text-sm"><option>Todos</option><option>Con envío</option><option>Sin envío</option></select><button onClick={limpiar} className="px-2 text-sm font-bold text-slate-500 underline">Limpiar</button></div></section>
+    <section className="mt-6 grid gap-4 sm:grid-cols-3"><div className="rounded-2xl bg-slate-950 p-5 text-white"><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Unidades a preparar</p><p className="mt-2 text-3xl font-black">{unidades}</p><p className="mt-1 text-sm text-slate-400">Según los filtros activos</p></div><div className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Productos distintos</p><p className="mt-2 text-3xl font-black text-slate-950">{productos.length}</p><p className="mt-1 text-sm text-slate-500">Para organizar la mise en place</p></div><div className="rounded-2xl border border-orange-200 bg-orange-50 p-5"><p className="text-xs font-bold uppercase tracking-wider text-orange-700">Entregas para hoy</p><p className="mt-2 text-3xl font-black text-orange-700">{entregasHoy}</p><p className="mt-1 text-sm text-orange-700">Dentro de los pedidos filtrados</p></div></section>
+    <section className="mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-col gap-2 border-b border-slate-100 p-6 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-600">Resumen de preparación</p><h2 className="mt-2 text-2xl font-black text-slate-950">Qué debe preparar la cocina</h2></div><p className="text-sm text-slate-500">{filtrados.length} pedidos · {unidades} unidades</p></div><div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-sm"><thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500"><tr><th className="p-4">Producto</th><th className="p-4 text-center">Pedidos</th>{ETAPAS.map((etapa) => <th key={etapa} className="p-4 text-right">{etapa}</th>)}<th className="p-4 text-right">Total</th><th className="p-4">Próxima entrega</th></tr></thead><tbody>{cargando && <tr><td colSpan={10} className="p-12 text-center text-slate-500">Cargando planificación…</td></tr>}{!cargando && productos.map((producto) => <tr key={producto.nombre} className="border-t border-slate-100 hover:bg-slate-50"><td className="p-4"><p className="font-black text-slate-950">{producto.nombre}</p><p className="mt-1 text-xs text-slate-500">{producto.categoria || "Sin categoría"}</p></td><td className="p-4 text-center font-bold">{producto.pedidos}</td>{ETAPAS.map((etapa) => <td key={etapa} className="p-4 text-right font-bold">{producto.porEtapa[etapa] || "—"}</td>)}<td className="p-4 text-right text-lg font-black text-orange-600">{producto.total}</td><td className="p-4 font-semibold text-slate-700">{fechaHumana(producto.proximaEntrega)}</td></tr>)}{!cargando && !productos.length && <tr><td colSpan={10} className="p-12 text-center text-slate-500">No hay productos que coincidan con estos filtros.</td></tr>}</tbody></table></div>{error && <p className="m-5 rounded-xl bg-rose-50 p-4 text-sm font-semibold text-rose-700">{error}</p>}</section>
+    <section className="mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-100 p-6"><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-600">Detalle operativo</p><h2 className="mt-2 text-2xl font-black text-slate-950">Pedidos que componen el resumen</h2></div><div className="divide-y divide-slate-100">{filtrados.slice(0, 100).map((pedido) => <Link key={pedido.id} href={`/pedidos/${pedido.id}`} className="flex flex-col gap-3 p-5 transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-mono text-xs font-bold text-orange-600">{pedido.codigo || "SIN CÓDIGO"}</p><p className="mt-1 font-black text-slate-950">{pedido.cliente || "Cliente sin nombre"}</p><p className="mt-1 text-sm text-slate-500">{(pedido.pedido_detalle || []).map((detalle) => `${Number(detalle.cantidad || 0)}× ${detalle.productos?.nombre || "Producto"}`).join(" · ")}</p></div><div className="flex items-center gap-4"><p className="text-sm font-semibold text-slate-600">Entrega: {fechaHumana(pedido.fecha_entrega)}</p><span className={`rounded-full border px-3 py-1 text-xs font-bold ${estilo[estadoPedido(pedido.estado)]}`}>{estadoPedido(pedido.estado)}</span></div></Link>)}{!cargando && !filtrados.length && <p className="p-10 text-center text-sm text-slate-500">No hay pedidos para mostrar.</p>}</div></section>
+  </div></main>;
 }
