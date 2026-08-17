@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 
 type IngredienteReceta = {
@@ -443,7 +444,7 @@ productoEditando
 <div className="border-b border-slate-200 p-6 sm:p-8">
 <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
 <div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-500">Catálogo</p><h2 className="mt-2 text-3xl font-black text-slate-950">Productos guardados</h2><p className="mt-1 text-sm text-slate-500">{productosFiltrados.length} de {productos.length} productos visibles</p></div>
-<div className="grid gap-3 sm:grid-cols-2"><input aria-label="Buscar productos" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-500" placeholder="Buscar producto o categoría" value={busquedaProducto} onChange={(event) => setBusquedaProducto(event.target.value)} /><select aria-label="Filtrar por categoría" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={categoriaFiltro} onChange={(event) => setCategoriaFiltro(event.target.value)}><option>Todas</option>{categorias.map((categoria) => <option key={categoria}>{categoria}</option>)}</select></div>
+<div className="grid gap-3 sm:grid-cols-3"><Link href="/recetas" className="rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-orange-600">Recetas y costos</Link><input aria-label="Buscar productos" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-500" placeholder="Buscar producto o categoría" value={busquedaProducto} onChange={(event) => setBusquedaProducto(event.target.value)} /><select aria-label="Filtrar por categoría" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={categoriaFiltro} onChange={(event) => setCategoriaFiltro(event.target.value)}><option>Todas</option>{categorias.map((categoria) => <option key={categoria}>{categoria}</option>)}</select></div>
 </div>
 </div>
 

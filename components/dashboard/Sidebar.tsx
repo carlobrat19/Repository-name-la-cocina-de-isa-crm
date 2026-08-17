@@ -12,6 +12,7 @@ const menu = [
   { label: "Clientes", href: "/clientes", icon: UsersRound, modulo: "clientes" as ModuloCrm },
   { label: "Conversaciones", href: "/conversaciones", icon: MessageCircle, modulo: "conversaciones" as ModuloCrm },
   { label: "Productos", href: "/productos", icon: Package, modulo: "productos" as ModuloCrm },
+  { label: "Recetas y costos", href: "/recetas", icon: Package, modulo: "productos" as ModuloCrm },
   { label: "Producción", href: "/produccion", icon: Factory, modulo: "produccion" as ModuloCrm },
   { label: "Pendientes", href: "/productos-pendientes", icon: ClipboardList, modulo: "pendientes" as ModuloCrm },
   { label: "Cobros y FEL", href: "/finanzas", icon: WalletCards, modulo: "cobros_fel" as ModuloCrm },
