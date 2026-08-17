@@ -26,6 +26,16 @@ type Producto = {
   precio_venta: number | string;
   costo?: number | string | null;
   estado?: string | null;
+  stock?: number | string | null;
+  descripcion?: string | null;
+  sku?: string | null;
+  imagen_url?: string | null;
+  stock_minimo?: number | string | null;
+  disponible_online?: boolean | null;
+  publicar_catalogo?: boolean | null;
+  tiempo_preparacion_min?: number | string | null;
+  etiquetas?: string[] | null;
+  canales_venta?: string[] | null;
 };
 
 export default function ProductosPage() {
@@ -34,6 +44,18 @@ const [nombre,setNombre]=useState("");
 const [categoria,setCategoria]=useState("");
 const [precio,setPrecio]=useState("");
 const [costo,setCosto]=useState("");
+const [stock,setStock]=useState("0");
+const [stockMinimo,setStockMinimo]=useState("0");
+const [descripcion,setDescripcion]=useState("");
+const [sku,setSku]=useState("");
+const [tiempoPreparacion,setTiempoPreparacion]=useState("");
+const [etiquetas,setEtiquetas]=useState("");
+const [publicarCatalogo,setPublicarCatalogo]=useState(false);
+const [disponibleOnline,setDisponibleOnline]=useState(true);
+const [canalesVenta,setCanalesVenta]=useState<string[]>(["WhatsApp", "Web"]);
+const [fotoProducto,setFotoProducto]=useState<File | null>(null);
+const [fotoActual,setFotoActual]=useState("");
+const [subiendoFoto,setSubiendoFoto]=useState(false);
 
 const [productos,setProductos]=
 useState<Producto[]>([]);
@@ -157,7 +179,34 @@ return;
 
 }
 
-let error;
+ let error;
+ let imagenUrl = fotoActual || null;
+ if (fotoProducto) {
+ setSubiendoFoto(true);
+ const extension = fotoProducto.name.split(".").pop()?.toLowerCase() || "jpg";
+ const ruta = `${crypto.randomUUID()}.${extension}`;
+ const { error: errorFoto } = await supabase.storage.from("productos").upload(ruta, fotoProducto, { contentType: fotoProducto.type });
+ setSubiendoFoto(false);
+ if (errorFoto) { console.error(errorFoto); alert("No se pudo subir la foto del producto."); return; }
+ imagenUrl = supabase.storage.from("productos").getPublicUrl(ruta).data.publicUrl;
+ }
+
+ const datosProducto = {
+ nombre,
+ categoria: categoria || null,
+ precio_venta: Number(precio),
+ costo: Number(costo),
+ stock: Number(stock || 0),
+ stock_minimo: Number(stockMinimo || 0),
+ descripcion: descripcion.trim() || null,
+ sku: sku.trim() || null,
+ imagen_url: imagenUrl,
+ tiempo_preparacion_min: tiempoPreparacion === "" ? null : Number(tiempoPreparacion),
+ etiquetas: etiquetas.split(",").map((etiqueta) => etiqueta.trim()).filter(Boolean),
+ publicar_catalogo: publicarCatalogo,
+ disponible_online: disponibleOnline,
+ canales_venta: canalesVenta,
+ };
 
 if(
 productoEditando
@@ -171,23 +220,7 @@ await supabase
 "productos"
 )
 
-.update({
-
-nombre,
-
-categoria,
-
-precio_venta:
-Number(
-precio
-),
-
-costo:
-Number(
-costo
-),
-
-})
+.update(datosProducto)
 
 .eq(
 "id",
@@ -207,28 +240,7 @@ await supabase
 "productos"
 )
 
-.insert([
-{
-
-nombre,
-
-categoria,
-
-precio_venta:
-Number(
-precio
-),
-
-costo:
-Number(
-costo
-),
-
-estado:
-"Activo"
-
-}
-]);
+.insert([{ ...datosProducto, estado: "Activo" }]);
 
 error =
 resultado.error;
@@ -268,6 +280,7 @@ setCategoria("");
 setPrecio("");
 
 setCosto("");
+setStock("0"); setStockMinimo("0"); setDescripcion(""); setSku(""); setTiempoPreparacion(""); setEtiquetas(""); setPublicarCatalogo(false); setDisponibleOnline(true); setCanalesVenta(["WhatsApp", "Web"]); setFotoProducto(null); setFotoActual("");
 
 setProductoEditando(
 null
@@ -400,6 +413,15 @@ e.target.value
 )}
 />
 
+<textarea className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 sm:col-span-2" placeholder="Descripción comercial: qué incluye, sabor, tamaño y condiciones" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
+<input className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" placeholder="SKU o código interno" value={sku} onChange={(e) => setSku(e.target.value)} />
+<input type="number" min="0" className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" placeholder="Tiempo de preparación (min)" value={tiempoPreparacion} onChange={(e) => setTiempoPreparacion(e.target.value)} />
+<input type="number" min="0" className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" placeholder="Existencias para vender" value={stock} onChange={(e) => setStock(e.target.value)} />
+<input type="number" min="0" className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" placeholder="Alerta de stock mínimo" value={stockMinimo} onChange={(e) => setStockMinimo(e.target.value)} />
+<input className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 sm:col-span-2" placeholder="Etiquetas separadas por coma: regalo, postre, aniversario" value={etiquetas} onChange={(e) => setEtiquetas(e.target.value)} />
+<label className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm font-bold text-slate-700 sm:col-span-2">Foto principal del producto<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setFotoProducto(e.target.files?.[0] || null)} className="mt-2 block w-full text-sm font-normal" />{fotoActual && <span className="mt-2 block text-xs font-normal text-emerald-700">Este producto ya tiene una foto. Selecciona otra solo si deseas reemplazarla.</span>}</label>
+<div className="grid gap-3 rounded-2xl bg-slate-50 p-4 sm:col-span-2"><p className="text-sm font-black text-slate-900">Catálogo y canales de venta</p><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={publicarCatalogo} onChange={(e) => setPublicarCatalogo(e.target.checked)} /> Publicar en el catálogo digital</label><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={disponibleOnline} onChange={(e) => setDisponibleOnline(e.target.checked)} /> Disponible para pedidos en línea</label><div className="flex flex-wrap gap-3">{["WhatsApp", "Web", "Facebook", "Instagram", "PedidosYa", "Uber Eats"].map((canal) => <label key={canal} className="flex items-center gap-1 text-xs font-semibold"><input type="checkbox" checked={canalesVenta.includes(canal)} onChange={(e) => setCanalesVenta(e.target.checked ? [...canalesVenta, canal] : canalesVenta.filter((actual) => actual !== canal))} /> {canal}</label>)}</div></div>
+
 <input
 type="number"
 className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
@@ -413,6 +435,7 @@ e.target.value
 
 <button
 
+disabled={subiendoFoto}
 onClick={
 guardarProducto
 }
@@ -427,11 +450,11 @@ productoEditando
 
 ?
 
-"Actualizar Producto"
+subiendoFoto ? "Subiendo foto..." : "Actualizar Producto"
 
 :
 
-"Guardar Producto"
+subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
 
 }
 
@@ -610,6 +633,7 @@ String(
 producto.costo
 )
 );
+setStock(String(producto.stock ?? 0)); setStockMinimo(String(producto.stock_minimo ?? 0)); setDescripcion(producto.descripcion ?? ""); setSku(producto.sku ?? ""); setTiempoPreparacion(producto.tiempo_preparacion_min == null ? "" : String(producto.tiempo_preparacion_min)); setEtiquetas((producto.etiquetas || []).join(", ")); setPublicarCatalogo(Boolean(producto.publicar_catalogo)); setDisponibleOnline(producto.disponible_online !== false); setCanalesVenta(producto.canales_venta?.length ? producto.canales_venta : ["WhatsApp", "Web"]); setFotoActual(producto.imagen_url ?? ""); setFotoProducto(null);
 
 window.scrollTo({
 
