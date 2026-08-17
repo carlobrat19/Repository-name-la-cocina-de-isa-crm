@@ -3,6 +3,30 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
+type IngredienteReceta = {
+  cantidad: number;
+  ingredientes: { nombre: string; unidad_base: string; costo_referencia: number | string; stock_actual: number | string } | null;
+};
+
+type RecetaPiloto = {
+  rendimiento: number | string;
+  unidad_rendimiento: string;
+  merma_pct: number | string;
+  margen_pct: number | string;
+  iva_pct: number | string;
+  recargo_carta_pct: number | string;
+  receta_ingredientes: IngredienteReceta[];
+};
+
+type Producto = {
+  id: string;
+  nombre: string;
+  categoria?: string | null;
+  precio_venta: number | string;
+  costo?: number | string | null;
+  estado?: string | null;
+};
+
 export default function ProductosPage() {
 
 const [nombre,setNombre]=useState("");
@@ -11,7 +35,9 @@ const [precio,setPrecio]=useState("");
 const [costo,setCosto]=useState("");
 
 const [productos,setProductos]=
-useState<any[]>([]);
+useState<Producto[]>([]);
+
+const [recetaPiloto, setRecetaPiloto] = useState<RecetaPiloto | null>(null);
 
 const [
 productoEditando,
@@ -55,9 +81,21 @@ return;
 
 }
 
+const productosCargados = (data || []) as Producto[];
+
 setProductos(
-data || []
+productosCargados
 );
+
+const panBanano = productosCargados.find((producto) => producto.nombre === "PAN DE BANANO");
+if (panBanano) {
+const recetaRespuesta = await supabase
+.from("recetas_estandar")
+.select("rendimiento, unidad_rendimiento, merma_pct, margen_pct, iva_pct, recargo_carta_pct, receta_ingredientes(cantidad, ingredientes(nombre, unidad_base, costo_referencia, stock_actual))")
+.eq("producto_id", panBanano.id)
+.maybeSingle();
+if (!recetaRespuesta.error) setRecetaPiloto(recetaRespuesta.data as RecetaPiloto | null);
+}
 
 }
 
@@ -240,9 +278,8 @@ obtenerProductos();
 // ======================
 
 useEffect(()=>{
-
-obtenerProductos();
-
+const timer = window.setTimeout(() => void obtenerProductos(), 0);
+return () => window.clearTimeout(timer);
 },[]);
 
 // ======================
@@ -252,6 +289,20 @@ return(
 <main className="min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 p-10">
 
 <div className="max-w-7xl mx-auto">
+
+{recetaPiloto && (() => {
+const costoBase = recetaPiloto.receta_ingredientes.reduce((total, detalle) => total + Number(detalle.cantidad || 0) * Number(detalle.ingredientes?.costo_referencia || 0), 0);
+const conMerma = costoBase * (1 + Number(recetaPiloto.merma_pct || 0));
+const precioSugerido = conMerma * (1 + Number(recetaPiloto.margen_pct || 0)) * (1 + Number(recetaPiloto.iva_pct || 0)) * (1 + Number(recetaPiloto.recargo_carta_pct || 0));
+return <section className="mb-10 overflow-hidden rounded-[35px] bg-slate-950 p-8 text-white shadow-2xl">
+<p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Receta piloto · La Cocina de Isa</p>
+<h1 className="mt-2 text-4xl font-black">Pan de Banano</h1>
+<p className="mt-2 text-sm text-slate-300">Costo calculado automáticamente desde los ingredientes de tu receta estándar.</p>
+<div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo ingredientes</p><b className="text-2xl">Q{costoBase.toFixed(2)}</b></div><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo con merma</p><b className="text-2xl">Q{conMerma.toFixed(2)}</b></div><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Rendimiento</p><b className="text-2xl">{recetaPiloto.rendimiento} {recetaPiloto.unidad_rendimiento}</b></div><div className="rounded-2xl bg-orange-500 p-4"><p className="text-xs text-orange-100">Precio sugerido actual</p><b className="text-2xl">Q{precioSugerido.toFixed(2)}</b></div></div>
+<div className="mt-7 overflow-x-auto rounded-2xl bg-white text-slate-900"><table className="w-full text-sm"><thead className="bg-slate-100 text-left text-xs uppercase text-slate-500"><tr><th className="p-3">Ingrediente</th><th className="p-3">Cantidad</th><th className="p-3">Costo unitario</th><th className="p-3 text-right">Costo receta</th><th className="p-3 text-right">Stock</th></tr></thead><tbody>{recetaPiloto.receta_ingredientes.map((detalle) => <tr key={detalle.ingredientes?.nombre} className="border-t"><td className="p-3 font-bold">{detalle.ingredientes?.nombre}</td><td className="p-3">{Number(detalle.cantidad).toFixed(detalle.ingredientes?.unidad_base === "g" ? 1 : 2)} {detalle.ingredientes?.unidad_base}</td><td className="p-3">Q{Number(detalle.ingredientes?.costo_referencia || 0).toFixed(detalle.ingredientes?.unidad_base === "g" ? 4 : 2)}</td><td className="p-3 text-right font-bold">Q{(Number(detalle.cantidad) * Number(detalle.ingredientes?.costo_referencia || 0)).toFixed(2)}</td><td className="p-3 text-right">{Number(detalle.ingredientes?.stock_actual || 0).toFixed(detalle.ingredientes?.unidad_base === "g" ? 1 : 0)} {detalle.ingredientes?.unidad_base}</td></tr>)}</tbody></table></div>
+<p className="mt-4 text-xs text-slate-300">Regla importada: {(Number(recetaPiloto.merma_pct) * 100).toFixed(0)}% merma · {(Number(recetaPiloto.margen_pct) * 100).toFixed(0)}% margen · {(Number(recetaPiloto.iva_pct) * 100).toFixed(0)}% IVA · {(Number(recetaPiloto.recargo_carta_pct) * 100).toFixed(0)}% recargo de carta.</p>
+</section>;
+})()}
 
 <div className="bg-white rounded-[35px] shadow-2xl p-10 max-w-3xl mx-auto">
 
@@ -394,7 +445,7 @@ Acciones
 {
 
 productos.map(
-(producto:any)=>(
+(producto)=>(
 
 <tr
 key={
@@ -489,7 +540,7 @@ producto.nombre
 );
 
 setCategoria(
-producto.categoria
+producto.categoria ?? ""
 );
 
 setPrecio(
