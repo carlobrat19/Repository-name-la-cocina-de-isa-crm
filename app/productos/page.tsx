@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 
 type IngredienteReceta = {
@@ -66,6 +67,9 @@ const [precioFinalProducto, setPrecioFinalProducto] = useState("");
 const [guardandoPrecioFinal, setGuardandoPrecioFinal] = useState(false);
 const [busquedaProducto, setBusquedaProducto] = useState("");
 const [categoriaFiltro, setCategoriaFiltro] = useState("Todas");
+const [inventarioFiltro, setInventarioFiltro] = useState("Todos");
+const [catalogoFiltro, setCatalogoFiltro] = useState("Todos");
+const [canalFiltro, setCanalFiltro] = useState("Todos");
 
 const [
 productoEditando,
@@ -332,9 +336,14 @@ return () => window.clearTimeout(timer);
 },[]);
 
 const categorias = Array.from(new Set(productos.map((producto) => producto.categoria?.trim()).filter(Boolean))) as string[];
+const canales = Array.from(new Set(productos.flatMap((producto) => producto.canales_venta || []))).sort();
 const productosFiltrados = productos.filter((producto) => {
-const texto = `${producto.nombre} ${producto.categoria ?? ""}`.toLowerCase();
-return texto.includes(busquedaProducto.trim().toLowerCase()) && (categoriaFiltro === "Todas" || producto.categoria === categoriaFiltro);
+const texto = `${producto.nombre} ${producto.categoria ?? ""} ${producto.sku ?? ""} ${(producto.etiquetas || []).join(" ")}`.toLowerCase();
+const stockActual = Number(producto.stock || 0);
+const stockMinimoActual = Number(producto.stock_minimo || 0);
+const pasaInventario = inventarioFiltro === "Todos" || (inventarioFiltro === "Sin existencias" && stockActual <= 0) || (inventarioFiltro === "Stock bajo" && stockActual > 0 && stockActual <= stockMinimoActual) || (inventarioFiltro === "Disponible" && stockActual > stockMinimoActual);
+const pasaCatalogo = catalogoFiltro === "Todos" || (catalogoFiltro === "Publicado" && producto.publicar_catalogo) || (catalogoFiltro === "No publicado" && !producto.publicar_catalogo) || (catalogoFiltro === "Disponible online" && producto.disponible_online);
+return texto.includes(busquedaProducto.trim().toLowerCase()) && (categoriaFiltro === "Todas" || producto.categoria === categoriaFiltro) && pasaInventario && pasaCatalogo && (canalFiltro === "Todos" || (producto.canales_venta || []).includes(canalFiltro));
 });
 
 // ======================
@@ -473,24 +482,32 @@ subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
 <div className="border-b border-slate-200 p-6 sm:p-8">
 <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
 <div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-500">Catálogo</p><h2 className="mt-2 text-3xl font-black text-slate-950">Productos guardados</h2><p className="mt-1 text-sm text-slate-500">{productosFiltrados.length} de {productos.length} productos visibles</p></div>
-<div className="grid gap-3 sm:grid-cols-3"><Link href="/recetas" className="rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-orange-600">Recetas y costos</Link><input aria-label="Buscar productos" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-500" placeholder="Buscar producto o categoría" value={busquedaProducto} onChange={(event) => setBusquedaProducto(event.target.value)} /><select aria-label="Filtrar por categoría" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={categoriaFiltro} onChange={(event) => setCategoriaFiltro(event.target.value)}><option>Todas</option>{categorias.map((categoria) => <option key={categoria}>{categoria}</option>)}</select></div>
+<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"><Link href="/recetas" className="rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-orange-600">Recetas y costos</Link><input aria-label="Buscar productos" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-500" placeholder="Nombre, código, etiqueta o categoría" value={busquedaProducto} onChange={(event) => setBusquedaProducto(event.target.value)} /><select aria-label="Filtrar por categoría" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={categoriaFiltro} onChange={(event) => setCategoriaFiltro(event.target.value)}><option>Todas</option>{categorias.map((categoria) => <option key={categoria}>{categoria}</option>)}</select><select aria-label="Filtrar por inventario" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={inventarioFiltro} onChange={(event) => setInventarioFiltro(event.target.value)}><option>Todos</option><option>Disponible</option><option>Stock bajo</option><option>Sin existencias</option></select><select aria-label="Filtrar por catálogo" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={catalogoFiltro} onChange={(event) => setCatalogoFiltro(event.target.value)}><option>Todos</option><option>Publicado</option><option>No publicado</option><option>Disponible online</option></select><select aria-label="Filtrar por canal" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={canalFiltro} onChange={(event) => setCanalFiltro(event.target.value)}><option>Todos</option>{canales.map((canal) => <option key={canal}>{canal}</option>)}</select></div>
 </div>
 </div>
 
 <div className="overflow-x-auto p-3 sm:p-5">
 
-<table className="w-full min-w-[880px] table-auto text-sm">
+<table className="w-full min-w-[1180px] table-auto text-sm">
 
 <thead>
 
 <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
 
 <th className="p-5 text-left">
-Producto
+Producto y código
 </th>
 
 <th className="p-5 text-left">
 Categoría
+</th>
+
+<th className="p-5 text-left">
+Inventario
+</th>
+
+<th className="p-5 text-left">
+Catálogo
 </th>
 
 <th className="p-5 text-left">
@@ -530,13 +547,7 @@ producto.id
 }
 >
 
-<td className="p-5 font-bold text-slate-950">
-
-{
-producto.nombre
-}
-
-</td>
+<td className="p-5"><div className="flex min-w-[230px] items-center gap-3">{producto.imagen_url ? <Image src={producto.imagen_url} alt={producto.nombre} width={48} height={48} className="size-12 rounded-xl border border-slate-200 object-cover" /> : <div className="grid size-12 place-items-center rounded-xl bg-orange-50 text-xs font-black text-orange-600">SIN<br/>FOTO</div>}<div><p className="font-bold text-slate-950">{producto.nombre}</p><p className="mt-1 font-mono text-[11px] font-bold uppercase text-slate-500">{producto.sku || "SIN CÓDIGO"}</p>{producto.descripcion && <p className="mt-1 max-w-[240px] truncate text-xs text-slate-500">{producto.descripcion}</p>}</div></div></td>
 
 <td className="p-5 text-slate-600">
 
@@ -545,6 +556,10 @@ producto.categoria
 }
 
 </td>
+
+<td className="p-5"><p className={`font-black ${Number(producto.stock || 0) <= 0 ? "text-rose-600" : Number(producto.stock || 0) <= Number(producto.stock_minimo || 0) ? "text-amber-600" : "text-emerald-700"}`}>{Number(producto.stock || 0)} u.</p><p className="mt-1 text-[11px] text-slate-500">Mínimo: {Number(producto.stock_minimo || 0)}</p></td>
+
+<td className="p-5"><div className="flex flex-col items-start gap-1">{producto.publicar_catalogo ? <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-700">Publicado</span> : <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">Interno</span>}<span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${producto.disponible_online && Number(producto.stock || 0) > 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{producto.disponible_online && Number(producto.stock || 0) > 0 ? "Disponible online" : "No disponible"}</span></div></td>
 
 <td className="p-5 text-emerald-700 font-bold">
 
@@ -686,7 +701,7 @@ Eliminar
 
 }
 
-{productosFiltrados.length === 0 && <tr><td colSpan={7} className="p-12 text-center text-slate-500">No encontramos productos con esos filtros.</td></tr>}
+{productosFiltrados.length === 0 && <tr><td colSpan={9} className="p-12 text-center text-slate-500">No encontramos productos con esos filtros.</td></tr>}
 </tbody>
 
 </table>
