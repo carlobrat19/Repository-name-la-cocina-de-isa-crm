@@ -327,6 +327,7 @@ export default function PedidosPage() {
         clienteExistente = (coincidencias.find((resultado) => resultado.data)?.data || null) as Cliente | null;
         clientePedidoId = clienteExistente?.id || null;
       }
+      const clienteNuevo = !clientePedidoId;
       const datosCliente = {
         nombre: cliente.trim(), telefono: telefono.trim() || null, email: correoFiscal.trim() || null, nit: nit.trim() || null,
         razon_social: razonSocial.trim() || null, direccion: direccionFiscal.trim() || null, canal_origen: "Manual",
@@ -342,6 +343,22 @@ export default function PedidosPage() {
           .single();
         if (error) throw error;
         clientePedidoId = clienteNuevo.id;
+      }
+
+      if (clienteNuevo && requiereEnvio && direccion.trim() && clientePedidoId) {
+        const { error: direccionError } = await supabase
+          .from("cliente_direcciones")
+          .insert({
+            cliente_id: clientePedidoId,
+            etiqueta: "Principal",
+            direccion: direccion.trim(),
+            departamento: departamentoEntrega.trim() || null,
+            municipio: municipioEntrega.trim() || null,
+            zona: zonaEntrega.trim() || null,
+            referencia: null,
+            principal: true,
+          });
+        if (direccionError) throw direccionError;
       }
 
       const { data: pedidoData, error: pedidoError } = await supabase
