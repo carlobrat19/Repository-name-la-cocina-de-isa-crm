@@ -46,6 +46,8 @@ type Pedido = {
   observaciones?: string | null;
   canal_origen?: string | null;
   tipo_documento?: string | null;
+  creado_por?: string | null;
+  creado_por_nombre?: string | null;
 };
 type Detalle = {
   id?: string;
@@ -365,6 +367,9 @@ export default function DetallePedidoPage() {
             <p className="mt-1 text-sm text-slate-500">
               Vista operativa, de cobro y preparación para facturación
               electrónica.
+            </p>
+            <p className="mt-2 text-xs font-semibold text-slate-500">
+              Registrado por: {pedido.creado_por_nombre || "No disponible (pedido creado antes de esta mejora)"}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
