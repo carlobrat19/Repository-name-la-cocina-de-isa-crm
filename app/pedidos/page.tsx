@@ -25,6 +25,7 @@ type Producto = {
   id: string;
   nombre: string;
   precio_venta?: number | string | null;
+  costo?: number | string | null;
 };
 
 type ItemCarrito = {
@@ -32,6 +33,7 @@ type ItemCarrito = {
   nombre: string;
   cantidad: number;
   precio: number;
+  costo: number;
 };
 
 type Cliente = {
@@ -137,7 +139,7 @@ export default function PedidosPage() {
     setCargandoProductos(true);
     const { data, error } = await supabase
       .from("productos")
-      .select("id, nombre, precio_venta")
+      .select("id, nombre, precio_venta, costo")
       .order("nombre");
     if (error) console.error(error);
     setProductos((data || []) as Producto[]);
@@ -224,6 +226,7 @@ export default function PedidosPage() {
     }
     const unidades = Math.max(1, Number(cantidad) || 1);
     const precio = Number(productoActual.precio_venta || 0);
+    const costo = Number(productoActual.costo || 0);
     setCarrito((anterior) => {
       const existente = anterior.find((item) => item.id === productoActual.id);
       if (existente)
@@ -239,6 +242,7 @@ export default function PedidosPage() {
           nombre: productoActual.nombre,
           cantidad: unidades,
           precio,
+          costo,
         },
       ];
     });
@@ -409,7 +413,7 @@ export default function PedidosPage() {
             producto_id: item.id,
             cantidad: item.cantidad,
             precio: item.precio,
-            costo: item.precio * item.cantidad,
+            costo: item.costo,
           })),
         );
       if (detalleError) throw detalleError;
