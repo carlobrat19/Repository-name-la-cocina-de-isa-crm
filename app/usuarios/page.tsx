@@ -12,7 +12,8 @@ const roles: RolCrm[] = ["Ventas", "Producción", "Reparto", "Caja", "Sin acceso
 const modulos: { id: ModuloCrm; label: string; detalle: string }[] = [
   { id: "dashboard", label: "Resumen", detalle: "Indicadores principales" }, { id: "pedidos", label: "Pedidos", detalle: "Crear y gestionar ventas" },
   { id: "clientes", label: "Clientes", detalle: "Ficha, direcciones y etiquetas" }, { id: "conversaciones", label: "Conversaciones", detalle: "WhatsApp, Meta y respuestas" },
-  { id: "productos", label: "Productos", detalle: "Catálogo e inventario" }, { id: "produccion", label: "Producción", detalle: "Preparación de pedidos" },
+  { id: "productos", label: "Productos y catálogo", detalle: "Catálogo, fotos, precios y canales" }, { id: "recetas_costos", label: "Recetas y costos", detalle: "Recetas estándar y costo por producto" },
+  { id: "ingredientes", label: "Ingredientes", detalle: "Inventario y costos de materias primas" }, { id: "produccion", label: "Producción", detalle: "Preparación de pedidos" },
   { id: "pendientes", label: "Pendientes", detalle: "Control de productos" }, { id: "cobros_fel", label: "Cobros y FEL", detalle: "Pagos y facturación" },
   { id: "flujo_caja", label: "Flujo de caja", detalle: "Movimientos de efectivo" }, { id: "reportes", label: "Reportes", detalle: "Resultados y métricas" },
   { id: "integraciones", label: "Integraciones", detalle: "Configuraciones externas" },

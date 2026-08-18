@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 export type RolCrm = "Administrador" | "Ventas" | "Producción" | "Reparto" | "Caja" | "Sin acceso";
-export type ModuloCrm = "dashboard" | "pedidos" | "clientes" | "conversaciones" | "productos" | "produccion" | "pendientes" | "cobros_fel" | "flujo_caja" | "reportes" | "integraciones";
+export type ModuloCrm = "dashboard" | "pedidos" | "clientes" | "conversaciones" | "productos" | "recetas_costos" | "ingredientes" | "produccion" | "pendientes" | "cobros_fel" | "flujo_caja" | "reportes" | "integraciones";
 
 type AuthContextValue = {
   id: string | null;
