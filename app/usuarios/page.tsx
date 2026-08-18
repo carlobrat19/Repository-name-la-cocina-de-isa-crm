@@ -69,7 +69,116 @@ export default function UsuariosPage() {
     setGuardando(`reset-${perfil.id}`); const { error } = await supabase.auth.resetPasswordForEmail(perfil.email, { redirectTo: `${window.location.origin}/restablecer-contrasena` }); setGuardando(null);
     if (error) { setMensaje(error.message); return; } await registrar("Envió restablecimiento de contraseña", perfil.id, { email: perfil.email }); setMensaje(`Se envió un correo seguro a ${perfil.email}.`); await cargar();
   }
+  async function eliminarCuenta(perfil: Perfil) {
+    if (!window.confirm(`¿Eliminar definitivamente a ${perfil.email}? Solo se permitirá si no tiene pedidos, movimientos ni otra actividad registrada.`)) return;
+    setGuardando(`eliminar-${perfil.id}`); const { data: { session } } = await supabase.auth.getSession();
+    const respuesta = await fetch(`/api/admin/usuarios/${perfil.id}`, { method: "DELETE", headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {} }); const resultado = await respuesta.json() as { error?: string };
+    setGuardando(null); if (!respuesta.ok) { setMensaje(resultado.error || "No se pudo eliminar la cuenta."); return; } setMensaje("Cuenta eliminada definitivamente."); await cargar();
+  }
+  async function eliminarInvitacion(invitacion: Invitacion) {
+    if (!window.confirm(`¿Eliminar la autorización pendiente para ${invitacion.email}?`)) return;
+    setGuardando(`invitacion-${invitacion.id}`); const { error } = await supabase.from("invitaciones_crm").delete().eq("id", invitacion.id); setGuardando(null);
+    if (error) { setMensaje(error.message); return; } await registrar("Eliminó una autorización pendiente", null, { email: invitacion.email }); setMensaje("Autorización pendiente eliminada."); await cargar();
+  }
 
   if (rolActual !== "Administrador") return <main className="min-h-screen bg-slate-50 p-10 text-center text-slate-500">Solo el Administrador puede gestionar usuarios.</main>;
-  return <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 lg:px-10 lg:py-9"><div className="mx-auto max-w-7xl"><header className="mb-6"><p className="text-xs font-bold uppercase tracking-[.18em] text-orange-600">Administración privada</p><h1 className="mt-1 text-3xl font-black">Usuarios y permisos</h1><p className="mt-1 text-sm text-slate-500">Solo tú autorizas cuentas, módulos, vencimientos y restablecimientos.</p></header>{mensaje && <p className="mb-5 rounded-xl bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-800">{mensaje}</p>}<section className="grid gap-6 xl:grid-cols-[380px_1fr]"><form onSubmit={crear} className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><MailPlus className="text-orange-600"/><div><h2 className="font-bold">Autorizar nueva cuenta</h2><p className="text-xs text-slate-500">Nadie puede registrarse sin tu aprobación.</p></div></div><div className="mt-5 space-y-3"><input required value={nombre} onChange={(event) => setNombre(event.target.value)} placeholder="Nombre de la persona" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/><input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="correo@empresa.com" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/><select value={rol} onChange={(event) => aplicarRol(event.target.value as RolCrm)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold">{roles.map((item) => <option key={item}>{item}</option>)}</select><label className="block text-sm font-bold">Vence el acceso (opcional)<input type="datetime-local" value={accesoHasta} onChange={(event) => setAccesoHasta(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/></label></div><div className="mt-5 flex justify-between"><p className="text-xs font-bold uppercase tracking-[.14em] text-slate-500">Módulos permitidos</p><button type="button" onClick={() => setSeleccion(modulos.map((modulo) => modulo.id))} className="text-xs font-bold text-orange-600">Todos</button></div><div className="mt-3 grid gap-2">{modulos.map((modulo) => <label key={modulo.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-100 p-2.5"><input type="checkbox" checked={seleccion.includes(modulo.id)} onChange={() => setSeleccion(alternar(seleccion, modulo.id))} className="size-4 accent-orange-500"/><span><b className="block text-sm">{modulo.label}</b><small className="text-xs text-slate-500">{modulo.detalle}</small></span></label>)}</div><button disabled={guardando === "nuevo"} className="mt-5 w-full rounded-xl bg-slate-950 py-3 text-sm font-bold text-white">{guardando === "nuevo" ? "Autorizando…" : "Autorizar cuenta"}</button></form><div className="space-y-6"><section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4"><UsersRound className="text-orange-600"/><div><h2 className="font-bold">Equipo activo</h2><p className="text-xs text-slate-500">Controla estado, módulos y vigencia de cada persona.</p></div></div><div className="divide-y divide-slate-100">{perfiles.map((perfil) => { const principal = perfil.email === "carlobrat@gmail.com"; const permitidos = permisos[perfil.id] ?? []; return <article key={perfil.id} className="p-5"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="flex items-center gap-3"><UserRound className="h-9 w-9 rounded-xl bg-slate-100 p-2 text-slate-500"/><div><p className="font-bold">{perfil.nombre || "Sin nombre"}</p><p className="text-xs text-slate-500">{perfil.email} · {principal ? "Administrador principal" : perfil.activo ? "Activo" : "Desactivado"}</p><p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500"><Clock3 size={12}/>{fecha(perfil.acceso_hasta)}</p></div></div>{!principal && <div className="flex flex-wrap gap-2"><select value={perfil.rol} onChange={(event) => void actualizarPerfil(perfil, { rol: event.target.value as RolCrm })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">{roles.map((item) => <option key={item}>{item}</option>)}</select><button onClick={() => void actualizarPerfil(perfil, { activo: !perfil.activo })} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold">{perfil.activo ? "Desactivar" : "Activar"}</button><button disabled={guardando === `reset-${perfil.id}`} onClick={() => void restablecer(perfil)} className="rounded-xl bg-orange-50 px-3 py-2 text-xs font-bold text-orange-700"><KeyRound className="mr-1 inline h-3.5 w-3.5"/>Restablecer</button></div>}</div>{!principal && <><label className="mt-4 block text-xs font-bold uppercase tracking-wide text-slate-500">Acceso temporal<input type="datetime-local" defaultValue={entradaFecha(perfil.acceso_hasta)} onBlur={(event) => { const valor = event.target.value ? new Date(event.target.value).toISOString() : null; if (valor !== perfil.acceso_hasta) void actualizarPerfil(perfil, { acceso_hasta: valor }); }} className="mt-1.5 block w-full max-w-xs rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700"/></label><div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{modulos.map((modulo) => <label key={modulo.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm"><input type="checkbox" disabled={guardando === perfil.id} checked={permitidos.includes(modulo.id)} onChange={() => void actualizarModulos(perfil, alternar(permitidos, modulo.id))} className="size-4 accent-orange-500"/>{modulo.label}</label>)}</div></>}</article>; })}</div></section><section className="grid gap-6 lg:grid-cols-2"><article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><ShieldCheck className="text-orange-600"/><div><h2 className="font-bold">Autorizaciones pendientes</h2><p className="text-xs text-slate-500">Esperando activación.</p></div></div><div className="mt-4 space-y-2">{invitaciones.filter((item) => !item.activado_at).map((item) => <div key={item.id} className="rounded-xl bg-slate-50 p-3"><b className="block text-sm">{item.nombre || item.email}</b><small className="text-xs text-slate-500">{item.email} · {item.modulos.length} módulos · {fecha(item.acceso_hasta)}</small></div>)}{!invitaciones.some((item) => !item.activado_at) && <p className="text-sm text-slate-500">No hay autorizaciones pendientes.</p>}</div></article><article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><History className="text-orange-600"/><div><h2 className="font-bold">Bitácora</h2><p className="text-xs text-slate-500">Últimas acciones administrativas.</p></div></div><div className="mt-4 space-y-2">{auditoria.map((item) => <div key={item.id} className="rounded-xl bg-slate-50 p-3"><p className="text-sm font-bold">{item.accion}</p><p className="mt-1 text-xs text-slate-500">{item.usuario_id ? nombres.get(item.usuario_id) || "Usuario" : item.detalle?.email || "Cuenta"} · {fecha(item.created_at)}</p></div>)}{!auditoria.length && <p className="text-sm text-slate-500">Aún no hay acciones registradas.</p>}</div></article></section></div></section></div></main>;
+  return <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 lg:px-10 lg:py-9">
+<div className="mx-auto max-w-7xl">
+<header className="mb-6">
+<p className="text-xs font-bold uppercase tracking-[.18em] text-orange-600">Administración privada</p>
+<h1 className="mt-1 text-3xl font-black">Usuarios y permisos</h1>
+<p className="mt-1 text-sm text-slate-500">Solo tú autorizas cuentas, módulos, vencimientos y restablecimientos.</p>
+</header>{mensaje && <p className="mb-5 rounded-xl bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-800">{mensaje}</p>}<section className="grid gap-6 xl:grid-cols-[380px_1fr]">
+<form onSubmit={crear} className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+<div className="flex items-center gap-3">
+<MailPlus className="text-orange-600"/>
+<div>
+<h2 className="font-bold">Autorizar nueva cuenta</h2>
+<p className="text-xs text-slate-500">Nadie puede registrarse sin tu aprobación.</p>
+</div>
+</div>
+<div className="mt-5 space-y-3">
+<input required value={nombre} onChange={(event) => setNombre(event.target.value)} placeholder="Nombre de la persona" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/>
+<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="correo@empresa.com" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/>
+<select value={rol} onChange={(event) => aplicarRol(event.target.value as RolCrm)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold">{roles.map((item) => <option key={item}>{item}</option>)}</select>
+<label className="block text-sm font-bold">Vence el acceso (opcional)<input type="datetime-local" value={accesoHasta} onChange={(event) => setAccesoHasta(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/>
+</label>
+</div>
+<div className="mt-5 flex justify-between">
+<p className="text-xs font-bold uppercase tracking-[.14em] text-slate-500">Módulos permitidos</p>
+<button type="button" onClick={() => setSeleccion(modulos.map((modulo) => modulo.id))} className="text-xs font-bold text-orange-600">Todos</button>
+</div>
+<div className="mt-3 grid gap-2">{modulos.map((modulo) => <label key={modulo.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-100 p-2.5">
+<input type="checkbox" checked={seleccion.includes(modulo.id)} onChange={() => setSeleccion(alternar(seleccion, modulo.id))} className="size-4 accent-orange-500"/>
+<span>
+<b className="block text-sm">{modulo.label}</b>
+<small className="text-xs text-slate-500">{modulo.detalle}</small>
+</span>
+</label>)}</div>
+<button disabled={guardando === "nuevo"} className="mt-5 w-full rounded-xl bg-slate-950 py-3 text-sm font-bold text-white">{guardando === "nuevo" ? "Autorizando…" : "Autorizar cuenta"}</button>
+</form>
+<div className="space-y-6">
+<section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+<div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+<UsersRound className="text-orange-600"/>
+<div>
+<h2 className="font-bold">Equipo activo</h2>
+<p className="text-xs text-slate-500">Controla estado, módulos y vigencia de cada persona.</p>
+</div>
+</div>
+<div className="divide-y divide-slate-100">{perfiles.map((perfil) => { const principal = perfil.email === "carlobrat@gmail.com"; const permitidos = permisos[perfil.id] ?? []; return <article key={perfil.id} className="p-5">
+<div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+<div className="flex items-center gap-3">
+<UserRound className="h-9 w-9 rounded-xl bg-slate-100 p-2 text-slate-500"/>
+<div>
+<p className="font-bold">{perfil.nombre || "Sin nombre"}</p>
+<p className="text-xs text-slate-500">{perfil.email} · {principal ? "Administrador principal" : perfil.activo ? "Activo" : "Desactivado"}</p>
+<p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
+<Clock3 size={12}/>{fecha(perfil.acceso_hasta)}</p>
+</div>
+</div>{!principal && <div className="flex flex-wrap gap-2">
+<select value={perfil.rol} onChange={(event) => void actualizarPerfil(perfil, { rol: event.target.value as RolCrm })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">{roles.map((item) => <option key={item}>{item}</option>)}</select>
+<button onClick={() => void actualizarPerfil(perfil, { activo: !perfil.activo })} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold">{perfil.activo ? "Desactivar" : "Activar"}</button>
+<button disabled={guardando === `reset-${perfil.id}`} onClick={() => void restablecer(perfil)} className="rounded-xl bg-orange-50 px-3 py-2 text-xs font-bold text-orange-700">
+<KeyRound className="mr-1 inline h-3.5 w-3.5"/>Restablecer</button>
+<button disabled={guardando === `eliminar-${perfil.id}`} onClick={() => void eliminarCuenta(perfil)} className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">Eliminar</button>
+</div>}</div>{!principal && <>
+<label className="mt-4 block text-xs font-bold uppercase tracking-wide text-slate-500">Acceso temporal<input type="datetime-local" defaultValue={entradaFecha(perfil.acceso_hasta)} onBlur={(event) => { const valor = event.target.value ? new Date(event.target.value).toISOString() : null; if (valor !== perfil.acceso_hasta) void actualizarPerfil(perfil, { acceso_hasta: valor }); }} className="mt-1.5 block w-full max-w-xs rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal text-slate-700"/>
+</label>
+<div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{modulos.map((modulo) => <label key={modulo.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm">
+<input type="checkbox" disabled={guardando === perfil.id} checked={permitidos.includes(modulo.id)} onChange={() => void actualizarModulos(perfil, alternar(permitidos, modulo.id))} className="size-4 accent-orange-500"/>{modulo.label}</label>)}</div>
+</>}</article>; })}</div>
+</section>
+<section className="grid gap-6 lg:grid-cols-2">
+<article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+<div className="flex items-center gap-2">
+<ShieldCheck className="text-orange-600"/>
+<div>
+<h2 className="font-bold">Autorizaciones pendientes</h2>
+<p className="text-xs text-slate-500">Esperando activación.</p>
+</div>
+</div>
+<div className="mt-4 space-y-2">{invitaciones.filter((item) => !item.activado_at).map((item) => <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 p-3">
+<span><b className="block text-sm">{item.nombre || item.email}</b><small className="text-xs text-slate-500">{item.email} · {item.modulos.length} módulos · {fecha(item.acceso_hasta)}</small></span>
+<button disabled={guardando === `invitacion-${item.id}`} onClick={() => void eliminarInvitacion(item)} className="text-xs font-bold text-rose-700">Eliminar</button>
+</div>)}{!invitaciones.some((item) => !item.activado_at) && <p className="text-sm text-slate-500">No hay autorizaciones pendientes.</p>}</div>
+</article>
+<article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+<div className="flex items-center gap-2">
+<History className="text-orange-600"/>
+<div>
+<h2 className="font-bold">Bitácora</h2>
+<p className="text-xs text-slate-500">Últimas acciones administrativas.</p>
+</div>
+</div>
+<div className="mt-4 space-y-2">{auditoria.map((item) => <div key={item.id} className="rounded-xl bg-slate-50 p-3">
+<p className="text-sm font-bold">{item.accion}</p>
+<p className="mt-1 text-xs text-slate-500">{item.usuario_id ? nombres.get(item.usuario_id) || "Usuario" : item.detalle?.email || "Cuenta"} · {fecha(item.created_at)}</p>
+</div>)}{!auditoria.length && <p className="text-sm text-slate-500">Aún no hay acciones registradas.</p>}</div>
+</article>
+</section>
+</div>
+</section>
+</div>
+</main>;
 }
