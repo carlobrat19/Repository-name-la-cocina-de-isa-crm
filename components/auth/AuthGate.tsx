@@ -33,7 +33,8 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [rol, setRol] = useState<RolCrm | null>(null);
   const [modulos, setModulos] = useState<ModuloCrm[]>([]);
   const [listo, setListo] = useState(false);
-  const esAcceso = pathname.startsWith("/acceso");
+  const esLogin = pathname.startsWith("/acceso");
+  const esAcceso = esLogin || pathname.startsWith("/restablecer-contrasena");
 
   useEffect(() => {
     let activo = true;
@@ -46,20 +47,21 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
         return;
       }
       const [{ data: perfil }, { data: permisos }] = await Promise.all([
-        supabase.from("perfiles_crm").select("rol, activo").eq("id", session.user.id).maybeSingle(),
+        supabase.from("perfiles_crm").select("rol, activo, acceso_hasta").eq("id", session.user.id).maybeSingle(),
         supabase.from("permisos_usuario_crm").select("modulo").eq("user_id", session.user.id),
       ]);
       if (!activo) return;
-      const rolPerfil = perfil?.activo ? perfil.rol as RolCrm : "Sin acceso";
+      const vigente = !perfil?.acceso_hasta || new Date(perfil.acceso_hasta) > new Date();
+      const rolPerfil = perfil?.activo && vigente ? perfil.rol as RolCrm : "Sin acceso";
       setId(session.user.id); setEmail(session.user.email ?? null); setRol(rolPerfil);
       setModulos((permisos ?? []).map((permiso) => permiso.modulo as ModuloCrm)); setListo(true);
       if (!esAcceso && (!perfil || !perfil.activo || rolPerfil === "Sin acceso")) router.replace("/acceso?sin_acceso=1");
-      if (esAcceso && perfil?.activo && rolPerfil !== "Sin acceso") router.replace("/dashboard");
+      if (esLogin && perfil?.activo && rolPerfil !== "Sin acceso") router.replace("/dashboard");
     }
     void verificarAcceso();
     const { data: listener } = supabase.auth.onAuthStateChange(() => { void verificarAcceso(); });
     return () => { activo = false; listener.subscription.unsubscribe(); };
-  }, [esAcceso, router]);
+  }, [esAcceso, esLogin, router]);
 
   const value = useMemo<AuthContextValue>(() => ({
     id, email, rol, modulos, listo,
