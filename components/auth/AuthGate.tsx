@@ -56,7 +56,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
       setId(session.user.id); setEmail(session.user.email ?? null); setRol(rolPerfil);
       setModulos((permisos ?? []).map((permiso) => permiso.modulo as ModuloCrm)); setListo(true);
       if (!esAcceso && (!perfil || !perfil.activo || rolPerfil === "Sin acceso")) router.replace("/acceso?sin_acceso=1");
-      if (esLogin && perfil?.activo && rolPerfil !== "Sin acceso") router.replace("/dashboard");
+      if (esLogin && perfil?.activo && rolPerfil !== "Sin acceso") router.replace("/");
     }
     void verificarAcceso();
     const { data: listener } = supabase.auth.onAuthStateChange(() => { void verificarAcceso(); });

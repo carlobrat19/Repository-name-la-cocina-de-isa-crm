@@ -1,22 +1,5 @@
-"use client";
-
-import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowRight, CircleDollarSign, ClipboardList, Package, ShoppingBag } from "lucide-react";
-import PageHeader from "@/components/dashboard/PageHeader";
-import MetricCard from "@/components/dashboard/MetricCard";
-import { moneda } from "@/lib/crm";
-import { supabase } from "@/lib/supabase";
-
-type Pedido = { id: string; codigo: string | null; cliente: string | null; total: number | null; estado: string | null; fecha_creacion: string | null; fecha_entrega: string | null; pago_estado: string | null };
+import WelcomeHome from "@/components/dashboard/WelcomeHome";
 
 export default function DashboardPage() {
-  const [pedidos, setPedidos] = useState<Pedido[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const cargar = useCallback(async () => { setLoading(true); const { data, error: queryError } = await supabase.from("pedidos").select("id,codigo,cliente,total,estado,fecha_creacion,fecha_entrega,pago_estado").order("fecha_creacion", { ascending: false }).limit(100); if (queryError) setError(queryError.message); else setPedidos((data || []) as Pedido[]); setLoading(false); }, []);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void cargar(); }, [cargar]);
-  const metrics = useMemo(() => { const now = new Date(); const currentMonth = pedidos.filter(p => p.fecha_creacion && new Date(p.fecha_creacion).getMonth() === now.getMonth() && new Date(p.fecha_creacion).getFullYear() === now.getFullYear()); return { sales: currentMonth.reduce((sum, p) => sum + Number(p.total || 0), 0), pending: pedidos.filter(p => p.estado !== "Entregado").length, paid: pedidos.filter(p => p.pago_estado === "Pagado").length }; }, [pedidos]);
-  return <section><PageHeader eyebrow="Centro de operación" title="Buenos días, Isa" description="Mira el estado de ventas, producción y entregas de tu negocio." actions={<Link href="/pedidos" className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-orange-600">Nuevo pedido <ArrowRight size={16}/></Link>}/><div className="space-y-7 p-6 md:p-10">{error && <p className="rounded-xl bg-rose-50 p-4 text-sm font-medium text-rose-700">No se pudo cargar el resumen: {error}</p>}<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="Ventas del mes" value={moneda(metrics.sales)} detail="Facturación registrada" icon={CircleDollarSign}/><MetricCard label="Pedidos activos" value={metrics.pending} detail="Pendientes de entregar" icon={ClipboardList} accent="blue"/><MetricCard label="Pagos completos" value={metrics.paid} detail="Pedidos marcados como pagados" icon={ShoppingBag} accent="green"/><MetricCard label="Total de pedidos" value={pedidos.length} detail="Últimos 100 registros" icon={Package} accent="violet"/></div><div className="grid gap-6 xl:grid-cols-[1.55fr_.85fr]"><section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 p-5"><div><h2 className="font-black text-slate-950">Pedidos recientes</h2><p className="mt-1 text-sm text-slate-500">Actividad más reciente de ventas</p></div><Link href="/pedidos/lista" className="text-sm font-bold text-orange-600">Ver todos</Link></div><div className="divide-y divide-slate-100">{loading ? <p className="p-8 text-sm text-slate-500">Cargando pedidos…</p> : pedidos.slice(0, 6).map(p => <Link href={`/pedidos/${p.id}`} key={p.id} className="flex items-center justify-between gap-4 p-5 transition hover:bg-slate-50"><div><p className="font-bold text-slate-900">{p.cliente || "Cliente sin nombre"}</p><p className="mt-1 text-sm text-slate-500">{p.codigo || "Sin código"} · {p.fecha_entrega || "Sin fecha de entrega"}</p></div><div className="text-right"><p className="font-black text-slate-900">{moneda(p.total)}</p><span className="mt-1 inline-block rounded-full bg-orange-50 px-2.5 py-1 text-xs font-bold text-orange-700">{p.estado || "Pendiente"}</span></div></Link>)}{!loading && !pedidos.length && <p className="p-8 text-sm text-slate-500">Aún no hay pedidos. Crea el primero para comenzar.</p>}</div></section><section className="rounded-2xl bg-slate-950 p-6 text-white"><p className="text-xs font-bold uppercase tracking-[.18em] text-orange-400">Siguiente paso</p><h2 className="mt-3 text-2xl font-black">Organiza la producción del día</h2><p className="mt-3 text-sm leading-6 text-slate-400">Revisa los pedidos pendientes y prepara tus productos antes de las entregas.</p><Link href="/productos-pendientes" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-900">Ver pendientes <ArrowRight size={16}/></Link></section></div></div></section>;
+  return <WelcomeHome/>;
 }
