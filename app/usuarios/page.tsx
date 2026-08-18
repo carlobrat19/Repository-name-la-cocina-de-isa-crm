@@ -11,7 +11,7 @@ type Auditoria = { id: string; usuario_id: string | null; accion: string; detall
 
 const roles: RolCrm[] = ["Ventas", "Producción", "Reparto", "Caja", "Sin acceso"];
 const modulos: { id: ModuloCrm; label: string; detalle: string }[] = [
-  { id: "dashboard", label: "Resumen", detalle: "Indicadores principales" }, { id: "pedidos", label: "Pedidos", detalle: "Crear y gestionar ventas" },
+  { id: "inicio", label: "Inicio", detalle: "Portada y accesos rápidos" }, { id: "dashboard", label: "Resumen", detalle: "Indicadores principales" }, { id: "pedidos", label: "Pedidos", detalle: "Crear y gestionar ventas" },
   { id: "clientes", label: "Clientes", detalle: "Fichas y direcciones" }, { id: "conversaciones", label: "Conversaciones", detalle: "WhatsApp y Meta" },
   { id: "productos", label: "Productos y catálogo", detalle: "Fotos, precios y canales" }, { id: "recetas_costos", label: "Recetas y costos", detalle: "Receta estándar y rentabilidad" },
   { id: "ingredientes", label: "Ingredientes", detalle: "Inventario de materias primas" }, { id: "produccion", label: "Producción", detalle: "Preparación de pedidos" },
@@ -20,10 +20,10 @@ const modulos: { id: ModuloCrm; label: string; detalle: string }[] = [
   { id: "integraciones", label: "Integraciones", detalle: "Conexiones externas" },
 ];
 const plantillas: Record<Exclude<RolCrm, "Administrador" | "Sin acceso">, ModuloCrm[]> = {
-  Ventas: ["dashboard", "pedidos", "clientes", "conversaciones", "productos"],
-  Producción: ["dashboard", "productos", "recetas_costos", "ingredientes", "produccion", "pendientes"],
-  Reparto: ["dashboard", "pedidos"],
-  Caja: ["dashboard", "pedidos", "clientes", "cobros_fel", "flujo_caja"],
+  Ventas: ["inicio", "dashboard", "pedidos", "clientes", "conversaciones", "productos"],
+  Producción: ["inicio", "dashboard", "productos", "recetas_costos", "ingredientes", "produccion", "pendientes"],
+  Reparto: ["inicio", "dashboard", "pedidos"],
+  Caja: ["inicio", "dashboard", "pedidos", "clientes", "cobros_fel", "flujo_caja"],
 };
 const fecha = (valor: string | null) => valor ? new Intl.DateTimeFormat("es-GT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(valor)) : "Sin vencimiento";
 const entradaFecha = (valor: string | null) => valor ? new Date(valor).toISOString().slice(0, 16) : "";

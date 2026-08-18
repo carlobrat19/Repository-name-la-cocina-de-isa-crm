@@ -1,12 +1,13 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, Boxes, ClipboardList, Factory, House, LogOut, Menu, MessageCircle, Package, PanelLeftClose, PanelLeftOpen, ReceiptText, ShoppingBag, UsersRound, WalletCards, X } from "lucide-react";
+import { BarChart3, Boxes, ClipboardList, Factory, House, LayoutDashboard, LogOut, Menu, MessageCircle, Package, PanelLeftClose, PanelLeftOpen, ReceiptText, ShoppingBag, UsersRound, WalletCards, X } from "lucide-react";
 import { useState } from "react";
 import { ModuloCrm, useCrmAuth } from "@/components/auth/AuthGate";
 
 const menu = [
-  { label: "Inicio", href: "/", icon: House, modulo: "dashboard" as ModuloCrm },
+  { label: "Inicio", href: "/", icon: House, modulo: "inicio" as ModuloCrm },
+  { label: "Resumen", href: "/dashboard", icon: LayoutDashboard, modulo: "dashboard" as ModuloCrm },
   { label: "Pedidos", href: "/pedidos/lista", icon: ShoppingBag, modulo: "pedidos" as ModuloCrm },
   { label: "Clientes", href: "/clientes", icon: UsersRound, modulo: "clientes" as ModuloCrm },
   { label: "Conversaciones", href: "/conversaciones", icon: MessageCircle, modulo: "conversaciones" as ModuloCrm },
