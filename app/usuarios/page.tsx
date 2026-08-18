@@ -15,15 +15,15 @@ const modulos: { id: ModuloCrm; label: string; detalle: string }[] = [
   { id: "clientes", label: "Clientes", detalle: "Fichas y direcciones" }, { id: "conversaciones", label: "Conversaciones", detalle: "WhatsApp y Meta" },
   { id: "productos", label: "Productos y catálogo", detalle: "Fotos, precios y canales" }, { id: "recetas_costos", label: "Recetas y costos", detalle: "Receta estándar y rentabilidad" },
   { id: "ingredientes", label: "Ingredientes", detalle: "Inventario de materias primas" }, { id: "produccion", label: "Producción", detalle: "Preparación de pedidos" },
-  { id: "pendientes", label: "Pendientes", detalle: "Productos por preparar" }, { id: "cobros_fel", label: "Cobros y FEL", detalle: "Pagos y facturación" },
+  { id: "pendientes", label: "Pendientes", detalle: "Productos por preparar" }, { id: "punto_venta", label: "Punto de venta", detalle: "Caja, cobros y ventas de sucursal" }, { id: "sucursales", label: "Sucursales e inventario", detalle: "Traslados, existencias y puntos de venta" }, { id: "cobros_fel", label: "Cobros y FEL", detalle: "Pagos y facturación" },
   { id: "flujo_caja", label: "Flujo de caja", detalle: "Cuentas y movimientos" }, { id: "reportes", label: "Reportes", detalle: "Resultados y métricas" },
   { id: "integraciones", label: "Integraciones", detalle: "Conexiones externas" },
 ];
 const plantillas: Record<Exclude<RolCrm, "Administrador" | "Sin acceso">, ModuloCrm[]> = {
-  Ventas: ["inicio", "dashboard", "pedidos", "clientes", "conversaciones", "productos"],
-  Producción: ["inicio", "dashboard", "productos", "recetas_costos", "ingredientes", "produccion", "pendientes"],
+  Ventas: ["inicio", "dashboard", "pedidos", "clientes", "conversaciones", "productos", "punto_venta"],
+  Producción: ["inicio", "dashboard", "productos", "recetas_costos", "ingredientes", "produccion", "pendientes", "sucursales"],
   Reparto: ["inicio", "dashboard", "pedidos"],
-  Caja: ["inicio", "dashboard", "pedidos", "clientes", "cobros_fel", "flujo_caja"],
+  Caja: ["inicio", "dashboard", "pedidos", "clientes", "punto_venta", "cobros_fel", "flujo_caja"],
 };
 const fecha = (valor: string | null) => valor ? new Intl.DateTimeFormat("es-GT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(valor)) : "Sin vencimiento";
 const entradaFecha = (valor: string | null) => valor ? new Date(valor).toISOString().slice(0, 16) : "";

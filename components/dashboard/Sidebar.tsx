@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, Boxes, ClipboardList, Factory, House, LayoutDashboard, LogOut, Menu, MessageCircle, Package, PanelLeftClose, PanelLeftOpen, ReceiptText, ShoppingBag, UsersRound, WalletCards, X } from "lucide-react";
+import { BarChart3, Boxes, ClipboardList, Factory, House, LayoutDashboard, LogOut, Menu, MessageCircle, Package, PanelLeftClose, PanelLeftOpen, ReceiptText, ShoppingBag, Store, UsersRound, WalletCards, X } from "lucide-react";
 import { useState } from "react";
 import { ModuloCrm, useCrmAuth } from "@/components/auth/AuthGate";
 
@@ -16,6 +16,8 @@ const menu = [
   { label: "Ingredientes", href: "/ingredientes", icon: Boxes, modulo: "ingredientes" as ModuloCrm },
   { label: "Producción", href: "/produccion", icon: Factory, modulo: "produccion" as ModuloCrm },
   { label: "Pendientes", href: "/productos-pendientes", icon: ClipboardList, modulo: "pendientes" as ModuloCrm },
+  { label: "Punto de venta", href: "/punto-venta", icon: Store, modulo: "punto_venta" as ModuloCrm },
+  { label: "Sucursales", href: "/sucursales", icon: Boxes, modulo: "sucursales" as ModuloCrm },
   { label: "Cobros y FEL", href: "/finanzas", icon: WalletCards, modulo: "cobros_fel" as ModuloCrm },
   { label: "Flujo de caja", href: "/flujo-caja", icon: ReceiptText, modulo: "flujo_caja" as ModuloCrm },
   { label: "Reportes", href: "/reportes", icon: BarChart3, modulo: "reportes" as ModuloCrm },
