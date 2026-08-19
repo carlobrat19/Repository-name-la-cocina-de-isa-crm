@@ -73,7 +73,6 @@ type Cotizacion = {
   estado: string;
   subtotal: number | string;
   costo_envio: number | string;
-  descuento: number | string;
   total: number | string;
   vence_el: string | null;
 };
@@ -130,7 +129,6 @@ export default function ConversacionesPage() {
     [productoCotizacion, setProductoCotizacion] = useState(""),
     [cantidadCotizacion, setCantidadCotizacion] = useState("1"),
     [envioCotizacion, setEnvioCotizacion] = useState("0"),
-    [descuentoCotizacion, setDescuentoCotizacion] = useState("0"),
     [venceCotizacion, setVenceCotizacion] = useState("");
 
   const cargar = useCallback(async () => {
@@ -202,13 +200,12 @@ export default function ConversacionesPage() {
     setCotizacionActiva(cotizacion);
     setLineasCotizacion((data || []) as LineaCotizacion[]);
     setEnvioCotizacion(String(cotizacion.costo_envio || 0));
-    setDescuentoCotizacion(String(cotizacion.descuento || 0));
     setVenceCotizacion(cotizacion.vence_el || "");
   }
   async function cargarCotizaciones(conversacion: Conversacion) {
     const { data, error: cotizacionError } = await supabase
       .from("cotizaciones")
-      .select("id,codigo,estado,subtotal,costo_envio,descuento,total,vence_el")
+      .select("id,codigo,estado,subtotal,costo_envio,total,vence_el")
       .eq("conversacion_id", conversacion.id)
       .order("created_at", { ascending: false });
     if (cotizacionError) {
@@ -393,7 +390,7 @@ export default function ConversacionesPage() {
         estado: "Borrador",
         notas: `Generada desde ${seleccionada.canal}.`,
       })
-      .select("id,codigo,estado,subtotal,costo_envio,descuento,total,vence_el")
+      .select("id,codigo,estado,subtotal,costo_envio,total,vence_el")
       .single();
     if (cotizacionError || !data) {
       setError(cotizacionError?.message || "No se pudo crear la cotización.");
@@ -445,19 +442,18 @@ export default function ConversacionesPage() {
       0,
     );
     const envio = Math.max(0, Number(envioCotizacion || 0));
-    const descuento = Math.max(0, Number(descuentoCotizacion || 0));
-    const total = Math.max(0, subtotal + envio - descuento);
+    const total = Math.max(0, subtotal + envio);
     const { data: actualizada, error: actualizacionError } = await supabase
       .from("cotizaciones")
       .update({
         subtotal,
         costo_envio: envio,
-        descuento,
+        descuento: 0,
         total,
         vence_el: venceCotizacion || null,
       })
       .eq("id", cotizacionId)
-      .select("id,codigo,estado,subtotal,costo_envio,descuento,total,vence_el")
+      .select("id,codigo,estado,subtotal,costo_envio,total,vence_el")
       .single();
     if (actualizacionError || !actualizada) {
       setError(
@@ -849,7 +845,7 @@ export default function ConversacionesPage() {
                 <select value={cotizacionActiva?.id || ""} onChange={(event) => { const encontrada = cotizaciones.find((item) => item.id === event.target.value); if (encontrada) void abrirCotizacion(encontrada); }} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs">
                   <option value="">Seleccionar cotización</option>{cotizaciones.map((item) => <option key={item.id} value={item.id}>{item.codigo} · Q{Number(item.total || 0).toFixed(2)}</option>)}
                 </select>
-                {cotizacionActiva && <div className="mt-2 space-y-2 rounded-xl bg-orange-50 p-3"><select value={productoCotizacion} onChange={(event) => setProductoCotizacion(event.target.value)} className="w-full rounded-lg border border-orange-100 bg-white p-2 text-xs"><option value="">Agregar producto</option>{productos.map((item) => <option key={item.id} value={item.id}>{item.nombre} · Q{Number(item.precio_venta || 0).toFixed(2)}</option>)}</select><div className="flex gap-2"><input aria-label="Cantidad" type="number" min="1" value={cantidadCotizacion} onChange={(event) => setCantidadCotizacion(event.target.value)} className="w-20 rounded-lg border border-orange-100 p-2 text-xs"/><button type="button" onClick={() => void agregarLineaCotizacion()} className="rounded-lg bg-orange-600 px-2 text-xs font-bold text-white">Agregar</button></div>{lineasCotizacion.map((linea) => <div key={linea.id} className="flex justify-between gap-2 text-xs"><span>{linea.cantidad}× {linea.descripcion}</span><button type="button" onClick={() => void quitarLineaCotizacion(linea)} className="font-bold text-rose-600">Quitar</button></div>)}<div className="grid grid-cols-2 gap-2"><label className="space-y-1 text-[11px] font-bold text-slate-600">Envío (Q)<input type="number" min="0" step="0.01" value={envioCotizacion} onChange={(event) => setEnvioCotizacion(event.target.value)} placeholder="0.00" className="w-full rounded-lg border border-orange-100 bg-white p-2 text-xs font-normal"/></label><label className="space-y-1 text-[11px] font-bold text-slate-600">Descuento (Q)<input type="number" min="0" step="0.01" value={descuentoCotizacion} onChange={(event) => setDescuentoCotizacion(event.target.value)} placeholder="0.00" className="w-full rounded-lg border border-orange-100 bg-white p-2 text-xs font-normal"/></label><label className="col-span-2 space-y-1 text-[11px] font-bold text-slate-600">Válida hasta (opcional)<input type="date" value={venceCotizacion} onChange={(event) => setVenceCotizacion(event.target.value)} className="w-full rounded-lg border border-orange-100 bg-white p-2 text-xs font-normal"/></label></div><p className="text-[11px] text-slate-600">Subtotal Q{Number(cotizacionActiva.subtotal || 0).toFixed(2)} + envío Q{Number(envioCotizacion || 0).toFixed(2)} − descuento Q{Number(descuentoCotizacion || 0).toFixed(2)}</p><button type="button" onClick={() => void recalcularCotizacion(cotizacionActiva.id)} className="w-full rounded-lg border border-orange-200 bg-white p-2 text-xs font-bold text-orange-700">Guardar cotización · Q{Number(cotizacionActiva.total || 0).toFixed(2)}</button><p className="text-[11px] leading-4 text-slate-600">Al convertir se trasladan productos, precios, envío y descuento. Solo completarás entrega y pago.</p><Link href={`/pedidos?clienteId=${seleccionada.cliente_id || ""}&conversacionId=${seleccionada.id}&responsableId=${seleccionada.responsable_id || ""}&canal=${seleccionada.canal}&cotizacionId=${cotizacionActiva.id}`} className="block rounded-lg bg-slate-950 p-2 text-center text-xs font-bold text-white">Convertir y completar pedido</Link></div>}
+                {cotizacionActiva && <div className="mt-2 space-y-2 rounded-xl bg-orange-50 p-3"><select value={productoCotizacion} onChange={(event) => setProductoCotizacion(event.target.value)} className="w-full rounded-lg border border-orange-100 bg-white p-2 text-xs"><option value="">Agregar producto</option>{productos.map((item) => <option key={item.id} value={item.id}>{item.nombre} · Q{Number(item.precio_venta || 0).toFixed(2)}</option>)}</select><div className="flex gap-2"><input aria-label="Cantidad" type="number" min="1" value={cantidadCotizacion} onChange={(event) => setCantidadCotizacion(event.target.value)} className="w-20 rounded-lg border border-orange-100 p-2 text-xs"/><button type="button" onClick={() => void agregarLineaCotizacion()} className="rounded-lg bg-orange-600 px-2 text-xs font-bold text-white">Agregar</button></div>{lineasCotizacion.map((linea) => <div key={linea.id} className="flex justify-between gap-2 text-xs"><span>{linea.cantidad}× {linea.descripcion}</span><button type="button" onClick={() => void quitarLineaCotizacion(linea)} className="font-bold text-rose-600">Quitar</button></div>)}<div className="grid gap-2"><label className="space-y-1 text-[11px] font-bold text-slate-600">Envío (Q)<input type="number" min="0" step="0.01" value={envioCotizacion} onChange={(event) => setEnvioCotizacion(event.target.value)} placeholder="0.00" className="w-full rounded-lg border border-orange-100 bg-white p-2 text-xs font-normal"/></label><label className="space-y-1 text-[11px] font-bold text-slate-600">Válida hasta (opcional)<input type="date" value={venceCotizacion} onChange={(event) => setVenceCotizacion(event.target.value)} className="w-full rounded-lg border border-orange-100 bg-white p-2 text-xs font-normal"/></label></div><p className="text-[11px] text-slate-600">Subtotal Q{Number(cotizacionActiva.subtotal || 0).toFixed(2)} + envío Q{Number(envioCotizacion || 0).toFixed(2)}</p><button type="button" onClick={() => void recalcularCotizacion(cotizacionActiva.id)} className="w-full rounded-lg border border-orange-200 bg-white p-2 text-xs font-bold text-orange-700">Guardar cotización · Q{Number(cotizacionActiva.total || 0).toFixed(2)}</button><p className="text-[11px] leading-4 text-slate-600">Al convertir se trasladan productos, precios y envío. Solo completarás entrega y pago.</p><Link href={`/pedidos?clienteId=${seleccionada.cliente_id || ""}&conversacionId=${seleccionada.id}&responsableId=${seleccionada.responsable_id || ""}&canal=${seleccionada.canal}&cotizacionId=${cotizacionActiva.id}`} className="block rounded-lg bg-slate-950 p-2 text-center text-xs font-bold text-white">Convertir y completar pedido</Link></div>}
               </div>
               <form onSubmit={guardarNota}>
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
