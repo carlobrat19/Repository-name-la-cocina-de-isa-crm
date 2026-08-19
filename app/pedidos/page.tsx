@@ -132,6 +132,7 @@ export default function PedidosPage() {
   const [municipioEntrega, setMunicipioEntrega] = useState("");
   const [zonaEntrega, setZonaEntrega] = useState("");
   const [costoEnvio, setCostoEnvio] = useState(0);
+  const [descuento, setDescuento] = useState(0);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [productoSeleccionado, setProductoSeleccionado] = useState("");
   const [cantidad, setCantidad] = useState(1);
@@ -167,8 +168,15 @@ export default function PedidosPage() {
     if (canal) setCanalOrigen(canal);
     if (idCotizacion) {
       setCotizacionId(idCotizacion);
-      void supabase.from("cotizacion_detalle").select("producto_id,descripcion,cantidad,precio,productos(costo)").eq("cotizacion_id", idCotizacion).then(({ data }) => {
-        setCarrito((data || []).filter((item) => item.producto_id).map((item) => ({ id: item.producto_id as string, nombre: item.descripcion, cantidad: Number(item.cantidad || 1), precio: Number(item.precio || 0), costo: Number((item.productos as { costo?: number } | null)?.costo || 0) })));
+      void Promise.all([
+        supabase.from("cotizacion_detalle").select("producto_id,descripcion,cantidad,precio,productos(costo)").eq("cotizacion_id", idCotizacion),
+        supabase.from("cotizaciones").select("costo_envio,descuento").eq("id", idCotizacion).maybeSingle(),
+      ]).then(([{ data: lineas }, { data: cotizacion }]) => {
+        setCarrito((lineas || []).filter((item) => item.producto_id).map((item) => ({ id: item.producto_id as string, nombre: item.descripcion, cantidad: Number(item.cantidad || 1), precio: Number(item.precio || 0), costo: Number((item.productos as { costo?: number } | null)?.costo || 0) })));
+        const envioCotizado = Number(cotizacion?.costo_envio || 0);
+        setCostoEnvio(envioCotizado);
+        setDescuento(Math.max(0, Number(cotizacion?.descuento || 0)));
+        if (envioCotizado > 0) setRequiereEnvio(true);
       });
     }
     if (!idCliente) return;
@@ -239,7 +247,7 @@ export default function PedidosPage() {
       carrito.reduce((total, item) => total + item.precio * item.cantidad, 0),
     [carrito],
   );
-  const totalPedido = subtotalProductos + (requiereEnvio ? costoEnvio : 0);
+  const totalPedido = Math.max(0, subtotalProductos + (requiereEnvio ? costoEnvio : 0) - descuento);
   const totalUnidades = useMemo(
     () => carrito.reduce((total, item) => total + item.cantidad, 0),
     [carrito],
@@ -405,6 +413,7 @@ export default function PedidosPage() {
           total: totalPedido,
           subtotal_productos: subtotalProductos,
           costo_envio: requiereEnvio ? costoEnvio : 0,
+          descuento,
           departamento_entrega: requiereEnvio
             ? departamentoEntrega.trim() || null
             : null,
@@ -935,6 +944,28 @@ export default function PedidosPage() {
                 </div>
               </section>
             )}
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <InputLabel>Descuento del pedido</InputLabel>
+              <div className="relative max-w-sm">
+                <span className="pointer-events-none absolute left-3 top-2.5 text-sm font-bold text-slate-500">
+                  Q
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={descuento || ""}
+                  onChange={(event) =>
+                    setDescuento(Math.max(0, Number(event.target.value) || 0))
+                  }
+                  placeholder="0.00"
+                  className={`${fieldClass} pl-7`}
+                />
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                Se aplica al total. Proviene de la cotización si fue registrado allí.
+              </p>
+            </section>
           </div>
 
           <aside className="xl:sticky xl:top-6 xl:self-start">
@@ -1031,6 +1062,14 @@ export default function PedidosPage() {
                       </span>
                       <span className="font-bold text-slate-900">
                         {formatMoney(costoEnvio)}
+                      </span>
+                    </div>
+                  )}
+                  {descuento > 0 && (
+                    <div className="flex justify-between text-slate-600">
+                      <span>Descuento</span>
+                      <span className="font-bold text-rose-600">
+                        − {formatMoney(descuento)}
                       </span>
                     </div>
                   )}
