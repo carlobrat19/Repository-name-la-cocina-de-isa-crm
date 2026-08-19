@@ -48,6 +48,7 @@ type Pedido = {
   tipo_documento?: string | null;
   creado_por?: string | null;
   creado_por_nombre?: string | null;
+  responsable_id?: string | null;
 };
 type Detalle = {
   id?: string;
@@ -110,6 +111,7 @@ export default function DetallePedidoPage() {
   );
   const [pagos, setPagos] = useState<Pago[]>([]);
   const [factura, setFactura] = useState<Factura | null>(null);
+  const [responsableNombre, setResponsableNombre] = useState<string | null>(null);
   const [editando, setEditando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [facturando, setFacturando] = useState(false);
@@ -134,6 +136,7 @@ export default function DetallePedidoPage() {
       pagosRespuesta,
       facturaRespuesta,
       clienteRespuesta,
+      responsableRespuesta,
     ] = await Promise.all([
       supabase
         .from("pedido_detalle")
@@ -158,12 +161,16 @@ export default function DetallePedidoPage() {
             .eq("id", pedidoActual.cliente_id)
             .maybeSingle()
         : Promise.resolve({ data: null }),
+      pedidoActual.responsable_id
+        ? supabase.from("perfiles_crm").select("nombre,email").eq("id", pedidoActual.responsable_id).maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
     setPedido(pedidoActual);
     setDetalles((detallesRespuesta.data ?? []) as Detalle[]);
     setPagos((pagosRespuesta.data ?? []) as Pago[]);
     setFactura((facturaRespuesta.data ?? null) as Factura | null);
     setClienteFiscal((clienteRespuesta.data ?? null) as ClienteFiscal | null);
+    setResponsableNombre(responsableRespuesta.data ? (responsableRespuesta.data.nombre || responsableRespuesta.data.email) : null);
     setCargando(false);
   }, [id]);
   useEffect(() => {
@@ -371,6 +378,7 @@ export default function DetallePedidoPage() {
             <p className="mt-2 text-xs font-semibold text-slate-500">
               Registrado por: {pedido.creado_por_nombre || "No disponible (pedido creado antes de esta mejora)"}
             </p>
+            {responsableNombre && <p className="mt-1 text-xs font-semibold text-orange-700">Seguimiento asignado a: {responsableNombre}</p>}
           </div>
           <div className="flex flex-wrap gap-2">
             <button

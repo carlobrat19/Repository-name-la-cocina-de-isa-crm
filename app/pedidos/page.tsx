@@ -123,6 +123,9 @@ export default function PedidosPage() {
   const [formaPago, setFormaPago] = useState("Efectivo");
   const [observaciones, setObservaciones] = useState("");
   const [vendedor, setVendedor] = useState("REDES");
+  const [conversacionId, setConversacionId] = useState<string | null>(null);
+  const [responsableId, setResponsableId] = useState<string | null>(null);
+  const [canalOrigen, setCanalOrigen] = useState("Manual");
   const [requiereEnvio, setRequiereEnvio] = useState(false);
   const [departamentoEntrega, setDepartamentoEntrega] = useState("");
   const [municipioEntrega, setMunicipioEntrega] = useState("");
@@ -149,6 +152,21 @@ export default function PedidosPage() {
   useEffect(() => {
     const timeout = window.setTimeout(() => void obtenerProductos(), 0);
     return () => window.clearTimeout(timeout);
+  }, []);
+
+  useEffect(() => {
+    const parametros = new URLSearchParams(window.location.search);
+    const idCliente = parametros.get("clienteId");
+    const idConversacion = parametros.get("conversacionId");
+    const idResponsable = parametros.get("responsableId");
+    const canal = parametros.get("canal");
+    if (idConversacion) setConversacionId(idConversacion);
+    if (idResponsable) setResponsableId(idResponsable);
+    if (canal) setCanalOrigen(canal);
+    if (!idCliente) return;
+    void supabase.from("clientes").select("id, nombre, telefono, email, nit, razon_social, direccion").eq("id", idCliente).maybeSingle().then(({ data, error }) => {
+      if (!error && data) void seleccionarCliente(data as Cliente);
+    });
   }, []);
 
   async function buscarClientes(termino: string) {
@@ -334,7 +352,7 @@ export default function PedidosPage() {
       const clienteNuevo = !clientePedidoId;
       const datosCliente = {
         nombre: cliente.trim(), telefono: telefono.trim() || null, email: correoFiscal.trim() || null, nit: nit.trim() || null,
-        razon_social: razonSocial.trim() || null, direccion: direccionFiscal.trim() || null, canal_origen: "Manual",
+        razon_social: razonSocial.trim() || null, direccion: direccionFiscal.trim() || null, canal_origen: canalOrigen,
       };
       if (clientePedidoId) {
         const { error } = await supabase.from("clientes").update(datosCliente).eq("id", clientePedidoId);
@@ -388,7 +406,9 @@ export default function PedidosPage() {
           zona_entrega: requiereEnvio ? zonaEntrega.trim() || null : null,
           cliente_id: clientePedidoId,
           saldo_pendiente: Math.max(0, totalPedido - abono),
-          canal_origen: "Manual",
+          canal_origen: canalOrigen,
+          conversacion_id: conversacionId,
+          responsable_id: responsableId,
           observaciones: observaciones.trim() || null,
           vendedor,
           requiere_envio: requiereEnvio,
@@ -476,6 +496,7 @@ export default function PedidosPage() {
             <p className="mt-1 text-sm text-slate-500">
               Registra la venta y coordina la entrega desde un solo flujo.
             </p>
+            {conversacionId && <p className="mt-2 text-xs font-bold text-green-700">Pedido iniciado desde conversación · Canal: {canalOrigen}</p>}
           </div>
           <div className="rounded-xl border border-orange-100 bg-orange-50 px-4 py-3 text-sm text-orange-800">
             <span className="font-bold">{carrito.length}</span> producto
