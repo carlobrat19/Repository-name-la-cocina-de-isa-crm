@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 type Perfil = { id: string; email: string; nombre: string | null; rol: RolCrm; activo: boolean; acceso_hasta: string | null; created_at: string };
 type Invitacion = { id: string; email: string; nombre: string | null; rol: RolCrm; modulos: ModuloCrm[]; activado_at: string | null; acceso_hasta: string | null };
 type Auditoria = { id: string; usuario_id: string | null; accion: string; detalle: Record<string, string> | null; created_at: string };
+type SucursalAsignable = { id: string; nombre: string };
 
 const roles: RolCrm[] = ["Ventas", "Producción", "Reparto", "Caja", "Sin acceso"];
 const modulos: { id: ModuloCrm; label: string; detalle: string }[] = [
@@ -30,19 +31,21 @@ const entradaFecha = (valor: string | null) => valor ? new Date(valor).toISOStri
 
 export default function UsuariosPage() {
   const { id: administradorId, rol: rolActual } = useCrmAuth();
-  const [perfiles, setPerfiles] = useState<Perfil[]>([]); const [invitaciones, setInvitaciones] = useState<Invitacion[]>([]); const [permisos, setPermisos] = useState<Record<string, ModuloCrm[]>>({}); const [auditoria, setAuditoria] = useState<Auditoria[]>([]);
+  const [perfiles, setPerfiles] = useState<Perfil[]>([]); const [invitaciones, setInvitaciones] = useState<Invitacion[]>([]); const [permisos, setPermisos] = useState<Record<string, ModuloCrm[]>>({}); const [auditoria, setAuditoria] = useState<Auditoria[]>([]); const [sucursales, setSucursales] = useState<SucursalAsignable[]>([]); const [asignaciones, setAsignaciones] = useState<Record<string, string[]>>({});
   const [nombre, setNombre] = useState(""); const [email, setEmail] = useState(""); const [rol, setRol] = useState<RolCrm>("Ventas"); const [seleccion, setSeleccion] = useState<ModuloCrm[]>(plantillas.Ventas); const [accesoHasta, setAccesoHasta] = useState(""); const [guardando, setGuardando] = useState<string | null>(null); const [mensaje, setMensaje] = useState("");
 
   async function cargar() {
-    const [a, b, c, d] = await Promise.all([
+    const [a, b, c, d, e, f] = await Promise.all([
       supabase.from("perfiles_crm").select("id,email,nombre,rol,activo,acceso_hasta,created_at").order("created_at", { ascending: false }),
       supabase.from("invitaciones_crm").select("id,email,nombre,rol,modulos,activado_at,acceso_hasta").order("creado_at", { ascending: false }),
       supabase.from("permisos_usuario_crm").select("user_id,modulo"),
       supabase.from("auditoria_usuarios_crm").select("id,usuario_id,accion,detalle,created_at").order("created_at", { ascending: false }).limit(12),
+      supabase.from("sucursales").select("id,nombre").eq("activa", true).order("nombre"),
+      supabase.from("usuarios_sucursales").select("usuario_id,sucursal_id").eq("activa", true),
     ]);
-    const error = a.error || b.error || c.error || d.error; if (error) setMensaje(`No se pudo cargar la administración: ${error.message}`);
+    const error = a.error || b.error || c.error || d.error || e.error || f.error; if (error) setMensaje(`No se pudo cargar la administración: ${error.message}`);
     setPerfiles((a.data ?? []) as Perfil[]); setInvitaciones((b.data ?? []) as Invitacion[]); setAuditoria((d.data ?? []) as Auditoria[]);
-    const agrupados: Record<string, ModuloCrm[]> = {}; (c.data ?? []).forEach((item) => { (agrupados[item.user_id] ??= []).push(item.modulo as ModuloCrm); }); setPermisos(agrupados);
+    const agrupados: Record<string, ModuloCrm[]> = {}; (c.data ?? []).forEach((item) => { (agrupados[item.user_id] ??= []).push(item.modulo as ModuloCrm); }); setPermisos(agrupados); setSucursales((e.data ?? []) as SucursalAsignable[]); const porUsuario: Record<string, string[]> = {}; (f.data ?? []).forEach((item) => { (porUsuario[item.usuario_id] ??= []).push(item.sucursal_id); }); setAsignaciones(porUsuario);
   }
   useEffect(() => { const timer = window.setTimeout(() => void cargar(), 0); return () => window.clearTimeout(timer); }, []);
   const nombres = useMemo(() => new Map(perfiles.map((perfil) => [perfil.id, perfil.nombre || perfil.email])), [perfiles]);
@@ -64,6 +67,10 @@ export default function UsuariosPage() {
     setGuardando(perfil.id); const actuales = permisos[perfil.id] ?? []; const borrar = actuales.filter((item) => !nuevos.includes(item)); const agregar = nuevos.filter((item) => !actuales.includes(item));
     const resultados = await Promise.all([borrar.length ? supabase.from("permisos_usuario_crm").delete().eq("user_id", perfil.id).in("modulo", borrar) : Promise.resolve({ error: null }), agregar.length ? supabase.from("permisos_usuario_crm").insert(agregar.map((modulo) => ({ user_id: perfil.id, modulo }))) : Promise.resolve({ error: null })]); setGuardando(null);
     const error = resultados.find((resultado) => resultado.error)?.error; if (error) { setMensaje(error.message); return; } await registrar("Actualizó módulos", perfil.id, { modulos: nuevos.join(", ") || "Sin módulos" }); setPermisos({ ...permisos, [perfil.id]: nuevos });
+  }
+  async function actualizarSucursales(perfil: Perfil, nuevas: string[]) {
+    setGuardando(perfil.id); const actuales = asignaciones[perfil.id] ?? []; const borrar = actuales.filter((id) => !nuevas.includes(id)); const agregar = nuevas.filter((id) => !actuales.includes(id));
+    const resultados = await Promise.all([borrar.length ? supabase.from("usuarios_sucursales").delete().eq("usuario_id", perfil.id).in("sucursal_id", borrar) : Promise.resolve({ error: null }), agregar.length ? supabase.from("usuarios_sucursales").insert(agregar.map((sucursal_id) => ({ usuario_id: perfil.id, sucursal_id }))) : Promise.resolve({ error: null })]); setGuardando(null); const error = resultados.find((resultado) => resultado.error)?.error; if (error) { setMensaje(error.message); return; } setAsignaciones({ ...asignaciones, [perfil.id]: nuevas }); await registrar("Actualizó sucursales asignadas", perfil.id, { sucursales: nuevas.length ? nuevas.join(",") : "Sin sucursal" });
   }
   async function restablecer(perfil: Perfil) {
     setGuardando(`reset-${perfil.id}`); const { error } = await supabase.auth.resetPasswordForEmail(perfil.email, { redirectTo: `${window.location.origin}/restablecer-contrasena` }); setGuardando(null);
@@ -147,6 +154,7 @@ export default function UsuariosPage() {
 </label>
 <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{modulos.map((modulo) => <label key={modulo.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm">
 <input type="checkbox" disabled={guardando === perfil.id} checked={permitidos.includes(modulo.id)} onChange={() => void actualizarModulos(perfil, alternar(permitidos, modulo.id))} className="size-4 accent-orange-500"/>{modulo.label}</label>)}</div>
+<div className="mt-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Sucursales autorizadas para POS</p><div className="mt-2 flex flex-wrap gap-2">{sucursales.map((sucursal) => <label key={sucursal.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm"><input type="checkbox" disabled={guardando === perfil.id} checked={(asignaciones[perfil.id] ?? []).includes(sucursal.id)} onChange={() => { const actuales = asignaciones[perfil.id] ?? []; void actualizarSucursales(perfil, actuales.includes(sucursal.id) ? actuales.filter((id) => id !== sucursal.id) : [...actuales, sucursal.id]); }} className="size-4 accent-orange-500"/>{sucursal.nombre}</label>)}</div><p className="mt-2 text-xs text-slate-500">Sin asignación, el usuario no puede abrir caja ni vender en ninguna sucursal.</p></div>
 </>}</article>; })}</div>
 </section>
 <section className="grid gap-6 lg:grid-cols-2">
