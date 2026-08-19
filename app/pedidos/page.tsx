@@ -126,6 +126,7 @@ export default function PedidosPage() {
   const [conversacionId, setConversacionId] = useState<string | null>(null);
   const [responsableId, setResponsableId] = useState<string | null>(null);
   const [canalOrigen, setCanalOrigen] = useState("Manual");
+  const [cotizacionId, setCotizacionId] = useState<string | null>(null);
   const [requiereEnvio, setRequiereEnvio] = useState(false);
   const [departamentoEntrega, setDepartamentoEntrega] = useState("");
   const [municipioEntrega, setMunicipioEntrega] = useState("");
@@ -159,10 +160,17 @@ export default function PedidosPage() {
     const idCliente = parametros.get("clienteId");
     const idConversacion = parametros.get("conversacionId");
     const idResponsable = parametros.get("responsableId");
+    const idCotizacion = parametros.get("cotizacionId");
     const canal = parametros.get("canal");
     if (idConversacion) setConversacionId(idConversacion);
     if (idResponsable) setResponsableId(idResponsable);
     if (canal) setCanalOrigen(canal);
+    if (idCotizacion) {
+      setCotizacionId(idCotizacion);
+      void supabase.from("cotizacion_detalle").select("producto_id,descripcion,cantidad,precio,productos(costo)").eq("cotizacion_id", idCotizacion).then(({ data }) => {
+        setCarrito((data || []).filter((item) => item.producto_id).map((item) => ({ id: item.producto_id as string, nombre: item.descripcion, cantidad: Number(item.cantidad || 1), precio: Number(item.precio || 0), costo: Number((item.productos as { costo?: number } | null)?.costo || 0) })));
+      });
+    }
     if (!idCliente) return;
     void supabase.from("clientes").select("id, nombre, telefono, email, nit, razon_social, direccion").eq("id", idCliente).maybeSingle().then(({ data, error }) => {
       if (!error && data) void seleccionarCliente(data as Cliente);
@@ -437,6 +445,11 @@ export default function PedidosPage() {
           })),
         );
       if (detalleError) throw detalleError;
+
+      if (cotizacionId) {
+        const { error: cotizacionError } = await supabase.from("cotizaciones").update({ estado: "Convertida", convertido_pedido_id: pedidoData.id }).eq("id", cotizacionId);
+        if (cotizacionError) throw cotizacionError;
+      }
 
       if (abono > 0) {
         const { error } = await supabase
