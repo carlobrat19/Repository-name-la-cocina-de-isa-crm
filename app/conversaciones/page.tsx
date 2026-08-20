@@ -26,6 +26,8 @@ type Cliente = {
   telefono: string | null;
   email: string | null;
   nit: string | null;
+  razon_social?: string | null;
+  direccion?: string | null;
 };
 type Lead = {
   id: string;
@@ -130,6 +132,17 @@ export default function ConversacionesPage() {
     [cantidadCotizacion, setCantidadCotizacion] = useState("1"),
     [envioCotizacion, setEnvioCotizacion] = useState("0"),
     [venceCotizacion, setVenceCotizacion] = useState("");
+  const [datosPedido, setDatosPedido] = useState({
+    nombre: "",
+    telefono: "",
+    email: "",
+    nit: "",
+    razonSocial: "",
+    direccion: "",
+    departamento: "",
+    municipio: "",
+    zona: "",
+  });
 
   const cargar = useCallback(async () => {
     const [sesion, conversacionesData, perfilesData, productosData] =
@@ -138,7 +151,7 @@ export default function ConversacionesPage() {
         supabase
           .from("conversaciones")
           .select(
-            "id,canal,ultimo_mensaje,ultimo_mensaje_at,estado,cliente_id,responsable_id,prioridad,proxima_accion_at,lead_id,clientes(id,nombre,telefono,email,nit),leads(id,estado,responsable_id,valor_estimado,ultima_actividad_at)",
+            "id,canal,ultimo_mensaje,ultimo_mensaje_at,estado,cliente_id,responsable_id,prioridad,proxima_accion_at,lead_id,clientes(id,nombre,telefono,email,nit,razon_social,direccion),leads(id,estado,responsable_id,valor_estimado,ultima_actividad_at)",
           )
           .order("ultimo_mensaje_at", { ascending: false, nullsFirst: false }),
         supabase
@@ -236,6 +249,7 @@ export default function ConversacionesPage() {
     if (seleccionada) {
       void cargarDetalle(seleccionada);
       void cargarCotizaciones(seleccionada);
+      void cargarDatosPedido(seleccionada);
     }
   }, [seleccionada, cargarDetalle]);
   const visibles = useMemo(
@@ -257,6 +271,55 @@ export default function ConversacionesPage() {
     setAviso("");
     setNota("");
     await cargarDetalle(conversacion);
+  }
+  async function cargarDatosPedido(conversacion: Conversacion) {
+    const base = conversacion.clientes;
+    if (!base) {
+      setDatosPedido({ nombre: "", telefono: "", email: "", nit: "", razonSocial: "", direccion: "", departamento: "", municipio: "", zona: "" });
+      return;
+    }
+    const { data: direccion } = await supabase
+      .from("cliente_direcciones")
+      .select("direccion,departamento,municipio,zona")
+      .eq("cliente_id", base.id)
+      .eq("principal", true)
+      .maybeSingle();
+    setDatosPedido({
+      nombre: base.nombre || "", telefono: base.telefono || "", email: base.email || "", nit: base.nit || "", razonSocial: base.razon_social || "", direccion: direccion?.direccion || base.direccion || "", departamento: direccion?.departamento || "", municipio: direccion?.municipio || "", zona: direccion?.zona || "",
+    });
+  }
+  async function guardarDatosPedido() {
+    if (!seleccionada || !datosPedido.nombre.trim()) {
+      setError("Ingresa al menos el nombre del cliente antes de guardar.");
+      return null;
+    }
+    setError("");
+    const clienteDatos = { nombre: datosPedido.nombre.trim(), telefono: datosPedido.telefono.trim() || null, email: datosPedido.email.trim() || null, nit: datosPedido.nit.trim() || null, razon_social: datosPedido.razonSocial.trim() || null, direccion: datosPedido.direccion.trim() || null, canal_origen: seleccionada.canal };
+    let clienteId = seleccionada.cliente_id;
+    if (clienteId) {
+      const { error: clienteError } = await supabase.from("clientes").update(clienteDatos).eq("id", clienteId);
+      if (clienteError) { setError(clienteError.message); return null; }
+    } else {
+      const { data, error: clienteError } = await supabase.from("clientes").insert(clienteDatos).select("id,nombre,telefono,email,nit,razon_social,direccion").single();
+      if (clienteError || !data) { setError(clienteError?.message || "No se pudo crear el cliente."); return null; }
+      clienteId = data.id;
+      const { error: conversacionError } = await supabase.from("conversaciones").update({ cliente_id: clienteId }).eq("id", seleccionada.id);
+      if (conversacionError) { setError(conversacionError.message); return null; }
+      const siguiente = { ...seleccionada, cliente_id: clienteId, clientes: data as Cliente };
+      setSeleccionada(siguiente);
+      setConversaciones((actuales) => actuales.map((item) => item.id === siguiente.id ? siguiente : item));
+    }
+    if (datosPedido.direccion.trim()) {
+      const { data: existente } = await supabase.from("cliente_direcciones").select("id").eq("cliente_id", clienteId).eq("principal", true).maybeSingle();
+      const direccionDatos = { direccion: datosPedido.direccion.trim(), departamento: datosPedido.departamento.trim() || null, municipio: datosPedido.municipio.trim() || null, zona: datosPedido.zona.trim() || null, etiqueta: "Entrega principal", principal: true };
+      const respuesta = existente
+        ? await supabase.from("cliente_direcciones").update(direccionDatos).eq("id", existente.id)
+        : await supabase.from("cliente_direcciones").insert({ ...direccionDatos, cliente_id: clienteId });
+      if (respuesta.error) { setError(respuesta.error.message); return null; }
+    }
+    await registrarActividad("Seguimiento", "Datos esenciales para pedido actualizados.", { ...seleccionada, cliente_id: clienteId });
+    setAviso("Datos del cliente y entrega guardados. Ya puedes crear o convertir el pedido.");
+    return clienteId;
   }
   async function registrarActividad(
     tipo: string,
@@ -389,107 +452,68 @@ export default function ConversacionesPage() {
   async function crearCotizacion() {
     if (!seleccionada || !usuarioId) return;
     const codigo = `COT-${new Date().toISOString().replace(/\D/g, "").slice(2, 14)}`;
-    const { data, error: cotizacionError } = await supabase
-      .from("cotizaciones")
-      .insert({
-        codigo,
-        cliente_id: seleccionada.cliente_id,
-        conversacion_id: seleccionada.id,
-        responsable_id: seleccionada.responsable_id,
-        creado_por: usuarioId,
-        estado: "Borrador",
-        notas: `Generada desde ${seleccionada.canal}.`,
-      })
-      .select("id,codigo,estado,subtotal,costo_envio,total,vence_el")
-      .single();
-    if (cotizacionError || !data) {
-      setError(cotizacionError?.message || "No se pudo crear la cotización.");
-      return;
-    }
-    await registrarActividad(
-      "Cotización",
-      `Cotización ${codigo} creada desde la conversación.`,
-    );
-    setCotizaciones([data as Cotizacion, ...cotizaciones]);
-    await abrirCotizacion(data as Cotizacion);
-    setAviso(`Cotización ${codigo} lista para agregar productos.`);
-    if (seleccionada) await cargarDetalle(seleccionada);
+    setCotizacionActiva({ id: "", codigo, estado: "Borrador", subtotal: 0, costo_envio: 0, total: 0, vence_el: null });
+    setLineasCotizacion([]);
+    setProductoCotizacion("");
+    setCantidadCotizacion("1");
+    setEnvioCotizacion("0");
+    setVenceCotizacion("");
+    setAviso(`Borrador ${codigo} listo. Se guardará únicamente al presionar Guardar cotización.`);
   }
   async function agregarLineaCotizacion() {
     if (!cotizacionActiva || !productoCotizacion) return;
     const producto = productos.find((item) => item.id === productoCotizacion);
     const cantidad = Number(cantidadCotizacion);
     if (!producto || !Number.isFinite(cantidad) || cantidad <= 0) return;
-    const { error: lineaError } = await supabase
-      .from("cotizacion_detalle")
-      .insert({
-        cotizacion_id: cotizacionActiva.id,
-        producto_id: producto.id,
-        descripcion: producto.nombre,
-        cantidad,
-        precio: Number(producto.precio_venta || 0),
-      });
-    if (lineaError) {
-      setError(lineaError.message);
-      return;
-    }
+    const linea = { id: crypto.randomUUID(), producto_id: producto.id, descripcion: producto.nombre, cantidad, precio: Number(producto.precio_venta || 0) };
+    const nuevasLineas = [...lineasCotizacion, linea];
+    const subtotal = nuevasLineas.reduce((total, item) => total + Number(item.cantidad) * Number(item.precio), 0);
+    setLineasCotizacion(nuevasLineas);
+    setCotizacionActiva({ ...cotizacionActiva, subtotal, total: subtotal + Math.max(0, Number(envioCotizacion || 0)) });
     setProductoCotizacion("");
     setCantidadCotizacion("1");
-    await recalcularCotizacion(cotizacionActiva.id);
   }
-  async function recalcularCotizacion(cotizacionId: string) {
-    const { data, error: lineasError } = await supabase
-      .from("cotizacion_detalle")
-      .select("id,producto_id,descripcion,cantidad,precio")
-      .eq("cotizacion_id", cotizacionId);
-    if (lineasError) {
-      setError(lineasError.message);
+  async function recalcularCotizacion() {
+    if (!cotizacionActiva || !seleccionada || !usuarioId || !lineasCotizacion.length) {
+      setError("Agrega al menos un producto antes de guardar la cotización.");
       return;
     }
-    const subtotal = (data || []).reduce(
+    const clienteId = await guardarDatosPedido();
+    if (!clienteId) return;
+    const subtotal = lineasCotizacion.reduce(
       (total, item) =>
         total + Number(item.cantidad || 0) * Number(item.precio || 0),
       0,
     );
     const envio = Math.max(0, Number(envioCotizacion || 0));
     const total = Math.max(0, subtotal + envio);
-    const { data: actualizada, error: actualizacionError } = await supabase
-      .from("cotizaciones")
-      .update({
+    const datosCotizacion = {
         subtotal,
         costo_envio: envio,
         descuento: 0,
         total,
         vence_el: venceCotizacion || null,
-      })
-      .eq("id", cotizacionId)
-      .select("id,codigo,estado,subtotal,costo_envio,total,vence_el")
-      .single();
-    if (actualizacionError || !actualizada) {
-      setError(
-        actualizacionError?.message || "No se pudo actualizar la cotización.",
-      );
-      return;
-    }
-    setLineasCotizacion((data || []) as LineaCotizacion[]);
+      };
+    const respuesta = cotizacionActiva.id
+      ? await supabase.from("cotizaciones").update(datosCotizacion).eq("id", cotizacionActiva.id).select("id,codigo,estado,subtotal,costo_envio,total,vence_el").single()
+      : await supabase.from("cotizaciones").insert({ ...datosCotizacion, codigo: cotizacionActiva.codigo, cliente_id: clienteId, conversacion_id: seleccionada.id, responsable_id: seleccionada.responsable_id, creado_por: usuarioId, estado: "Borrador", notas: `Generada desde ${seleccionada.canal}.` }).select("id,codigo,estado,subtotal,costo_envio,total,vence_el").single();
+    if (respuesta.error || !respuesta.data) { setError(respuesta.error?.message || "No se pudo guardar la cotización."); return; }
+    const actualizada = respuesta.data as Cotizacion;
+    const { error: borrarError } = await supabase.from("cotizacion_detalle").delete().eq("cotizacion_id", actualizada.id);
+    if (borrarError) { setError(borrarError.message); return; }
+    const { error: detalleError } = await supabase.from("cotizacion_detalle").insert(lineasCotizacion.map(({ producto_id, descripcion, cantidad, precio }) => ({ cotizacion_id: actualizada.id, producto_id, descripcion, cantidad, precio })));
+    if (detalleError) { setError(detalleError.message); return; }
     setCotizacionActiva(actualizada as Cotizacion);
-    setCotizaciones(
-      cotizaciones.map((item) =>
-        item.id === cotizacionId ? (actualizada as Cotizacion) : item,
-      ),
-    );
+    setCotizaciones((actuales) => actualizada.id === cotizacionActiva.id ? actuales.map((item) => item.id === actualizada.id ? actualizada : item) : [actualizada, ...actuales]);
+    await registrarActividad("Cotización", `Cotización ${actualizada.codigo} guardada desde la conversación.`);
+    setAviso(`Cotización ${actualizada.codigo} guardada.`);
   }
   async function quitarLineaCotizacion(linea: LineaCotizacion) {
     if (!cotizacionActiva) return;
-    const { error: borradoError } = await supabase
-      .from("cotizacion_detalle")
-      .delete()
-      .eq("id", linea.id);
-    if (borradoError) {
-      setError(borradoError.message);
-      return;
-    }
-    await recalcularCotizacion(cotizacionActiva.id);
+    const nuevasLineas = lineasCotizacion.filter((item) => item.id !== linea.id);
+    const subtotal = nuevasLineas.reduce((total, item) => total + Number(item.cantidad) * Number(item.precio), 0);
+    setLineasCotizacion(nuevasLineas);
+    setCotizacionActiva({ ...cotizacionActiva, subtotal, total: subtotal + Math.max(0, Number(envioCotizacion || 0)) });
   }
   async function crearAtencion(event: FormEvent) {
     event.preventDefault();
@@ -850,12 +874,25 @@ export default function ConversacionesPage() {
                   ))}
                 </select>
               </div>
+              <section className="rounded-xl border border-green-200 bg-green-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-green-800">Datos para pedido</p>
+                <p className="mt-1 text-[11px] leading-4 text-green-700">Completa y guarda estos datos antes de crear o convertir el pedido.</p>
+                <div className="mt-3 grid gap-2">
+                  <input value={datosPedido.nombre} onChange={(event) => setDatosPedido({ ...datosPedido, nombre: event.target.value })} placeholder="Nombre del cliente *" className="rounded-lg border border-green-200 bg-white p-2 text-xs" />
+                  <input value={datosPedido.telefono} onChange={(event) => setDatosPedido({ ...datosPedido, telefono: event.target.value })} placeholder="Teléfono / WhatsApp" className="rounded-lg border border-green-200 bg-white p-2 text-xs" />
+                  <div className="grid grid-cols-2 gap-2"><input value={datosPedido.nit} onChange={(event) => setDatosPedido({ ...datosPedido, nit: event.target.value })} placeholder="NIT" className="rounded-lg border border-green-200 bg-white p-2 text-xs" /><input value={datosPedido.razonSocial} onChange={(event) => setDatosPedido({ ...datosPedido, razonSocial: event.target.value })} placeholder="Razón social" className="rounded-lg border border-green-200 bg-white p-2 text-xs" /></div>
+                  <input type="email" value={datosPedido.email} onChange={(event) => setDatosPedido({ ...datosPedido, email: event.target.value })} placeholder="Correo fiscal" className="rounded-lg border border-green-200 bg-white p-2 text-xs" />
+                  <input value={datosPedido.direccion} onChange={(event) => setDatosPedido({ ...datosPedido, direccion: event.target.value })} placeholder="Dirección de entrega" className="rounded-lg border border-green-200 bg-white p-2 text-xs" />
+                  <div className="grid grid-cols-3 gap-2"><input value={datosPedido.departamento} onChange={(event) => setDatosPedido({ ...datosPedido, departamento: event.target.value })} placeholder="Departamento" className="min-w-0 rounded-lg border border-green-200 bg-white p-2 text-xs" /><input value={datosPedido.municipio} onChange={(event) => setDatosPedido({ ...datosPedido, municipio: event.target.value })} placeholder="Municipio" className="min-w-0 rounded-lg border border-green-200 bg-white p-2 text-xs" /><input value={datosPedido.zona} onChange={(event) => setDatosPedido({ ...datosPedido, zona: event.target.value })} placeholder="Zona" className="min-w-0 rounded-lg border border-green-200 bg-white p-2 text-xs" /></div>
+                </div>
+                <button type="button" onClick={() => void guardarDatosPedido()} className="mt-3 w-full rounded-lg bg-green-700 p-2 text-xs font-bold text-white hover:bg-green-800">Guardar datos del pedido</button>
+              </section>
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Cotización</p>
                 <select value={cotizacionActiva?.id || ""} onChange={(event) => { const encontrada = cotizaciones.find((item) => item.id === event.target.value); if (encontrada) void abrirCotizacion(encontrada); }} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs">
                   <option value="">Seleccionar cotización</option>{cotizaciones.map((item) => <option key={item.id} value={item.id}>{item.codigo} · Q{Number(item.total || 0).toFixed(2)}</option>)}
                 </select>
-                {cotizacionActiva && <div className="mt-2 space-y-2 rounded-xl bg-orange-50 p-3"><select value={productoCotizacion} onChange={(event) => setProductoCotizacion(event.target.value)} className="w-full rounded-lg border border-orange-100 bg-white p-2 text-xs"><option value="">Agregar producto</option>{productos.map((item) => <option key={item.id} value={item.id}>{item.nombre} · Q{Number(item.precio_venta || 0).toFixed(2)}</option>)}</select><div className="flex gap-2"><input aria-label="Cantidad" type="number" min="1" value={cantidadCotizacion} onChange={(event) => setCantidadCotizacion(event.target.value)} className="w-20 rounded-lg border border-orange-100 p-2 text-xs"/><button type="button" onClick={() => void agregarLineaCotizacion()} className="rounded-lg bg-orange-600 px-2 text-xs font-bold text-white">Agregar</button></div>{lineasCotizacion.map((linea) => <div key={linea.id} className="flex justify-between gap-2 text-xs"><span>{linea.cantidad}× {linea.descripcion}</span><button type="button" onClick={() => void quitarLineaCotizacion(linea)} className="font-bold text-rose-600">Quitar</button></div>)}<div className="grid gap-2"><label className="space-y-1 text-[11px] font-bold text-slate-600">Envío (Q)<input type="number" min="0" step="0.01" value={envioCotizacion} onChange={(event) => setEnvioCotizacion(event.target.value)} placeholder="0.00" className="w-full rounded-lg border border-orange-100 bg-white p-2 text-xs font-normal"/></label><label className="space-y-1 text-[11px] font-bold text-slate-600">Válida hasta (opcional)<input type="date" value={venceCotizacion} onChange={(event) => setVenceCotizacion(event.target.value)} className="w-full rounded-lg border border-orange-100 bg-white p-2 text-xs font-normal"/></label></div><p className="text-[11px] text-slate-600">Subtotal Q{Number(cotizacionActiva.subtotal || 0).toFixed(2)} + envío Q{Number(envioCotizacion || 0).toFixed(2)}</p><button type="button" onClick={() => void recalcularCotizacion(cotizacionActiva.id)} className="w-full rounded-lg border border-orange-200 bg-white p-2 text-xs font-bold text-orange-700">Guardar cotización · Q{Number(cotizacionActiva.total || 0).toFixed(2)}</button><p className="text-[11px] leading-4 text-slate-600">Al convertir se trasladan productos, precios y envío. Solo completarás entrega y pago.</p><Link href={`/pedidos?clienteId=${seleccionada.cliente_id || ""}&conversacionId=${seleccionada.id}&responsableId=${seleccionada.responsable_id || ""}&canal=${seleccionada.canal}&cotizacionId=${cotizacionActiva.id}`} className="block rounded-lg bg-slate-950 p-2 text-center text-xs font-bold text-white">Convertir y completar pedido</Link></div>}
+                {cotizacionActiva && <div className="mt-2 space-y-2 rounded-xl bg-orange-50 p-3"><select value={productoCotizacion} onChange={(event) => setProductoCotizacion(event.target.value)} className="w-full rounded-lg border border-orange-100 bg-white p-2 text-xs"><option value="">Agregar producto</option>{productos.map((item) => <option key={item.id} value={item.id}>{item.nombre} · Q{Number(item.precio_venta || 0).toFixed(2)}</option>)}</select><div className="flex gap-2"><input aria-label="Cantidad" type="number" min="1" value={cantidadCotizacion} onChange={(event) => setCantidadCotizacion(event.target.value)} className="w-20 rounded-lg border border-orange-100 p-2 text-xs"/><button type="button" onClick={() => void agregarLineaCotizacion()} className="rounded-lg bg-orange-600 px-2 text-xs font-bold text-white">Agregar</button></div>{lineasCotizacion.map((linea) => <div key={linea.id} className="flex justify-between gap-2 text-xs"><span>{linea.cantidad}× {linea.descripcion}</span><button type="button" onClick={() => void quitarLineaCotizacion(linea)} className="font-bold text-rose-600">Quitar</button></div>)}<div className="grid gap-2"><label className="space-y-1 text-[11px] font-bold text-slate-600">Envío (Q)<input type="number" min="0" step="0.01" value={envioCotizacion} onChange={(event) => setEnvioCotizacion(event.target.value)} placeholder="0.00" className="w-full rounded-lg border border-orange-100 bg-white p-2 text-xs font-normal"/></label><label className="space-y-1 text-[11px] font-bold text-slate-600">Válida hasta (opcional)<input type="date" value={venceCotizacion} onChange={(event) => setVenceCotizacion(event.target.value)} className="w-full rounded-lg border border-orange-100 bg-white p-2 text-xs font-normal"/></label></div><p className="text-[11px] text-slate-600">Subtotal Q{Number(cotizacionActiva.subtotal || 0).toFixed(2)} + envío Q{Number(envioCotizacion || 0).toFixed(2)}</p><button type="button" onClick={() => void recalcularCotizacion()} className="w-full rounded-lg border border-orange-200 bg-white p-2 text-xs font-bold text-orange-700">Guardar cotización · Q{Number(cotizacionActiva.total || 0).toFixed(2)}</button><p className="text-[11px] leading-4 text-slate-600">Al convertir se trasladan productos, precios y envío. Solo completarás entrega y pago.</p>{cotizacionActiva.id ? <Link href={`/pedidos?clienteId=${seleccionada.cliente_id || ""}&conversacionId=${seleccionada.id}&responsableId=${seleccionada.responsable_id || ""}&canal=${seleccionada.canal}&cotizacionId=${cotizacionActiva.id}`} className="block rounded-lg bg-slate-950 p-2 text-center text-xs font-bold text-white">Convertir y completar pedido</Link> : <p className="rounded-lg bg-slate-200 p-2 text-center text-xs font-bold text-slate-600">Guarda la cotización antes de convertirla.</p>}</div>}
               </div>
               <form onSubmit={guardarNota}>
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
