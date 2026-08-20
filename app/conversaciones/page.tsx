@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
@@ -106,6 +107,7 @@ const fecha = (valor: string | null) =>
 const nombrePerfil = (perfil: Perfil) => perfil.nombre?.trim() || perfil.email;
 
 export default function ConversacionesPage() {
+  const router = useRouter();
   const [conversaciones, setConversaciones] = useState<Conversacion[]>([]),
     [perfiles, setPerfiles] = useState<Perfil[]>([]),
     [seleccionada, setSeleccionada] = useState<Conversacion | null>(null),
@@ -320,6 +322,14 @@ export default function ConversacionesPage() {
     await registrarActividad("Seguimiento", "Datos esenciales para pedido actualizados.", { ...seleccionada, cliente_id: clienteId });
     setAviso("Datos del cliente y entrega guardados. Ya puedes crear o convertir el pedido.");
     return clienteId;
+  }
+  async function abrirPedidoDesdeConversacion() {
+    if (!seleccionada) return;
+    const clienteId = await guardarDatosPedido();
+    if (!clienteId) return;
+    router.push(
+      `/pedidos?clienteId=${clienteId}&conversacionId=${seleccionada.id}&responsableId=${seleccionada.responsable_id || ""}&canal=${seleccionada.canal}`,
+    );
   }
   async function registrarActividad(
     tipo: string,
@@ -770,12 +780,13 @@ export default function ConversacionesPage() {
                     >
                       <ClipboardPlus size={14} /> Cotización
                     </button>
-                    <Link
-                      href={`/pedidos?clienteId=${seleccionada.cliente_id || ""}&conversacionId=${seleccionada.id}&responsableId=${seleccionada.responsable_id || ""}&canal=${seleccionada.canal}`}
+                    <button
+                      type="button"
+                      onClick={() => void abrirPedidoDesdeConversacion()}
                       className="inline-flex items-center gap-1 rounded-lg bg-orange-600 px-3 py-2 text-xs font-bold text-white hover:bg-orange-700"
                     >
                       <Plus size={14} /> Crear pedido
-                    </Link>
+                    </button>
                   </div>
                 </div>
               </header>
