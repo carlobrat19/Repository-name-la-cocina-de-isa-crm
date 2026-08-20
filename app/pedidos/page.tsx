@@ -757,7 +757,7 @@ export default function PedidosPage() {
                     onChange={(event) => setEstado(event.target.value)}
                     className={fieldClass}
                   >
-                    {ESTADOS.map((item) => (
+                    {ESTADOS.filter((item) => item !== "Entregado").map((item) => (
                       <option key={item}>{item}</option>
                     ))}
                   </select>

@@ -220,7 +220,6 @@ export default function DetallePedidoPage() {
     const { error } = await supabase
       .from("pedidos")
       .update({
-        estado: pedido.estado,
         forma_pago: pedido.forma_pago,
         fecha_entrega: pedido.fecha_entrega || null,
         hora_entrega: pedido.hora_entrega || null,
@@ -303,7 +302,7 @@ export default function DetallePedidoPage() {
       await cargarPedido();
       return;
     }
-    const { error } = await supabase.from("pedidos").update({ estado: valor }).eq("id", pedido.id);
+    const { error } = await supabase.rpc("cambiar_estado_pedido_seguro", { p_pedido_id: pedido.id, p_estado: valor });
     setActualizandoEstado(false);
     if (error) { alert(`No se pudo actualizar: ${error.message}`); return; }
     await cargarPedido();

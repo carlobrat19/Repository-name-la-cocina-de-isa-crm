@@ -17,6 +17,7 @@ type RecetaPiloto = {
   margen_pct: number | string;
   iva_pct: number | string;
   recargo_carta_pct: number | string;
+  costos_adicionales: number | string;
   receta_ingredientes: IngredienteReceta[];
 };
 
@@ -130,7 +131,7 @@ setProductoReceta(producto);
 setPrecioFinalProducto(String(producto.precio_venta ?? ""));
 const recetaRespuesta = await supabase
 .from("recetas_estandar")
-.select("rendimiento, unidad_rendimiento, merma_pct, margen_pct, iva_pct, recargo_carta_pct, receta_ingredientes(cantidad, ingredientes(nombre, unidad_base, costo_referencia, stock_actual))")
+.select("rendimiento, unidad_rendimiento, merma_pct, margen_pct, iva_pct, recargo_carta_pct, costos_adicionales, receta_ingredientes(cantidad, ingredientes(nombre, unidad_base, costo_referencia, stock_actual))")
 .eq("producto_id", producto.id)
 .maybeSingle();
 if (recetaRespuesta.error) { console.error(recetaRespuesta.error); return; }
@@ -359,15 +360,18 @@ return(
 if (!recetaPiloto) return <section className="mb-10 rounded-[35px] bg-slate-950 p-8 text-white shadow-2xl"><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Producto seleccionado · {productoReceta.categoria || "Sin categoría"}</p><h1 className="mt-2 text-4xl font-black">{productoReceta.nombre}</h1><p className="mt-3 max-w-2xl text-sm text-slate-300">Este producto todavía no tiene una receta estándar. Créala para calcular sus costos automáticamente desde ingredientes e inventario.</p><Link href="/recetas" className="mt-6 inline-block rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white hover:bg-orange-400">Crear receta para este producto</Link></section>;
 const costoBase = recetaPiloto.receta_ingredientes.reduce((total, detalle) => total + Number(detalle.cantidad || 0) * Number(detalle.ingredientes?.costo_referencia || 0), 0);
 const conMerma = costoBase * (1 + Number(recetaPiloto.merma_pct || 0));
-const precioSugerido = conMerma * (1 + Number(recetaPiloto.margen_pct || 0)) * (1 + Number(recetaPiloto.iva_pct || 0)) * (1 + Number(recetaPiloto.recargo_carta_pct || 0));
+const costoTotalLote = conMerma + Number(recetaPiloto.costos_adicionales || 0);
+const costoPorUnidad = costoTotalLote / Math.max(0.001, Number(recetaPiloto.rendimiento || 1));
+const precioSinIva = costoPorUnidad / Math.max(0.01, 1 - Number(recetaPiloto.margen_pct || 0) - Number(recetaPiloto.recargo_carta_pct || 0));
+const precioSugerido = precioSinIva * (1 + Number(recetaPiloto.iva_pct || 0));
 return <section className="mb-10 overflow-hidden rounded-[35px] bg-slate-950 p-8 text-white shadow-2xl">
 <p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Receta estándar · {productoReceta.categoria || "Sin categoría"}</p>
 <h1 className="mt-2 text-4xl font-black">{productoReceta.nombre}</h1>
 <p className="mt-2 text-sm text-slate-300">Costo calculado automáticamente desde los ingredientes de tu receta estándar.</p>
-<div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo ingredientes</p><b className="text-2xl">Q{costoBase.toFixed(2)}</b></div><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo con merma</p><b className="text-2xl">Q{conMerma.toFixed(2)}</b></div><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Rendimiento</p><b className="text-2xl">{recetaPiloto.rendimiento} {recetaPiloto.unidad_rendimiento}</b></div><div className="rounded-2xl bg-orange-500 p-4"><p className="text-xs text-orange-100">Precio sugerido (referencia)</p><b className="text-2xl">Q{precioSugerido.toFixed(2)}</b></div></div>
+<div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo ingredientes</p><b className="text-2xl">Q{costoBase.toFixed(2)}</b></div><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo total del lote</p><b className="text-2xl">Q{costoTotalLote.toFixed(2)}</b></div><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo por {recetaPiloto.unidad_rendimiento}</p><b className="text-2xl">Q{costoPorUnidad.toFixed(2)}</b></div><div className="rounded-2xl bg-orange-500 p-4"><p className="text-xs text-orange-100">Precio sugerido con IVA</p><b className="text-2xl">Q{precioSugerido.toFixed(2)}</b></div></div>
 <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-orange-400/40 bg-orange-500/10 p-4 sm:flex-row sm:items-end"><div className="flex-1"><label className="block text-xs font-bold uppercase tracking-wide text-orange-200">Precio final de venta</label><p className="mt-1 text-xs text-slate-300">Este es el precio que verá el cliente y el que se usará en los pedidos.</p><div className="mt-2 flex max-w-xs overflow-hidden rounded-xl bg-white"><span className="px-3 py-3 font-bold text-slate-600">Q</span><input aria-label={`Precio final de venta de ${productoReceta.nombre}`} type="number" min="0" step="0.01" className="w-full bg-white py-3 pr-3 text-lg font-bold text-slate-900 outline-none" value={precioFinalProducto} onChange={(event) => setPrecioFinalProducto(event.target.value)} /></div></div><button type="button" onClick={guardarPrecioFinalPan} disabled={guardandoPrecioFinal} className="rounded-xl bg-orange-500 px-5 py-3 font-bold text-white transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60">{guardandoPrecioFinal ? "Guardando..." : "Guardar precio final"}</button></div>
 <div className="mt-7 overflow-x-auto rounded-2xl bg-white text-slate-900"><table className="w-full text-sm"><thead className="bg-slate-100 text-left text-xs uppercase text-slate-500"><tr><th className="p-3">Ingrediente</th><th className="p-3">Cantidad</th><th className="p-3">Costo unitario</th><th className="p-3 text-right">Costo receta</th><th className="p-3 text-right">Stock</th></tr></thead><tbody>{recetaPiloto.receta_ingredientes.map((detalle) => <tr key={detalle.ingredientes?.nombre} className="border-t"><td className="p-3 font-bold">{detalle.ingredientes?.nombre}</td><td className="p-3">{Number(detalle.cantidad).toFixed(detalle.ingredientes?.unidad_base === "g" ? 1 : 2)} {detalle.ingredientes?.unidad_base}</td><td className="p-3">Q{Number(detalle.ingredientes?.costo_referencia || 0).toFixed(detalle.ingredientes?.unidad_base === "g" ? 4 : 2)}</td><td className="p-3 text-right font-bold">Q{(Number(detalle.cantidad) * Number(detalle.ingredientes?.costo_referencia || 0)).toFixed(2)}</td><td className="p-3 text-right">{Number(detalle.ingredientes?.stock_actual || 0).toFixed(detalle.ingredientes?.unidad_base === "g" ? 1 : 0)} {detalle.ingredientes?.unidad_base}</td></tr>)}</tbody></table></div>
-<p className="mt-4 text-xs text-slate-300">Regla importada: {(Number(recetaPiloto.merma_pct) * 100).toFixed(0)}% merma · {(Number(recetaPiloto.margen_pct) * 100).toFixed(0)}% margen · {(Number(recetaPiloto.iva_pct) * 100).toFixed(0)}% IVA · {(Number(recetaPiloto.recargo_carta_pct) * 100).toFixed(0)}% recargo de carta.</p>
+<p className="mt-4 text-xs text-slate-300">Regla: {(Number(recetaPiloto.merma_pct) * 100).toFixed(0)}% merma · {(Number(recetaPiloto.margen_pct) * 100).toFixed(0)}% margen objetivo · {(Number(recetaPiloto.iva_pct) * 100).toFixed(0)}% IVA · {(Number(recetaPiloto.recargo_carta_pct) * 100).toFixed(0)}% comisión POS/plataforma · Q{Number(recetaPiloto.costos_adicionales || 0).toFixed(2)} costos adicionales.</p>
 </section>;
 })()}
 

@@ -7,7 +7,7 @@ import { supabase } from "../../lib/supabase";
 type Producto = { id: string; nombre: string; categoria: string | null; precio_venta: number | string; costo: number | string | null };
 type Ingrediente = { id: string; nombre: string; unidad_base: "g" | "ml" | "unidad"; costo_referencia: number | string; stock_actual: number | string; activo: boolean };
 type LineaReceta = { ingrediente_id: string; cantidad: number };
-type RecetaCargada = { id: string; rendimiento: number | string; unidad_rendimiento: string; merma_pct: number | string; margen_pct: number | string; iva_pct: number | string; recargo_carta_pct: number | string; receta_ingredientes: LineaReceta[] };
+type RecetaCargada = { id: string; rendimiento: number | string; unidad_rendimiento: string; merma_pct: number | string; margen_pct: number | string; iva_pct: number | string; recargo_carta_pct: number | string; costos_adicionales: number | string; receta_ingredientes: LineaReceta[] };
 
 const dinero = (valor: number) => `Q${valor.toFixed(2)}`;
 
@@ -25,6 +25,7 @@ export default function RecetasPage() {
   const [margen, setMargen] = useState("35");
   const [iva, setIva] = useState("12");
   const [recargo, setRecargo] = useState("0");
+  const [costosAdicionales, setCostosAdicionales] = useState("0");
   const [lineas, setLineas] = useState<LineaReceta[]>([]);
   const [ingredienteSeleccionado, setIngredienteSeleccionado] = useState("");
   const [cantidad, setCantidad] = useState("");
@@ -61,13 +62,13 @@ export default function RecetasPage() {
     setCargandoReceta(true);
     const { data, error } = await supabase
       .from("recetas_estandar")
-      .select("id,rendimiento,unidad_rendimiento,merma_pct,margen_pct,iva_pct,recargo_carta_pct,receta_ingredientes(ingrediente_id,cantidad)")
+      .select("id,rendimiento,unidad_rendimiento,merma_pct,margen_pct,iva_pct,recargo_carta_pct,costos_adicionales,receta_ingredientes(ingrediente_id,cantidad)")
       .eq("producto_id", id)
       .maybeSingle();
     setCargandoReceta(false);
     if (error) { console.error(error); alert("No se pudo cargar la receta."); return; }
     if (!data) {
-      setRendimiento("1"); setUnidadRendimiento("unidad"); setMerma("0"); setMargen("35"); setIva("12"); setRecargo("0");
+setRendimiento("1"); setUnidadRendimiento("unidad"); setMerma("0"); setMargen("35"); setIva("12"); setRecargo("0"); setCostosAdicionales("0");
       return;
     }
     const receta = data as unknown as RecetaCargada;
@@ -77,6 +78,7 @@ export default function RecetasPage() {
     setMargen(String(Number(receta.margen_pct) * 100));
     setIva(String(Number(receta.iva_pct) * 100));
     setRecargo(String(Number(receta.recargo_carta_pct) * 100));
+    setCostosAdicionales(String(Number(receta.costos_adicionales || 0)));
     setLineas((receta.receta_ingredientes || []).map((linea) => ({ ingrediente_id: linea.ingrediente_id, cantidad: Number(linea.cantidad) })));
   };
 
@@ -91,29 +93,35 @@ export default function RecetasPage() {
   const detalleLineas = useMemo(() => lineas.map((linea) => ({ ...linea, ingrediente: ingredientes.find((ingrediente) => ingrediente.id === linea.ingrediente_id) })).filter((linea) => linea.ingrediente), [lineas, ingredientes]);
   const costoBase = detalleLineas.reduce((total, linea) => total + linea.cantidad * Number(linea.ingrediente?.costo_referencia || 0), 0);
   const costoConMerma = costoBase * (1 + Number(merma || 0) / 100);
-  const precioSugerido = costoConMerma * (1 + Number(margen || 0) / 100) * (1 + Number(iva || 0) / 100) * (1 + Number(recargo || 0) / 100);
+  const costoTotalLote = costoConMerma + Number(costosAdicionales || 0);
+  const costoPorUnidad = costoTotalLote / Math.max(0.001, Number(rendimiento || 1));
+  const margenObjetivo = Number(margen || 0) / 100;
+  const comisionCanal = Number(recargo || 0) / 100;
+  const precioSinIva = costoPorUnidad / Math.max(0.01, 1 - margenObjetivo - comisionCanal);
+  const precioSugerido = precioSinIva * (1 + Number(iva || 0) / 100);
   const productoActual = productos.find((producto) => producto.id === productoId);
 
   const guardarReceta = async () => {
     if ((!productoId && modoProducto === "existente") || (modoProducto === "nuevo" && (!nombreProductoNuevo.trim() || !precioVentaNuevo)) || !Number(rendimiento) || Number(rendimiento) <= 0 || !lineas.length) { alert("Define el producto, su precio final, el rendimiento y al menos un ingrediente."); return; }
+    if (Number(margen || 0) + Number(recargo || 0) >= 99) { alert("El margen objetivo más la comisión debe ser menor a 99%."); return; }
     setGuardando(true);
     let productoParaReceta = productoId;
     if (modoProducto === "nuevo") {
-      const { data: productoNuevo, error: productoError } = await supabase.from("productos").insert({ nombre: nombreProductoNuevo.trim(), categoria: categoriaProductoNueva.trim() || null, precio_venta: Number(precioVentaNuevo), costo: costoConMerma, estado: "Activo" }).select("id").single();
+      const { data: productoNuevo, error: productoError } = await supabase.from("productos").insert({ nombre: nombreProductoNuevo.trim(), categoria: categoriaProductoNueva.trim() || null, precio_venta: Number(precioVentaNuevo), costo: costoPorUnidad, estado: "Activo" }).select("id").single();
       if (productoError || !productoNuevo) { console.error(productoError); setGuardando(false); alert("No se pudo crear el producto para esta receta."); return; }
       productoParaReceta = productoNuevo.id;
       setProductoId(productoNuevo.id);
     }
     const { data: receta, error: recetaError } = await supabase
       .from("recetas_estandar")
-      .upsert({ producto_id: productoParaReceta, rendimiento: Number(rendimiento), unidad_rendimiento: unidadRendimiento, merma_pct: Number(merma || 0) / 100, margen_pct: Number(margen || 0) / 100, iva_pct: Number(iva || 0) / 100, recargo_carta_pct: Number(recargo || 0) / 100, activa: true }, { onConflict: "producto_id" })
+      .upsert({ producto_id: productoParaReceta, rendimiento: Number(rendimiento), unidad_rendimiento: unidadRendimiento, merma_pct: Number(merma || 0) / 100, margen_pct: Number(margen || 0) / 100, iva_pct: Number(iva || 0) / 100, recargo_carta_pct: Number(recargo || 0) / 100, costos_adicionales: Number(costosAdicionales || 0), activa: true }, { onConflict: "producto_id" })
       .select("id")
       .single();
     if (recetaError || !receta) { console.error(recetaError); setGuardando(false); alert("No se pudo guardar la receta."); return; }
     const { error: borrarError } = await supabase.from("receta_ingredientes").delete().eq("receta_id", receta.id);
     if (borrarError) { console.error(borrarError); setGuardando(false); alert("No se pudo actualizar el detalle de ingredientes."); return; }
     const { error: detalleError } = await supabase.from("receta_ingredientes").insert(lineas.map((linea) => ({ receta_id: receta.id, ingrediente_id: linea.ingrediente_id, cantidad: linea.cantidad })));
-    const { error: costoError } = await supabase.from("productos").update({ costo: costoConMerma }).eq("id", productoParaReceta);
+    const { error: costoError } = await supabase.from("productos").update({ costo: costoPorUnidad }).eq("id", productoParaReceta);
     setGuardando(false);
     if (detalleError || costoError) { console.error(detalleError || costoError); alert("La receta se guardó parcialmente. Vuelve a intentar para terminar de sincronizarla."); return; }
     alert("Receta guardada y costo del producto actualizado.");
@@ -138,7 +146,7 @@ export default function RecetasPage() {
         <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-orange-700">¿Cómo quieres comenzar?</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => setModoProducto("nuevo")} className={`rounded-xl px-4 py-2 text-sm font-bold ${modoProducto === "nuevo" ? "bg-orange-500 text-white" : "bg-white text-slate-700"}`}>Crear producto desde esta receta</button><button type="button" onClick={() => setModoProducto("existente")} className={`rounded-xl px-4 py-2 text-sm font-bold ${modoProducto === "existente" ? "bg-slate-950 text-white" : "bg-white text-slate-700"}`}>Usar producto existente</button></div></div>
         {modoProducto === "nuevo" ? <div className="grid gap-4 rounded-2xl border border-slate-200 p-4 md:grid-cols-2"><label className="text-sm font-bold text-slate-700 md:col-span-2">Nombre del nuevo producto<input value={nombreProductoNuevo} onChange={(event) => setNombreProductoNuevo(event.target.value)} placeholder="Ej. Pan de banano con nuez" className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label><label className="text-sm font-bold text-slate-700">Categoría o marca<input value={categoriaProductoNueva} onChange={(event) => setCategoriaProductoNueva(event.target.value)} placeholder="La Cocina de Isa" className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label><label className="text-sm font-bold text-slate-700">Precio final de venta (Q)<input type="number" min="0" step="0.01" value={precioVentaNuevo} onChange={(event) => setPrecioVentaNuevo(event.target.value)} placeholder="0.00" className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label><p className="md:col-span-2 text-xs text-slate-500">Al guardar la receta, se creará este producto y se conectará automáticamente con su costo calculado.</p></div> : <div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-bold text-slate-700">Producto existente<select value={productoId} onChange={(event) => void cargarReceta(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-3 font-medium outline-none focus:border-orange-500"><option value="">Selecciona el producto</option>{productos.map((producto) => <option key={producto.id} value={producto.id}>{producto.nombre}</option>)}</select></label><div className="rounded-xl bg-slate-950 p-4 text-white"><p className="text-xs text-slate-300">Precio final actual</p><p className="mt-1 text-2xl font-black">{productoActual ? dinero(Number(productoActual.precio_venta)) : "—"}</p><p className="mt-1 text-xs text-slate-400">Se conserva al actualizar la receta.</p></div></div>}
         {cargandoReceta && <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-700">Cargando receta…</p>}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><label className="text-sm font-bold text-slate-700">Rendimiento<input type="number" min="0.001" step="0.001" value={rendimiento} onChange={(event) => setRendimiento(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label><label className="text-sm font-bold text-slate-700">Unidad de rendimiento<input value={unidadRendimiento} onChange={(event) => setUnidadRendimiento(event.target.value)} placeholder="Ej. pan, porción, unidad" className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label><label className="text-sm font-bold text-slate-700">Merma (%)<input type="number" min="0" step="0.01" value={merma} onChange={(event) => setMerma(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label><label className="text-sm font-bold text-slate-700">Margen (%)<input type="number" min="0" step="0.01" value={margen} onChange={(event) => setMargen(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label><label className="text-sm font-bold text-slate-700">IVA (%)<input type="number" min="0" step="0.01" value={iva} onChange={(event) => setIva(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label><label className="text-sm font-bold text-slate-700">Recargo / carta (%)<input type="number" min="0" step="0.01" value={recargo} onChange={(event) => setRecargo(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label></div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><label className="text-sm font-bold text-slate-700">Rendimiento<input type="number" min="0.001" step="0.001" value={rendimiento} onChange={(event) => setRendimiento(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label><label className="text-sm font-bold text-slate-700">Unidad de rendimiento<input value={unidadRendimiento} onChange={(event) => setUnidadRendimiento(event.target.value)} placeholder="Ej. pan, porción, unidad" className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label><label className="text-sm font-bold text-slate-700">Merma (%)<input type="number" min="0" step="0.01" value={merma} onChange={(event) => setMerma(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label><label className="text-sm font-bold text-slate-700">Margen objetivo (%)<input type="number" min="0" step="0.01" value={margen} onChange={(event) => setMargen(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label><label className="text-sm font-bold text-slate-700">IVA (%)<input type="number" min="0" step="0.01" value={iva} onChange={(event) => setIva(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label><label className="text-sm font-bold text-slate-700">Comisión POS / plataforma (%)<input type="number" min="0" step="0.01" value={recargo} onChange={(event) => setRecargo(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label><label className="text-sm font-bold text-slate-700">Costos adicionales del lote (Q)<input type="number" min="0" step="0.01" value={costosAdicionales} onChange={(event) => setCostosAdicionales(event.target.value)} placeholder="Empaque, gas o mano de obra" className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500" /></label></div>
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="font-black text-slate-950">Ingredientes de la receta</p><div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_150px_auto]"><select value={ingredienteSeleccionado} onChange={(event) => setIngredienteSeleccionado(event.target.value)} className="rounded-xl border border-slate-200 bg-white p-3 outline-none focus:border-orange-500"><option value="">Selecciona un ingrediente</option>{ingredientes.map((ingrediente) => <option key={ingrediente.id} value={ingrediente.id}>{ingrediente.nombre} · {ingrediente.unidad_base} · {dinero(Number(ingrediente.costo_referencia))}/{ingrediente.unidad_base}</option>)}</select><input type="number" min="0.001" step="0.001" placeholder="Cantidad" value={cantidad} onChange={(event) => setCantidad(event.target.value)} className="rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500"/><button type="button" onClick={agregarLinea} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white transition hover:bg-orange-600">Agregar</button></div>
           <div className="mt-4 overflow-x-auto rounded-xl bg-white"><table className="w-full min-w-[590px] text-sm"><thead className="bg-slate-100 text-left text-xs uppercase text-slate-500"><tr><th className="p-3">Ingrediente</th><th className="p-3">Cantidad</th><th className="p-3">Costo unitario</th><th className="p-3 text-right">Subtotal</th><th className="p-3"></th></tr></thead><tbody>{detalleLineas.map((linea) => <tr key={linea.ingrediente_id} className="border-t border-slate-100"><td className="p-3 font-bold text-slate-900">{linea.ingrediente?.nombre}</td><td className="p-3"><input aria-label={`Cantidad de ${linea.ingrediente?.nombre}`} type="number" min="0.001" step="0.001" value={linea.cantidad} onChange={(event) => setLineas(lineas.map((actual) => actual.ingrediente_id === linea.ingrediente_id ? { ...actual, cantidad: Number(event.target.value) } : actual))} className="w-24 rounded-lg border border-slate-200 p-2" /> <span className="text-slate-500">{linea.ingrediente?.unidad_base}</span></td><td className="p-3">{dinero(Number(linea.ingrediente?.costo_referencia || 0))}</td><td className="p-3 text-right font-black text-slate-900">{dinero(linea.cantidad * Number(linea.ingrediente?.costo_referencia || 0))}</td><td className="p-3 text-right"><button type="button" onClick={() => setLineas(lineas.filter((actual) => actual.ingrediente_id !== linea.ingrediente_id))} className="text-xs font-bold text-rose-600">Quitar</button></td></tr>)}{!detalleLineas.length && <tr><td colSpan={5} className="p-7 text-center text-slate-500">Agrega los ingredientes y sus cantidades para crear la receta.</td></tr>}</tbody></table></div>
         </div>
