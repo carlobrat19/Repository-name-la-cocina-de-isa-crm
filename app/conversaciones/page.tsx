@@ -223,6 +223,16 @@ export default function ConversacionesPage() {
     void cargar();
   }, [cargar]);
   useEffect(() => {
+    const conversacionId = new URLSearchParams(window.location.search).get(
+      "conversacionId",
+    );
+    if (!conversacionId || seleccionada?.id === conversacionId) return;
+    const conversacion = conversaciones.find(
+      (item) => item.id === conversacionId,
+    );
+    if (conversacion) setSeleccionada(conversacion);
+  }, [conversaciones, seleccionada?.id]);
+  useEffect(() => {
     if (seleccionada) {
       void cargarDetalle(seleccionada);
       void cargarCotizaciones(seleccionada);

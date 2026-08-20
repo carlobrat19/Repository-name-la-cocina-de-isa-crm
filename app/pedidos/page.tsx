@@ -516,6 +516,14 @@ export default function PedidosPage() {
               Registra la venta y coordina la entrega desde un solo flujo.
             </p>
             {conversacionId && <p className="mt-2 text-xs font-bold text-green-700">Pedido iniciado desde conversación · Canal: {canalOrigen}</p>}
+            {conversacionId && (
+              <Link
+                href={`/conversaciones?conversacionId=${conversacionId}`}
+                className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-orange-700 transition hover:text-orange-800"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" /> Volver a la conversación
+              </Link>
+            )}
           </div>
           <div className="rounded-xl border border-orange-100 bg-orange-50 px-4 py-3 text-sm text-orange-800">
             <span className="font-bold">{carrito.length}</span> producto
