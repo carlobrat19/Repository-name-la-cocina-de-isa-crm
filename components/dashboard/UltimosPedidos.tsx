@@ -1,8 +1,16 @@
 import Link from "next/link";
 
 interface Props {
-
-  pedidos: any[];
+  pedidos: Array<{
+    id: string;
+    codigo?: string | null;
+    cliente?: string | null;
+    telefono?: string | null;
+    fecha_pedido?: string | null;
+    estado?: string | null;
+    pago_estado?: string | null;
+    total?: number | string | null;
+  }>;
 }
 
 export default function UltimosPedidos({
@@ -12,7 +20,7 @@ export default function UltimosPedidos({
 }: Props) {
 
   function colorEstado(
-    estado: string
+    estado?: string | null
   ) {
 
     if (

@@ -9,11 +9,13 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   if (!token) return NextResponse.json({ error: "Sesión no válida." }, { status: 401 });
   const { data: { user: actor } } = await admin.auth.getUser(token);
-  if (!actor || actor.email?.toLowerCase() !== "carlobrat@gmail.com") return NextResponse.json({ error: "Solo el administrador principal puede eliminar cuentas." }, { status: 403 });
+  const { data: perfilActor } = actor ? await admin.from("perfiles_crm").select("rol,activo,acceso_hasta").eq("id", actor.id).maybeSingle() : { data: null };
+  const accesoVigente = perfilActor?.activo && (!perfilActor.acceso_hasta || new Date(perfilActor.acceso_hasta) > new Date());
+  if (!actor || !accesoVigente || perfilActor?.rol !== "Administrador") return NextResponse.json({ error: "Solo un administrador activo puede eliminar cuentas." }, { status: 403 });
   const { id } = await context.params;
   if (id === actor.id) return NextResponse.json({ error: "No puedes eliminar tu propia cuenta." }, { status: 400 });
   const { data: objetivo } = await admin.from("perfiles_crm").select("id,email,nombre").eq("id", id).maybeSingle();
-  if (!objetivo || objetivo.email.toLowerCase() === "carlobrat@gmail.com") return NextResponse.json({ error: "Cuenta no disponible para eliminar." }, { status: 404 });
+  if (!objetivo) return NextResponse.json({ error: "Cuenta no disponible para eliminar." }, { status: 404 });
   const revisiones = await Promise.all([
     admin.from("pedidos").select("id", { count: "exact", head: true }).eq("creado_por", id),
     admin.from("movimientos_caja").select("id", { count: "exact", head: true }).eq("creado_por", id),

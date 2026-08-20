@@ -333,7 +333,8 @@ obtenerProductos();
 useEffect(()=>{
 const timer = window.setTimeout(() => void obtenerProductos(), 0);
 return () => window.clearTimeout(timer);
-},[]);
+// obtenerProductos no depende de estado y solo debe ejecutarse al cargar el módulo.
+},[]); // eslint-disable-line react-hooks/exhaustive-deps
 
 const categorias = Array.from(new Set(productos.map((producto) => producto.categoria?.trim()).filter(Boolean))) as string[];
 const canales = Array.from(new Set(productos.flatMap((producto) => producto.canales_venta || []))).sort();

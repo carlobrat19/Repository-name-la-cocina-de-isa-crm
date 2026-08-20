@@ -55,6 +55,8 @@ type DireccionCliente = {
   zona?: string | null;
   referencia?: string | null;
   principal?: boolean | null;
+  ultima_entrega_at?: string | null;
+  veces_usada?: number | null;
 };
 
 const VENDEDORES = ["REDES", "LUCIA", "CARLO", "ISA", "MONICA", "RENATA"];
@@ -132,6 +134,7 @@ export default function PedidosPage() {
   const [municipioEntrega, setMunicipioEntrega] = useState("");
   const [zonaEntrega, setZonaEntrega] = useState("");
   const [costoEnvio, setCostoEnvio] = useState(0);
+  const [guardarDireccion, setGuardarDireccion] = useState(true);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [productoSeleccionado, setProductoSeleccionado] = useState("");
   const [cantidad, setCantidad] = useState(1);
@@ -156,31 +159,34 @@ export default function PedidosPage() {
   }, []);
 
   useEffect(() => {
-    const parametros = new URLSearchParams(window.location.search);
-    const idCliente = parametros.get("clienteId");
-    const idConversacion = parametros.get("conversacionId");
-    const idResponsable = parametros.get("responsableId");
-    const idCotizacion = parametros.get("cotizacionId");
-    const canal = parametros.get("canal");
-    if (idConversacion) setConversacionId(idConversacion);
-    if (idResponsable) setResponsableId(idResponsable);
-    if (canal) setCanalOrigen(canal);
-    if (idCotizacion) {
-      setCotizacionId(idCotizacion);
-      void Promise.all([
+    const timer = window.setTimeout(() => {
+      const parametros = new URLSearchParams(window.location.search);
+      const idCliente = parametros.get("clienteId");
+      const idConversacion = parametros.get("conversacionId");
+      const idResponsable = parametros.get("responsableId");
+      const idCotizacion = parametros.get("cotizacionId");
+      const canal = parametros.get("canal");
+      if (idConversacion) setConversacionId(idConversacion);
+      if (idResponsable) setResponsableId(idResponsable);
+      if (canal) setCanalOrigen(canal);
+      if (idCotizacion) {
+        setCotizacionId(idCotizacion);
+        void Promise.all([
         supabase.from("cotizacion_detalle").select("producto_id,descripcion,cantidad,precio,productos(costo)").eq("cotizacion_id", idCotizacion),
         supabase.from("cotizaciones").select("costo_envio").eq("id", idCotizacion).maybeSingle(),
-      ]).then(([{ data: lineas }, { data: cotizacion }]) => {
+        ]).then(([{ data: lineas }, { data: cotizacion }]) => {
         setCarrito((lineas || []).filter((item) => item.producto_id).map((item) => ({ id: item.producto_id as string, nombre: item.descripcion, cantidad: Number(item.cantidad || 1), precio: Number(item.precio || 0), costo: Number((item.productos as { costo?: number } | null)?.costo || 0) })));
         const envioCotizado = Number(cotizacion?.costo_envio || 0);
         setCostoEnvio(envioCotizado);
         if (envioCotizado > 0) setRequiereEnvio(true);
+        });
+      }
+      if (!idCliente) return;
+      void supabase.from("clientes").select("id, nombre, telefono, email, nit, razon_social, direccion").eq("id", idCliente).maybeSingle().then(({ data, error }) => {
+        if (!error && data) void seleccionarCliente(data as Cliente);
       });
-    }
-    if (!idCliente) return;
-    void supabase.from("clientes").select("id, nombre, telefono, email, nit, razon_social, direccion").eq("id", idCliente).maybeSingle().then(({ data, error }) => {
-      if (!error && data) void seleccionarCliente(data as Cliente);
-    });
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   async function buscarClientes(termino: string) {
@@ -215,8 +221,9 @@ export default function PedidosPage() {
     setCoincidenciasClientes([]);
     const { data, error } = await supabase
       .from("cliente_direcciones")
-      .select("id, etiqueta, direccion, departamento, municipio, zona, referencia, principal")
+      .select("id, etiqueta, direccion, departamento, municipio, zona, referencia, principal, ultima_entrega_at, veces_usada")
       .eq("cliente_id", clienteExistente.id)
+      .order("ultima_entrega_at", { ascending: false, nullsFirst: false })
       .order("principal", { ascending: false })
       .order("created_at", { ascending: false });
     if (error) console.error(error);
@@ -319,6 +326,7 @@ export default function PedidosPage() {
     setMunicipioEntrega("");
     setZonaEntrega("");
     setCostoEnvio(0);
+    setGuardarDireccion(true);
     setProductoSeleccionado("");
     setCantidad(1);
     setCarrito([]);
@@ -350,139 +358,20 @@ export default function PedidosPage() {
     try {
       const abono = pagoEstado === "Pago parcial" ? abonoInicial : pagoEstado === "Pagado" ? totalPedido : 0;
       if (pagoEstado === "Pago parcial" && (!Number.isFinite(abono) || abono <= 0 || abono >= totalPedido)) throw new Error("Ingresa un abono válido menor al total");
-      let clientePedidoId = clienteId;
-      let clienteExistente: Cliente | null = null;
-      if (!clientePedidoId) {
-        const coincidencias = await Promise.all([
-          telefono.trim() ? supabase.from("clientes").select("id, nombre, telefono, email, nit, razon_social, direccion").eq("telefono", telefono.trim()).maybeSingle() : Promise.resolve({ data: null, error: null }),
-          nit.trim() ? supabase.from("clientes").select("id, nombre, telefono, email, nit, razon_social, direccion").eq("nit", nit.trim()).maybeSingle() : Promise.resolve({ data: null, error: null }),
-          supabase.from("clientes").select("id, nombre, telefono, email, nit, razon_social, direccion").ilike("nombre", cliente.trim()).maybeSingle(),
-        ]);
-        const error = coincidencias.find((resultado) => resultado.error)?.error;
-        if (error) throw error;
-        clienteExistente = (coincidencias.find((resultado) => resultado.data)?.data || null) as Cliente | null;
-        clientePedidoId = clienteExistente?.id || null;
-      }
-      const clienteNuevo = !clientePedidoId;
-      const datosCliente = {
-        nombre: cliente.trim(), telefono: telefono.trim() || null, email: correoFiscal.trim() || null, nit: nit.trim() || null,
-        razon_social: razonSocial.trim() || null, direccion: direccionFiscal.trim() || null, canal_origen: canalOrigen,
-      };
-      if (clientePedidoId) {
-        const { error } = await supabase.from("clientes").update(datosCliente).eq("id", clientePedidoId);
-        if (error) throw error;
-      } else {
-        const { data: clienteNuevo, error } = await supabase
-          .from("clientes")
-          .insert(datosCliente)
-          .select("id")
-          .single();
-        if (error) throw error;
-        clientePedidoId = clienteNuevo.id;
-      }
-
-      if (clienteNuevo && requiereEnvio && direccion.trim() && clientePedidoId) {
-        const { error: direccionError } = await supabase
-          .from("cliente_direcciones")
-          .insert({
-            cliente_id: clientePedidoId,
-            etiqueta: "Principal",
-            direccion: direccion.trim(),
-            departamento: departamentoEntrega.trim() || null,
-            municipio: municipioEntrega.trim() || null,
-            zona: zonaEntrega.trim() || null,
-            referencia: null,
-            principal: true,
-          });
-        if (direccionError) throw direccionError;
-      }
-
-      const { data: pedidoData, error: pedidoError } = await supabase
-        .from("pedidos")
-        .insert({
-          cliente: cliente.trim(),
-          telefono: telefono.trim() || null,
-          direccion: direccion.trim() || null,
-          fecha_pedido: fechaCreacion || null,
-          fecha_entrega: fechaEntrega || null,
-          estado,
-          pago_estado: pagoEstado,
-          forma_pago: formaPago,
-          total: totalPedido,
-          subtotal_productos: subtotalProductos,
-          costo_envio: requiereEnvio ? costoEnvio : 0,
-          departamento_entrega: requiereEnvio
-            ? departamentoEntrega.trim() || null
-            : null,
-          municipio_entrega: requiereEnvio
-            ? municipioEntrega.trim() || null
-            : null,
-          zona_entrega: requiereEnvio ? zonaEntrega.trim() || null : null,
-          cliente_id: clientePedidoId,
-          saldo_pendiente: Math.max(0, totalPedido - abono),
-          canal_origen: canalOrigen,
-          conversacion_id: conversacionId,
-          responsable_id: responsableId,
-          observaciones: observaciones.trim() || null,
-          vendedor,
-          requiere_envio: requiereEnvio,
-          codigo: "",
-        })
-        .select("id, numero_pedido")
-        .single();
-      if (pedidoError) throw pedidoError;
-
-      const codigoERP = `PED-${String(pedidoData.numero_pedido).padStart(4, "0")}`;
-      const { error: codigoError } = await supabase
-        .from("pedidos")
-        .update({ codigo: codigoERP })
-        .eq("id", pedidoData.id);
-      if (codigoError) throw codigoError;
-
-      const { error: detalleError } = await supabase
-        .from("pedido_detalle")
-        .insert(
-          carrito.map((item) => ({
-            pedido_id: pedidoData.id,
-            producto_id: item.id,
-            cantidad: item.cantidad,
-            precio: item.precio,
-            costo: item.costo,
-          })),
-        );
-      if (detalleError) throw detalleError;
-
-      if (cotizacionId) {
-        const { error: cotizacionError } = await supabase.from("cotizaciones").update({ estado: "Convertida", convertido_pedido_id: pedidoData.id }).eq("id", cotizacionId);
-        if (cotizacionError) throw cotizacionError;
-      }
-
-      if (abono > 0) {
-        const { error } = await supabase
-          .from("pagos")
-          .insert({
-            pedido_id: pedidoData.id,
-          cliente_id: clientePedidoId,
-            monto: abono,
-            metodo: formaPago,
-          });
-        if (error) throw error;
-      }
-      const { error: inventarioError } = await supabase
-        .from("movimientos_inventario")
-        .insert(
-          carrito.map((item) => ({
-            producto_id: item.id,
-            pedido_id: pedidoData.id,
-            tipo: "Salida",
-            cantidad: -item.cantidad,
-            costo_unitario: item.precio,
-            motivo: `Venta ${codigoERP}`,
-          })),
-        );
-      if (inventarioError) throw inventarioError;
-
-      alert(`Pedido ${codigoERP} guardado correctamente.`);
+      const { data, error } = await supabase.rpc("registrar_pedido_completo", {
+        p_datos: {
+          cliente_id: clienteId,
+          cliente: cliente.trim(), telefono: telefono.trim(), nit: nit.trim(), razon_social: razonSocial.trim(), correo_fiscal: correoFiscal.trim(), direccion_fiscal: direccionFiscal.trim(),
+          direccion: direccion.trim(), fecha_pedido: fechaCreacion || null, fecha_entrega: fechaEntrega || null, estado, forma_pago: formaPago,
+          costo_envio: requiereEnvio ? costoEnvio : 0, departamento_entrega: departamentoEntrega.trim(), municipio_entrega: municipioEntrega.trim(), zona_entrega: zonaEntrega.trim(),
+          requiere_envio: requiereEnvio, guardar_direccion: guardarDireccion, abono_inicial: abono, canal_origen: canalOrigen,
+          conversacion_id: conversacionId, responsable_id: responsableId, cotizacion_id: cotizacionId, observaciones: observaciones.trim(), vendedor,
+          items: carrito.map((item) => ({ id: item.id, cantidad: item.cantidad, precio: item.precio, costo: item.costo })),
+        },
+      });
+      if (error) throw error;
+      const resultado = data as { codigo?: string } | null;
+      alert(`Pedido ${resultado?.codigo || ""} guardado correctamente.`);
       limpiarFormulario();
     } catch (error) {
       console.error(error);
@@ -730,7 +619,7 @@ export default function PedidosPage() {
                     Direcciones guardadas del cliente
                   </p>
                   <p className="mt-1 text-xs text-orange-700">
-                    Selecciona una para completar la entrega.
+                    La más reciente aparece primero. Selecciona una para completar la entrega.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {direccionesCliente.map((direccionGuardada) => (
@@ -743,6 +632,7 @@ export default function PedidosPage() {
                         <span className="block text-orange-700">
                           {direccionGuardada.etiqueta || "Dirección"}
                           {direccionGuardada.principal ? " · Principal" : ""}
+                          {direccionGuardada.ultima_entrega_at ? " · Última usada" : ""}
                         </span>
                         <span className="mt-1 block">{direccionGuardada.direccion}</span>
                         <span className="mt-1 block text-slate-500">
@@ -816,6 +706,18 @@ export default function PedidosPage() {
                         className={fieldClass}
                       />
                     </div>
+                    <label className="md:col-span-2 flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={guardarDireccion}
+                        onChange={(event) => setGuardarDireccion(event.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                      />
+                      <span>
+                        <b className="block text-slate-900">Guardar esta dirección para futuros pedidos</b>
+                        <span className="text-xs text-slate-500">No reemplaza la dirección principal: queda como una alternativa y se sugerirá por ser la última utilizada.</span>
+                      </span>
+                    </label>
                   </>
                 )}
                 <div>

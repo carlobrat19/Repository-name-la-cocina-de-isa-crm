@@ -235,7 +235,8 @@ export default function ConversacionesPage() {
     }
   }
   useEffect(() => {
-    void cargar();
+    const timer = window.setTimeout(() => void cargar(), 0);
+    return () => window.clearTimeout(timer);
   }, [cargar]);
   useEffect(() => {
     const conversacionId = new URLSearchParams(window.location.search).get(
@@ -245,14 +246,20 @@ export default function ConversacionesPage() {
     const conversacion = conversaciones.find(
       (item) => item.id === conversacionId,
     );
-    if (conversacion) setSeleccionada(conversacion);
+    if (!conversacion) return;
+    const timer = window.setTimeout(() => setSeleccionada(conversacion), 0);
+    return () => window.clearTimeout(timer);
   }, [conversaciones, seleccionada?.id]);
   useEffect(() => {
-    if (seleccionada) {
+    if (!seleccionada) return;
+    const timer = window.setTimeout(() => {
       void cargarDetalle(seleccionada);
       void cargarCotizaciones(seleccionada);
       void cargarDatosPedido(seleccionada);
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // cargarCotizaciones se mantiene estable para el ciclo de la conversación.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seleccionada, cargarDetalle]);
   const visibles = useMemo(
     () =>

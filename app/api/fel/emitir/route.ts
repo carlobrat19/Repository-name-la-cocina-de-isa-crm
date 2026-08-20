@@ -13,6 +13,14 @@ export async function POST(request: NextRequest) {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   const { data: usuario, error: usuarioError } = token ? await admin.auth.getUser(token) : { data: { user: null }, error: new Error("Sesión requerida") };
   if (usuarioError || !usuario.user) return NextResponse.json({ error: "Sesión requerida" }, { status: 401 });
+  const [{ data: perfil }, { data: permiso }] = await Promise.all([
+    admin.from("perfiles_crm").select("rol,activo,acceso_hasta").eq("id", usuario.user.id).maybeSingle(),
+    admin.from("permisos_usuario_crm").select("modulo").eq("user_id", usuario.user.id).eq("modulo", "cobros_fel").maybeSingle(),
+  ]);
+  const accesoVigente = perfil?.activo && (!perfil.acceso_hasta || new Date(perfil.acceso_hasta) > new Date());
+  if (!accesoVigente || (perfil?.rol !== "Administrador" && !permiso)) {
+    return NextResponse.json({ error: "No tienes permiso para preparar facturas FEL." }, { status: 403 });
+  }
 
   const [{ data: pedido, error: pedidoError }, { data: existente }] = await Promise.all([
     admin.from("pedidos").select("id, cliente_id, total, pago_estado, estado").eq("id", pedidoId).single(),

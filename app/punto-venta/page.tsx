@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/exhaustive-deps, @next/next/no-img-element */
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Banknote, Minus, PackageCheck, Plus, RefreshCw, ShoppingCart, Store, X, WalletCards } from "lucide-react";

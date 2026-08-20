@@ -198,9 +198,9 @@ export default function DetallePedidoPage() {
     (suma, pago) => suma + Number(pago.monto || 0),
     0,
   );
-  const pagoConfirmado = pedido?.pago_estado === "Pagado";
-  const abonado = pagoConfirmado ? total : abonadoRegistrado;
-  const saldo = Number(pedido?.saldo_pendiente ?? Math.max(0, total - abonado));
+  const abonado = abonadoRegistrado;
+  const saldo = Math.max(0, total - abonado);
+  const pagoConfirmado = saldo <= 0.009 && total > 0;
   const ubicacion = [
     pedido?.departamento_entrega,
     pedido?.municipio_entrega,
@@ -221,7 +221,6 @@ export default function DetallePedidoPage() {
       .from("pedidos")
       .update({
         estado: pedido.estado,
-        pago_estado: pedido.pago_estado,
         forma_pago: pedido.forma_pago,
         fecha_entrega: pedido.fecha_entrega || null,
         hora_entrega: pedido.hora_entrega || null,
@@ -286,13 +285,25 @@ export default function DetallePedidoPage() {
     if (!pedido) return;
     if (campo === "estado" && valor === "Cancelado" && !window.confirm("¿Confirmas que deseas cancelar este pedido? No se podrá emitir FEL mientras esté cancelado.")) return;
     setActualizandoEstado(true);
-    const pagoCompleto = campo === "pago_estado" && valor === "Pagado";
-    const pagoParcial = campo === "pago_estado" && valor === "Pago parcial";
-    const montoParcial = pagoParcial ? Number(window.prompt(`Abono recibido (saldo actual ${dinero(saldo)}):`, "") || 0) : 0;
-    if (pagoParcial && (!Number.isFinite(montoParcial) || montoParcial <= 0 || montoParcial > saldo)) return;
-    const saldoNuevo = pagoCompleto ? 0 : pagoParcial ? Math.max(0, saldo - montoParcial) : campo === "pago_estado" && valor === "Pendiente" ? total : undefined;
-    const { error } = await supabase.from("pedidos").update({ [campo]: valor, ...(saldoNuevo !== undefined ? { saldo_pendiente: saldoNuevo } : {}) }).eq("id", pedido.id);
-    if (!error && (pagoCompleto || pagoParcial)) await supabase.from("pagos").insert({ pedido_id: pedido.id, cliente_id: pedido.cliente_id, monto: pagoCompleto ? saldo : montoParcial, metodo: pedido.forma_pago || "Efectivo" });
+    if (campo === "pago_estado") {
+      if (valor === "Pendiente") {
+        alert("El estado de pago se calcula con los abonos registrados. Para corregir un cobro utiliza un ajuste autorizado; no se eliminan pagos para conservar la trazabilidad.");
+        setActualizandoEstado(false);
+        return;
+      }
+      const monto = valor === "Pagado" ? saldo : Number(window.prompt(`Abono recibido (saldo actual ${dinero(saldo)}):`, "") || 0);
+      if (!Number.isFinite(monto) || monto <= 0 || monto > saldo) {
+        alert("Ingresa un monto válido que no supere el saldo pendiente.");
+        setActualizandoEstado(false);
+        return;
+      }
+      const { error } = await supabase.rpc("registrar_abono_pedido", { p_pedido_id: pedido.id, p_monto: monto, p_metodo: pedido.forma_pago || "Efectivo", p_referencia: null });
+      setActualizandoEstado(false);
+      if (error) { alert(`No se pudo registrar el pago: ${error.message}`); return; }
+      await cargarPedido();
+      return;
+    }
+    const { error } = await supabase.from("pedidos").update({ estado: valor }).eq("id", pedido.id);
     setActualizandoEstado(false);
     if (error) { alert(`No se pudo actualizar: ${error.message}`); return; }
     await cargarPedido();
