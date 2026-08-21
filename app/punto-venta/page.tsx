@@ -2,25 +2,751 @@
 /* eslint-disable react-hooks/exhaustive-deps, @next/next/no-img-element */
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Banknote, Minus, PackageCheck, Plus, RefreshCw, ShoppingCart, Store, X, WalletCards } from "lucide-react";
+import {
+  Banknote,
+  Minus,
+  PackageCheck,
+  Plus,
+  RefreshCw,
+  ShoppingCart,
+  Store,
+  X,
+  WalletCards,
+} from "lucide-react";
 import { useCrmAuth } from "@/components/auth/AuthGate";
 import { supabase } from "@/lib/supabase";
 
-type Sucursal={id:string;nombre:string;marca:string;tipo:string;caja_efectivo_id:string|null}; type Producto={id:string;nombre:string;categoria:string|null;precio_venta:number;imagen_url:string|null}; type Inventario={producto_id:string;existencia:number}; type Turno={id:string;fondo_inicial:number}; type Cliente={id:string;nombre:string;telefono:string|null;nit:string|null;razon_social:string|null;direccion:string|null}; type Venta={id:string;total:number;estado:"Completada"|"Anulada";pedidos:{codigo:string;cliente:string}|{codigo:string;cliente:string}[]|null}; type Linea={producto:Producto;cantidad:number;existencia:number};
-const moneda=(n:number)=>new Intl.NumberFormat("es-GT",{style:"currency",currency:"GTQ"}).format(n);
+type Sucursal = {
+  id: string;
+  nombre: string;
+  marca: string;
+  tipo: string;
+  caja_efectivo_id: string | null;
+};
+type Producto = {
+  id: string;
+  nombre: string;
+  categoria: string | null;
+  precio_venta: number;
+  imagen_url: string | null;
+};
+type Inventario = { producto_id: string; existencia: number };
+type Turno = { id: string; fondo_inicial: number };
+type Cliente = {
+  id: string;
+  nombre: string;
+  telefono: string | null;
+  nit: string | null;
+  razon_social: string | null;
+  direccion: string | null;
+};
+type Venta = {
+  id: string;
+  total: number;
+  estado: "Completada" | "Anulada";
+  pedidos:
+    | { codigo: string; cliente: string }
+    | { codigo: string; cliente: string }[]
+    | null;
+};
+type Linea = { producto: Producto; cantidad: number; existencia: number };
+const moneda = (n: number) =>
+  new Intl.NumberFormat("es-GT", { style: "currency", currency: "GTQ" }).format(
+    n,
+  );
 
-export default function PuntoVentaPage(){
- const {id:usuarioId}=useCrmAuth(); const [sucursales,setSucursales]=useState<Sucursal[]>([]),[sucursalId,setSucursalId]=useState(""),[productos,setProductos]=useState<Producto[]>([]),[inventario,setInventario]=useState<Inventario[]>([]),[catalogo,setCatalogo]=useState<string[]>([]),[turno,setTurno]=useState<Turno|null>(null),[fondo,setFondo]=useState(""),[carrito,setCarrito]=useState<Linea[]>([]),[busqueda,setBusqueda]=useState(""),[metodo,setMetodo]=useState("Efectivo"),[clientes,setClientes]=useState<Cliente[]>([]),[clienteId,setClienteId]=useState(""),[cliente,setCliente]=useState("Consumidor final"),[telefono,setTelefono]=useState(""),[nit,setNit]=useState(""),[razon,setRazon]=useState(""),[direccion,setDireccion]=useState(""),[referencia,setReferencia]=useState(""),[mensaje,setMensaje]=useState(""),[guardando,setGuardando]=useState(false),[movTipo,setMovTipo]=useState("gasto_menor"),[movMonto,setMovMonto]=useState(""),[movCategoria,setMovCategoria]=useState(""),[movDescripcion,setMovDescripcion]=useState(""),[ventas,setVentas]=useState<Venta[]>([]);
- const sucursal=sucursales.find(x=>x.id===sucursalId);
- async function cargar(){const[a,b]=await Promise.all([supabase.from("sucursales").select("id,nombre,marca,tipo,caja_efectivo_id").eq("activa",true).order("nombre"),supabase.from("productos").select("id,nombre,categoria,precio_venta,imagen_url").eq("estado","Activo").order("nombre")]);if(a.error||b.error)setMensaje(`No se pudo cargar POS: ${(a.error||b.error)?.message}`);const ss=(a.data??[])as Sucursal[];setSucursales(ss);setProductos((b.data??[])as Producto[]);setSucursalId(x=>x||ss[0]?.id||"")}
- async function cargarLocal(){if(!sucursalId||!usuarioId)return;const[a,b,c,d]=await Promise.all([supabase.from("inventario_sucursal_productos").select("producto_id,existencia").eq("sucursal_id",sucursalId),supabase.from("catalogo_sucursal_productos").select("producto_id").eq("sucursal_id",sucursalId).eq("disponible",true),supabase.from("turnos_caja_pos").select("id,fondo_inicial").eq("sucursal_id",sucursalId).eq("cajero_id",usuarioId).eq("estado","abierto").maybeSingle(),supabase.from("clientes").select("id,nombre,telefono,nit,razon_social,direccion").eq("estado","Activo").order("nombre").limit(250)]);if(a.error||b.error||c.error||d.error)setMensaje(`No se pudo cargar la sucursal: ${(a.error||b.error||c.error||d.error)?.message}`);setInventario((a.data??[])as Inventario[]);setCatalogo((b.data??[]).map(x=>x.producto_id));setTurno((c.data??null)as Turno|null);setClientes((d.data??[])as Cliente[]);setCarrito([])}
- useEffect(()=>{const timer=window.setTimeout(()=>void cargar(),0);return()=>window.clearTimeout(timer)},[]);useEffect(()=>{const timer=window.setTimeout(()=>void cargarLocal(),0);return()=>window.clearTimeout(timer)},[sucursalId,usuarioId]);
- const stock=useMemo(()=>new Map(inventario.map(x=>[x.producto_id,Number(x.existencia)])),[inventario]);const disponibles=useMemo(()=>productos.filter(p=>catalogo.includes(p.id)&&(stock.get(p.id)??0)>0&&`${p.nombre} ${p.categoria??""}`.toLowerCase().includes(busqueda.toLowerCase())),[productos,catalogo,stock,busqueda]);const total=useMemo(()=>carrito.reduce((s,x)=>s+x.producto.precio_venta*x.cantidad,0),[carrito]);
- function agregar(p:Producto){const e=stock.get(p.id)??0;setCarrito(xs=>{const a=xs.find(x=>x.producto.id===p.id);return a?a.cantidad>=e?xs:xs.map(x=>x.producto.id===p.id?{...x,cantidad:x.cantidad+1}:x):[...xs,{producto:p,cantidad:1,existencia:e}]})} function cantidad(id:string,d:number){setCarrito(xs=>xs.flatMap(x=>x.producto.id!==id?[x]:x.cantidad+d<=0?[]:[{...x,cantidad:Math.min(x.existencia,x.cantidad+d)}]))}function elegirCliente(id:string){setClienteId(id);const x=clientes.find(c=>c.id===id);if(x){setCliente(x.nombre);setTelefono(x.telefono??"");setNit(x.nit??"");setRazon(x.razon_social??"");setDireccion(x.direccion??"")}}
- async function abrir(e:FormEvent){e.preventDefault();if(!usuarioId||!sucursal?.caja_efectivo_id)return setMensaje("Esta sucursal no tiene caja configurada.");setGuardando(true);const{error}=await supabase.from("turnos_caja_pos").insert({sucursal_id:sucursalId,cuenta_id:sucursal.caja_efectivo_id,cajero_id:usuarioId,fondo_inicial:Number(fondo||0)});setGuardando(false);if(error)return setMensaje(error.message);setFondo("");setMensaje("Caja abierta.");await cargarLocal()}
- async function cobrar(){if(!turno||!carrito.length)return setMensaje("Abre caja y agrega productos.");setGuardando(true);const{data,error}=await supabase.rpc("registrar_venta_pos",{p_sucursal_id:sucursalId,p_turno_id:turno.id,p_items:carrito.map(x=>({producto_id:x.producto.id,cantidad:x.cantidad})),p_metodo:metodo,p_cliente_id:clienteId||null,p_cliente:cliente,p_telefono:telefono||null,p_referencia:referencia||null,p_nit:nit||null,p_razon_social:razon||null,p_direccion_fiscal:direccion||null});setGuardando(false);if(error)return setMensaje(`No se pudo cobrar: ${error.message}`);const r=data as{codigo:string;total:number};setCarrito([]);setClienteId("");setCliente("Consumidor final");setTelefono("");setNit("");setRazon("");setDireccion("");setReferencia("");setMensaje(`Venta ${r.codigo} cobrada por ${moneda(Number(r.total))}.`);await cargarLocal()}
- async function movimiento(e:FormEvent){e.preventDefault();if(!turno)return;setGuardando(true);const{error}=await supabase.rpc("registrar_movimiento_caja_pos",{p_turno_id:turno.id,p_tipo:movTipo,p_monto:Number(movMonto),p_categoria:movCategoria||"Operación de caja",p_descripcion:movDescripcion});setGuardando(false);if(error)return setMensaje(error.message);setMovMonto("");setMovCategoria("");setMovDescripcion("");setMensaje("Movimiento de caja registrado.")}
- async function cerrar(){if(!turno)return;const contado=window.prompt("Efectivo físico contado (Q)","0");if(contado===null)return;const{data,error:er}=await supabase.rpc("resumen_turno_pos",{p_turno_id:turno.id});if(er)return setMensaje(er.message);const r=data as{efectivo_ventas:number;salidas:number;ingresos_ajuste:number};const esperado=Number(turno.fondo_inicial)+Number(r.efectivo_ventas)-Number(r.salidas)+Number(r.ingresos_ajuste),efectivo=Number(contado);if(!Number.isFinite(efectivo)||efectivo<0)return setMensaje("Monto inválido.");const{error}=await supabase.from("turnos_caja_pos").update({estado:"cerrado",cerrado_at:new Date().toISOString(),efectivo_esperado:esperado,efectivo_contado:efectivo,diferencia:efectivo-esperado}).eq("id",turno.id);if(error)return setMensaje(error.message);setMensaje(`Caja cerrada. Esperado ${moneda(esperado)} · contado ${moneda(efectivo)}.`);await cargarLocal()}
- async function historial(){if(!turno)return;const{data,error}=await supabase.from("ventas_pos").select("id,total,estado,pedidos(codigo,cliente)").eq("turno_id",turno.id).order("created_at",{ascending:false});if(error)return setMensaje(error.message);setVentas((data??[])as Venta[])}async function anular(v:Venta){const motivo=window.prompt("Motivo de anulación/devolución:");if(!motivo)return;setGuardando(true);const{error}=await supabase.rpc("anular_venta_pos",{p_venta_id:v.id,p_motivo:motivo});setGuardando(false);if(error)return setMensaje(error.message);setMensaje("Venta anulada, inventario y cobro revertidos. Si ya se emitió FEL, anúlala con el certificador.");await historial();await cargarLocal()}
- return <main className="min-h-screen bg-slate-100 px-4 py-7 sm:px-7 lg:px-10"><div className="mx-auto max-w-[1700px]"><header className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-orange-600">Venta de mostrador</p><h1 className="mt-2 text-4xl font-black">Punto de venta</h1><p className="mt-2 text-sm text-slate-600">Ventas, caja, inventario, clientes y FEL desde la sucursal asignada.</p></div><button onClick={()=>void cargarLocal()} className="rounded-xl border bg-white px-4 py-3 text-sm font-bold"><RefreshCw className="mr-2 inline" size={16}/>Actualizar</button></header>{mensaje&&<p className="mb-5 rounded-xl bg-amber-50 p-4 text-sm font-semibold text-amber-900">{mensaje}</p>}<section className="mb-6 grid gap-4 rounded-3xl border bg-white p-5 shadow-sm lg:grid-cols-[1fr_300px]"><div><label className="text-xs font-bold uppercase text-slate-500">Sucursal asignada</label><select value={sucursalId} onChange={e=>setSucursalId(e.target.value)} className="mt-2 w-full rounded-xl border p-3 font-bold">{sucursales.map(x=><option key={x.id} value={x.id}>{x.nombre}</option>)}</select><p className="mt-2 text-sm text-slate-500">{sucursal?.marca} · Solo ves catálogo e inventario autorizados para este local.</p></div><div className={`rounded-2xl p-4 ${turno?"bg-emerald-50 text-emerald-800":"bg-amber-50 text-amber-800"}`}><b>{turno?"Caja abierta":"Caja sin abrir"}</b><p className="mt-2 text-sm">{turno?`Fondo: ${moneda(Number(turno.fondo_inicial))}`:"Abre tu turno para cobrar."}</p></div></section>{!turno?<form onSubmit={abrir} className="mb-6 rounded-3xl bg-slate-950 p-6 text-white"><div className="grid gap-4 lg:grid-cols-[1fr_250px_auto]"><div><b>Caja física de {sucursal?.nombre||"la sucursal"}</b><p className="mt-2 text-xs text-slate-300">Tarjetas y transferencias se registran en cuentas centrales.</p></div><label>Fondo inicial (Q)<input type="number" min="0" step=".01" value={fondo} onChange={e=>setFondo(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-600 bg-slate-800 p-3"/></label><button disabled={guardando} className="rounded-xl bg-orange-500 px-5 py-3 font-bold">Abrir caja</button></div></form>:<section className="mb-6 grid gap-4 lg:grid-cols-[1fr_auto]"><form onSubmit={movimiento} className="rounded-2xl border bg-white p-4 shadow-sm"><b><WalletCards className="mr-2 inline text-orange-600" size={18}/>Movimiento de caja</b><div className="mt-3 grid gap-2 md:grid-cols-4"><select value={movTipo} onChange={e=>setMovTipo(e.target.value)} className="rounded-xl border p-3 text-sm"><option value="gasto_menor">Gasto menor</option><option value="retiro">Retiro de efectivo</option><option value="deposito">Depósito a banco</option><option value="ingreso_ajuste">Ingreso / ajuste</option></select><input required type="number" min=".01" step=".01" value={movMonto} onChange={e=>setMovMonto(e.target.value)} placeholder="Monto Q" className="rounded-xl border p-3 text-sm"/><input required value={movCategoria} onChange={e=>setMovCategoria(e.target.value)} placeholder="Categoría" className="rounded-xl border p-3 text-sm"/><input required value={movDescripcion} onChange={e=>setMovDescripcion(e.target.value)} placeholder="Motivo / comprobante" className="rounded-xl border p-3 text-sm"/></div><button disabled={guardando} className="mt-3 rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white">Registrar</button></form><div className="flex items-center gap-2"><button onClick={()=>void historial()} className="rounded-xl border bg-white px-4 py-3 text-sm font-bold">Historial</button><button onClick={()=>void cerrar()} className="rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm font-bold text-rose-700">Cerrar caja</button></div></section>}<section className="grid gap-6 xl:grid-cols-[1fr_420px]"><div className="rounded-3xl border bg-white shadow-sm"><div className="border-b p-5"><div className="flex justify-between"><div><h2 className="text-xl font-black">Productos disponibles</h2><p className="mt-1 text-sm text-slate-500">Catálogo habilitado para esta sucursal.</p></div><PackageCheck className="text-orange-500"/></div><input value={busqueda} onChange={e=>setBusqueda(e.target.value)} placeholder="Buscar producto o categoría" className="mt-4 w-full rounded-xl border bg-slate-50 p-3 text-sm"/></div><div className="grid gap-3 p-5 sm:grid-cols-2 2xl:grid-cols-3">{disponibles.map(p=><button key={p.id} disabled={!turno} onClick={()=>agregar(p)} className="rounded-2xl border text-left disabled:opacity-40"><div className="flex gap-3 bg-slate-50 p-3">{p.imagen_url?<img src={p.imagen_url} alt="" className="size-14 rounded-xl object-cover"/>:<span className="grid size-14 place-items-center rounded-xl bg-orange-100 text-orange-600"><Store size={22}/></span>}<div><b className="text-sm">{p.nombre}</b><p className="mt-1 text-xs text-slate-500">{p.categoria||"Sin categoría"}</p></div></div><div className="flex justify-between p-3"><b className="text-emerald-700">{moneda(p.precio_venta)}</b><small>{stock.get(p.id)} disponibles</small></div></button>)}{!disponibles.length&&<p className="col-span-full rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">No hay productos habilitados y con existencia. Carga inventario desde Sucursales.</p>}</div></div><aside className="h-fit overflow-hidden rounded-3xl border bg-white shadow-sm"><div className="flex justify-between bg-slate-950 p-5 text-white"><div><small className="font-bold uppercase text-slate-400">Cobro actual</small><h2 className="text-xl font-black">Carrito</h2></div><ShoppingCart/></div><div className="max-h-[300px] space-y-3 overflow-y-auto p-5">{carrito.map(x=><article key={x.producto.id} className="rounded-xl bg-slate-50 p-3"><div className="flex justify-between"><div><b className="text-sm">{x.producto.nombre}</b><p className="text-xs text-slate-500">{moneda(x.producto.precio_venta)} c/u</p></div><button onClick={()=>cantidad(x.producto.id,-x.cantidad)}><X size={17}/></button></div><div className="mt-3 flex justify-between"><span className="rounded-lg border bg-white"><button onClick={()=>cantidad(x.producto.id,-1)} className="p-2"><Minus size={14}/></button><b className="px-2">{x.cantidad}</b><button onClick={()=>cantidad(x.producto.id,1)} className="p-2"><Plus size={14}/></button></span><b className="text-emerald-700">{moneda(x.producto.precio_venta*x.cantidad)}</b></div></article>)}{!carrito.length&&<p className="rounded-xl bg-slate-50 p-7 text-center text-sm text-slate-500">Elige productos para cobrar.</p>}</div><div className="border-t p-5"><div className="flex justify-between text-lg font-black"><span>Total</span><span className="text-emerald-700">{moneda(total)}</span></div><div className="mt-4 grid gap-2"><select value={clienteId} onChange={e=>elegirCliente(e.target.value)} className="rounded-xl border bg-white p-3 text-sm"><option value="">Cliente nuevo / consumidor final</option>{clientes.map(x=><option key={x.id} value={x.id}>{x.nombre} · {x.telefono||x.nit||"sin dato"}</option>)}</select><input value={cliente} onChange={e=>{setClienteId("");setCliente(e.target.value)}} placeholder="Cliente / consumidor final" className="rounded-xl border p-3 text-sm"/><input value={telefono} onChange={e=>setTelefono(e.target.value)} placeholder="Teléfono" className="rounded-xl border p-3 text-sm"/><div className="grid grid-cols-2 gap-2"><input value={nit} onChange={e=>setNit(e.target.value)} placeholder="NIT para FEL" className="rounded-xl border p-3 text-sm"/><input value={razon} onChange={e=>setRazon(e.target.value)} placeholder="Razón social" className="rounded-xl border p-3 text-sm"/></div><input value={direccion} onChange={e=>setDireccion(e.target.value)} placeholder="Dirección fiscal" className="rounded-xl border p-3 text-sm"/><select value={metodo} onChange={e=>setMetodo(e.target.value)} className="rounded-xl border bg-white p-3 text-sm"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option><option>Link de pago</option></select><input value={referencia} onChange={e=>setReferencia(e.target.value)} placeholder="Referencia / comprobante" className="rounded-xl border p-3 text-sm"/><button disabled={guardando||!turno||!carrito.length} onClick={()=>void cobrar()} className="rounded-xl bg-orange-500 p-4 font-black text-white disabled:opacity-50"><Banknote className="mr-2 inline" size={18}/>{guardando?"Cobrando…":`Cobrar ${moneda(total)}`}</button></div></div></aside></section>{ventas.length>0&&<section className="mt-6 overflow-hidden rounded-3xl border bg-white shadow-sm"><div className="p-5 font-black">Ventas de este turno</div>{ventas.map(v=>{const p=Array.isArray(v.pedidos)?v.pedidos[0]:v.pedidos;return <div key={v.id} className="flex flex-wrap justify-between gap-3 border-t p-4 text-sm"><span><b>{p?.codigo||"POS"}</b> · {p?.cliente||"Consumidor final"}</span><span className="flex gap-3"><b>{moneda(Number(v.total))}</b><em className={v.estado==="Anulada"?"text-rose-600":"text-emerald-700"}>{v.estado}</em>{v.estado==="Completada"&&<button onClick={()=>void anular(v)} className="font-bold text-rose-700">Anular / devolver</button>}</span></div>})}</section>}</div></main>
+export default function PuntoVentaPage() {
+  const { id: usuarioId } = useCrmAuth();
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]),
+    [sucursalId, setSucursalId] = useState(""),
+    [productos, setProductos] = useState<Producto[]>([]),
+    [inventario, setInventario] = useState<Inventario[]>([]),
+    [catalogo, setCatalogo] = useState<string[]>([]),
+    [turno, setTurno] = useState<Turno | null>(null),
+    [fondo, setFondo] = useState(""),
+    [carrito, setCarrito] = useState<Linea[]>([]),
+    [busqueda, setBusqueda] = useState(""),
+    [metodo, setMetodo] = useState("Efectivo"),
+    [clientes, setClientes] = useState<Cliente[]>([]),
+    [clienteId, setClienteId] = useState(""),
+    [cliente, setCliente] = useState("Consumidor final"),
+    [telefono, setTelefono] = useState(""),
+    [nit, setNit] = useState(""),
+    [razon, setRazon] = useState(""),
+    [direccion, setDireccion] = useState(""),
+    [referencia, setReferencia] = useState(""),
+    [mensaje, setMensaje] = useState(""),
+    [guardando, setGuardando] = useState(false),
+    [movTipo, setMovTipo] = useState("gasto_menor"),
+    [movMonto, setMovMonto] = useState(""),
+    [movCategoria, setMovCategoria] = useState(""),
+    [movDescripcion, setMovDescripcion] = useState(""),
+    [ventas, setVentas] = useState<Venta[]>([]);
+  const sucursal = sucursales.find((x) => x.id === sucursalId);
+  async function cargar() {
+    const [a, b] = await Promise.all([
+      supabase
+        .from("sucursales")
+        .select("id,nombre,marca,tipo,caja_efectivo_id")
+        .eq("activa", true)
+        .order("nombre"),
+      supabase
+        .from("productos")
+        .select("id,nombre,categoria,precio_venta,imagen_url")
+        .eq("estado", "Activo")
+        .order("nombre"),
+    ]);
+    if (a.error || b.error)
+      setMensaje(`No se pudo cargar POS: ${(a.error || b.error)?.message}`);
+    const ss = (a.data ?? []) as Sucursal[];
+    setSucursales(ss);
+    setProductos((b.data ?? []) as Producto[]);
+    setSucursalId((x) => x || ss[0]?.id || "");
+  }
+  async function cargarLocal() {
+    if (!sucursalId || !usuarioId) return;
+    const [a, b, c, d] = await Promise.all([
+      supabase
+        .from("inventario_sucursal_productos")
+        .select("producto_id,existencia")
+        .eq("sucursal_id", sucursalId),
+      supabase
+        .from("catalogo_sucursal_productos")
+        .select("producto_id")
+        .eq("sucursal_id", sucursalId)
+        .eq("disponible", true),
+      supabase
+        .from("turnos_caja_pos")
+        .select("id,fondo_inicial")
+        .eq("sucursal_id", sucursalId)
+        .eq("cajero_id", usuarioId)
+        .eq("estado", "abierto")
+        .maybeSingle(),
+      supabase
+        .from("clientes")
+        .select("id,nombre,telefono,nit,razon_social,direccion")
+        .eq("estado", "Activo")
+        .order("nombre")
+        .limit(250),
+    ]);
+    if (a.error || b.error || c.error || d.error)
+      setMensaje(
+        `No se pudo cargar la sucursal: ${(a.error || b.error || c.error || d.error)?.message}`,
+      );
+    setInventario((a.data ?? []) as Inventario[]);
+    setCatalogo((b.data ?? []).map((x) => x.producto_id));
+    setTurno((c.data ?? null) as Turno | null);
+    setClientes((d.data ?? []) as Cliente[]);
+    setCarrito([]);
+  }
+  useEffect(() => {
+    const timer = window.setTimeout(() => void cargar(), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void cargarLocal(), 0);
+    return () => window.clearTimeout(timer);
+  }, [sucursalId, usuarioId]);
+  const stock = useMemo(
+    () => new Map(inventario.map((x) => [x.producto_id, Number(x.existencia)])),
+    [inventario],
+  );
+  const disponibles = useMemo(
+    () =>
+      productos.filter(
+        (p) =>
+          catalogo.includes(p.id) &&
+          (stock.get(p.id) ?? 0) > 0 &&
+          `${p.nombre} ${p.categoria ?? ""}`
+            .toLowerCase()
+            .includes(busqueda.toLowerCase()),
+      ),
+    [productos, catalogo, stock, busqueda],
+  );
+  const total = useMemo(
+    () => carrito.reduce((s, x) => s + x.producto.precio_venta * x.cantidad, 0),
+    [carrito],
+  );
+  function agregar(p: Producto) {
+    const e = stock.get(p.id) ?? 0;
+    setCarrito((xs) => {
+      const a = xs.find((x) => x.producto.id === p.id);
+      return a
+        ? a.cantidad >= e
+          ? xs
+          : xs.map((x) =>
+              x.producto.id === p.id ? { ...x, cantidad: x.cantidad + 1 } : x,
+            )
+        : [...xs, { producto: p, cantidad: 1, existencia: e }];
+    });
+  }
+  function cantidad(id: string, d: number) {
+    setCarrito((xs) =>
+      xs.flatMap((x) =>
+        x.producto.id !== id
+          ? [x]
+          : x.cantidad + d <= 0
+            ? []
+            : [{ ...x, cantidad: Math.min(x.existencia, x.cantidad + d) }],
+      ),
+    );
+  }
+  function elegirCliente(id: string) {
+    setClienteId(id);
+    const x = clientes.find((c) => c.id === id);
+    if (x) {
+      setCliente(x.nombre);
+      setTelefono(x.telefono ?? "");
+      setNit(x.nit ?? "");
+      setRazon(x.razon_social ?? "");
+      setDireccion(x.direccion ?? "");
+    }
+  }
+  async function abrir(e: FormEvent) {
+    e.preventDefault();
+    if (!usuarioId || !sucursal?.caja_efectivo_id)
+      return setMensaje("Esta sucursal no tiene caja configurada.");
+    setGuardando(true);
+    const { error } = await supabase
+      .from("turnos_caja_pos")
+      .insert({
+        sucursal_id: sucursalId,
+        cuenta_id: sucursal.caja_efectivo_id,
+        cajero_id: usuarioId,
+        fondo_inicial: Number(fondo || 0),
+      });
+    setGuardando(false);
+    if (error) return setMensaje(error.message);
+    setFondo("");
+    setMensaje("Caja abierta.");
+    await cargarLocal();
+  }
+  async function cobrar() {
+    if (!turno || !carrito.length)
+      return setMensaje("Abre caja y agrega productos.");
+    setGuardando(true);
+    const { data, error } = await supabase.rpc("registrar_venta_pos", {
+      p_sucursal_id: sucursalId,
+      p_turno_id: turno.id,
+      p_items: carrito.map((x) => ({
+        producto_id: x.producto.id,
+        cantidad: x.cantidad,
+      })),
+      p_metodo: metodo,
+      p_cliente_id: clienteId || null,
+      p_cliente: cliente,
+      p_telefono: telefono || null,
+      p_referencia: referencia || null,
+      p_nit: nit || null,
+      p_razon_social: razon || null,
+      p_direccion_fiscal: direccion || null,
+    });
+    setGuardando(false);
+    if (error) return setMensaje(`No se pudo cobrar: ${error.message}`);
+    const r = data as { codigo: string; total: number };
+    setCarrito([]);
+    setClienteId("");
+    setCliente("Consumidor final");
+    setTelefono("");
+    setNit("");
+    setRazon("");
+    setDireccion("");
+    setReferencia("");
+    setMensaje(`Venta ${r.codigo} cobrada por ${moneda(Number(r.total))}.`);
+    await cargarLocal();
+  }
+  async function movimiento(e: FormEvent) {
+    e.preventDefault();
+    if (!turno) return;
+    setGuardando(true);
+    const { error } = await supabase.rpc("registrar_movimiento_caja_pos", {
+      p_turno_id: turno.id,
+      p_tipo: movTipo,
+      p_monto: Number(movMonto),
+      p_categoria: movCategoria || "Operación de caja",
+      p_descripcion: movDescripcion,
+    });
+    setGuardando(false);
+    if (error) return setMensaje(error.message);
+    setMovMonto("");
+    setMovCategoria("");
+    setMovDescripcion("");
+    setMensaje("Movimiento de caja registrado.");
+  }
+  async function cerrar() {
+    if (!turno) return;
+    const contado = window.prompt("Efectivo físico contado (Q)", "0");
+    if (contado === null) return;
+    const { data, error: er } = await supabase.rpc("resumen_turno_pos", {
+      p_turno_id: turno.id,
+    });
+    if (er) return setMensaje(er.message);
+    const r = data as {
+      efectivo_ventas: number;
+      salidas: number;
+      ingresos_ajuste: number;
+    };
+    const esperado =
+        Number(turno.fondo_inicial) +
+        Number(r.efectivo_ventas) -
+        Number(r.salidas) +
+        Number(r.ingresos_ajuste),
+      efectivo = Number(contado);
+    if (!Number.isFinite(efectivo) || efectivo < 0)
+      return setMensaje("Monto inválido.");
+    const { error } = await supabase
+      .from("turnos_caja_pos")
+      .update({
+        estado: "cerrado",
+        cerrado_at: new Date().toISOString(),
+        efectivo_esperado: esperado,
+        efectivo_contado: efectivo,
+        diferencia: efectivo - esperado,
+      })
+      .eq("id", turno.id);
+    if (error) return setMensaje(error.message);
+    setMensaje(
+      `Caja cerrada. Esperado ${moneda(esperado)} · contado ${moneda(efectivo)}.`,
+    );
+    await cargarLocal();
+  }
+  async function historial() {
+    if (!turno) return;
+    const { data, error } = await supabase
+      .from("ventas_pos")
+      .select("id,total,estado,pedidos(codigo,cliente)")
+      .eq("turno_id", turno.id)
+      .order("created_at", { ascending: false });
+    if (error) return setMensaje(error.message);
+    setVentas((data ?? []) as Venta[]);
+  }
+  async function anular(v: Venta) {
+    const motivo = window.prompt("Motivo de anulación/devolución:");
+    if (!motivo) return;
+    setGuardando(true);
+    const { error } = await supabase.rpc("anular_venta_pos", {
+      p_venta_id: v.id,
+      p_motivo: motivo,
+    });
+    setGuardando(false);
+    if (error) return setMensaje(error.message);
+    setMensaje(
+      "Venta anulada, inventario y cobro revertidos. Si ya se emitió FEL, anúlala con el certificador.",
+    );
+    await historial();
+    await cargarLocal();
+  }
+  return (
+    <main className="min-h-screen bg-slate-100 px-4 py-7 sm:px-7 lg:px-10">
+      <div className="mx-auto max-w-[1700px]">
+        <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[.22em] text-orange-600">
+              Venta de mostrador
+            </p>
+            <h1 className="mt-2 text-4xl font-black">Punto de venta</h1>
+            <p className="mt-2 text-sm text-slate-600">
+              Ventas, caja, inventario, clientes y FEL desde la sucursal
+              asignada.
+            </p>
+          </div>
+          <button
+            onClick={() => void cargarLocal()}
+            className="rounded-xl border bg-white px-4 py-3 text-sm font-bold"
+          >
+            <RefreshCw className="mr-2 inline" size={16} />
+            Actualizar
+          </button>
+        </header>
+        {mensaje && (
+          <p className="mb-5 rounded-xl bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+            {mensaje}
+          </p>
+        )}
+        <section className="mb-6 grid gap-4 rounded-3xl border bg-white p-5 shadow-sm lg:grid-cols-[1fr_300px]">
+          <div>
+            <label className="text-xs font-bold uppercase text-slate-500">
+              Sucursal asignada
+            </label>
+            <select
+              value={sucursalId}
+              onChange={(e) => setSucursalId(e.target.value)}
+              className="mt-2 w-full rounded-xl border p-3 font-bold"
+            >
+              {sucursales.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.nombre}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-sm text-slate-500">
+              {sucursal?.marca} · Solo ves catálogo e inventario autorizados
+              para este local.
+            </p>
+          </div>
+          <div
+            className={`rounded-2xl p-4 ${turno ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}
+          >
+            <b>{turno ? "Caja abierta" : "Caja sin abrir"}</b>
+            <p className="mt-2 text-sm">
+              {turno
+                ? `Fondo: ${moneda(Number(turno.fondo_inicial))}`
+                : "Abre tu turno para cobrar."}
+            </p>
+          </div>
+        </section>
+        {!turno ? (
+          <form
+            onSubmit={abrir}
+            className="mb-6 rounded-3xl bg-slate-950 p-6 text-white"
+          >
+            <div className="grid gap-4 lg:grid-cols-[1fr_250px_auto]">
+              <div>
+                <b>Caja física de {sucursal?.nombre || "la sucursal"}</b>
+                <p className="mt-2 text-xs text-slate-300">
+                  Tarjetas y transferencias se registran en cuentas centrales.
+                </p>
+              </div>
+              <label>
+                Fondo inicial (Q)
+                <input
+                  type="number"
+                  min="0"
+                  step=".01"
+                  value={fondo}
+                  onChange={(e) => setFondo(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-slate-600 bg-slate-800 p-3"
+                />
+              </label>
+              <button
+                disabled={guardando}
+                className="rounded-xl bg-orange-500 px-5 py-3 font-bold"
+              >
+                Abrir caja
+              </button>
+            </div>
+          </form>
+        ) : (
+          <section className="mb-6 grid gap-4 lg:grid-cols-[1fr_auto]">
+            <form
+              onSubmit={movimiento}
+              className="rounded-2xl border bg-white p-4 shadow-sm"
+            >
+              <b>
+                <WalletCards
+                  className="mr-2 inline text-orange-600"
+                  size={18}
+                />
+                Movimiento de caja
+              </b>
+              <div className="mt-3 grid gap-2 md:grid-cols-4">
+                <select
+                  value={movTipo}
+                  onChange={(e) => setMovTipo(e.target.value)}
+                  className="rounded-xl border p-3 text-sm"
+                >
+                  <option value="gasto_menor">Gasto menor</option>
+                  <option value="retiro">Retiro de efectivo</option>
+                  <option value="deposito">Depósito a banco</option>
+                  <option value="ingreso_ajuste">Ingreso / ajuste</option>
+                </select>
+                <input
+                  required
+                  type="number"
+                  min=".01"
+                  step=".01"
+                  value={movMonto}
+                  onChange={(e) => setMovMonto(e.target.value)}
+                  placeholder="Monto Q"
+                  className="rounded-xl border p-3 text-sm"
+                />
+                <input
+                  required
+                  value={movCategoria}
+                  onChange={(e) => setMovCategoria(e.target.value)}
+                  placeholder="Categoría"
+                  className="rounded-xl border p-3 text-sm"
+                />
+                <input
+                  required
+                  value={movDescripcion}
+                  onChange={(e) => setMovDescripcion(e.target.value)}
+                  placeholder="Motivo / comprobante"
+                  className="rounded-xl border p-3 text-sm"
+                />
+              </div>
+              <button
+                disabled={guardando}
+                className="mt-3 rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white"
+              >
+                Registrar
+              </button>
+            </form>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => void historial()}
+                className="rounded-xl border bg-white px-4 py-3 text-sm font-bold"
+              >
+                Historial
+              </button>
+              <button
+                onClick={() => void cerrar()}
+                className="rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm font-bold text-rose-700"
+              >
+                Cerrar caja
+              </button>
+            </div>
+          </section>
+        )}
+        <section className="grid gap-6 xl:grid-cols-[1fr_420px]">
+          <div className="rounded-3xl border bg-white shadow-sm">
+            <div className="border-b p-5">
+              <div className="flex justify-between">
+                <div>
+                  <h2 className="text-xl font-black">Productos disponibles</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Catálogo habilitado para esta sucursal.
+                  </p>
+                </div>
+                <PackageCheck className="text-orange-500" />
+              </div>
+              <input
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar producto o categoría"
+                className="mt-4 w-full rounded-xl border bg-slate-50 p-3 text-sm"
+              />
+            </div>
+            <div className="grid gap-3 p-5 sm:grid-cols-2 2xl:grid-cols-3">
+              {disponibles.map((p) => (
+                <button
+                  key={p.id}
+                  disabled={!turno}
+                  onClick={() => agregar(p)}
+                  className="rounded-2xl border text-left disabled:opacity-40"
+                >
+                  <div className="flex gap-3 bg-slate-50 p-3">
+                    {p.imagen_url ? (
+                      <img
+                        src={p.imagen_url}
+                        alt=""
+                        className="size-14 rounded-xl object-cover"
+                      />
+                    ) : (
+                      <span className="grid size-14 place-items-center rounded-xl bg-orange-100 text-orange-600">
+                        <Store size={22} />
+                      </span>
+                    )}
+                    <div>
+                      <b className="text-sm">{p.nombre}</b>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {p.categoria || "Sin categoría"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex justify-between p-3">
+                    <b className="text-emerald-700">{moneda(p.precio_venta)}</b>
+                    <small>{stock.get(p.id)} disponibles</small>
+                  </div>
+                </button>
+              ))}
+              {!disponibles.length && (
+                <p className="col-span-full rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500">
+                  No hay productos habilitados y con existencia. Carga
+                  inventario desde Sucursales.
+                </p>
+              )}
+            </div>
+          </div>
+          <aside className="h-fit overflow-hidden rounded-3xl border bg-white shadow-sm">
+            <div className="flex justify-between bg-slate-950 p-5 text-white">
+              <div>
+                <small className="font-bold uppercase text-slate-400">
+                  Cobro actual
+                </small>
+                <h2 className="text-xl font-black">Carrito</h2>
+              </div>
+              <ShoppingCart />
+            </div>
+            <div className="max-h-[300px] space-y-3 overflow-y-auto p-5">
+              {carrito.map((x) => (
+                <article
+                  key={x.producto.id}
+                  className="rounded-xl bg-slate-50 p-3"
+                >
+                  <div className="flex justify-between">
+                    <div>
+                      <b className="text-sm">{x.producto.nombre}</b>
+                      <p className="text-xs text-slate-500">
+                        {moneda(x.producto.precio_venta)} c/u
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => cantidad(x.producto.id, -x.cantidad)}
+                    >
+                      <X size={17} />
+                    </button>
+                  </div>
+                  <div className="mt-3 flex justify-between">
+                    <span className="rounded-lg border bg-white">
+                      <button
+                        onClick={() => cantidad(x.producto.id, -1)}
+                        className="p-2"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <b className="px-2">{x.cantidad}</b>
+                      <button
+                        onClick={() => cantidad(x.producto.id, 1)}
+                        className="p-2"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </span>
+                    <b className="text-emerald-700">
+                      {moneda(x.producto.precio_venta * x.cantidad)}
+                    </b>
+                  </div>
+                </article>
+              ))}
+              {!carrito.length && (
+                <p className="rounded-xl bg-slate-50 p-7 text-center text-sm text-slate-500">
+                  Elige productos para cobrar.
+                </p>
+              )}
+            </div>
+            <div className="border-t p-5">
+              <div className="flex justify-between text-lg font-black">
+                <span>Total</span>
+                <span className="text-emerald-700">{moneda(total)}</span>
+              </div>
+              <div className="mt-4 grid gap-2">
+            <label className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              Cliente de la venta
+              <select
+                value={clienteId}
+                onChange={(e) => elegirCliente(e.target.value)}
+                className="mt-1 w-full rounded-xl border bg-white p-3 text-sm font-normal text-slate-900"
+              >
+                <option value="">Consumidor final — venta sin registrar cliente</option>
+              {clientes.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.nombre} · {x.telefono || x.nit || "sin dato"}
+                </option>
+              ))}
+              </select>
+            </label>
+            <p className="-mt-1 text-xs text-slate-500">
+              {clienteId
+                ? "Datos cargados del cliente registrado. Puedes ajustar los datos fiscales solo para esta venta."
+                : "Para venta rápida, deja Consumidor final. Selecciona un cliente para cargar sus datos automáticamente."}
+            </p>
+            <label className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              Nombre para el comprobante
+              <input
+                value={cliente}
+                onChange={(e) => {
+                  setClienteId("");
+                  setCliente(e.target.value);
+                }}
+                placeholder="Consumidor final o nombre del cliente"
+                className="mt-1 w-full rounded-xl border p-3 text-sm font-normal text-slate-900"
+              />
+            </label>
+                <input
+                  value={telefono}
+                  onChange={(e) => setTelefono(e.target.value)}
+                  placeholder="Teléfono"
+                  className="rounded-xl border p-3 text-sm"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    value={nit}
+                    onChange={(e) => setNit(e.target.value)}
+                    placeholder="NIT para FEL"
+                    className="rounded-xl border p-3 text-sm"
+                  />
+                  <input
+                    value={razon}
+                    onChange={(e) => setRazon(e.target.value)}
+                    placeholder="Razón social"
+                    className="rounded-xl border p-3 text-sm"
+                  />
+                </div>
+                <input
+                  value={direccion}
+                  onChange={(e) => setDireccion(e.target.value)}
+                  placeholder="Dirección fiscal"
+                  className="rounded-xl border p-3 text-sm"
+                />
+                <select
+                  value={metodo}
+                  onChange={(e) => setMetodo(e.target.value)}
+                  className="rounded-xl border bg-white p-3 text-sm"
+                >
+                  <option>Efectivo</option>
+                  <option>Tarjeta</option>
+                  <option>Transferencia</option>
+                  <option>Link de pago</option>
+                </select>
+                <input
+                  value={referencia}
+                  onChange={(e) => setReferencia(e.target.value)}
+                  placeholder="Referencia / comprobante"
+                  className="rounded-xl border p-3 text-sm"
+                />
+                <button
+                  disabled={guardando || !turno || !carrito.length}
+                  onClick={() => void cobrar()}
+                  className="rounded-xl bg-orange-500 p-4 font-black text-white disabled:opacity-50"
+                >
+                  <Banknote className="mr-2 inline" size={18} />
+                  {guardando ? "Cobrando…" : `Cobrar ${moneda(total)}`}
+                </button>
+              </div>
+            </div>
+          </aside>
+        </section>
+        {ventas.length > 0 && (
+          <section className="mt-6 overflow-hidden rounded-3xl border bg-white shadow-sm">
+            <div className="p-5 font-black">Ventas de este turno</div>
+            {ventas.map((v) => {
+              const p = Array.isArray(v.pedidos) ? v.pedidos[0] : v.pedidos;
+              return (
+                <div
+                  key={v.id}
+                  className="flex flex-wrap justify-between gap-3 border-t p-4 text-sm"
+                >
+                  <span>
+                    <b>{p?.codigo || "POS"}</b> ·{" "}
+                    {p?.cliente || "Consumidor final"}
+                  </span>
+                  <span className="flex gap-3">
+                    <b>{moneda(Number(v.total))}</b>
+                    <em
+                      className={
+                        v.estado === "Anulada"
+                          ? "text-rose-600"
+                          : "text-emerald-700"
+                      }
+                    >
+                      {v.estado}
+                    </em>
+                    {v.estado === "Completada" && (
+                      <button
+                        onClick={() => void anular(v)}
+                        className="font-bold text-rose-700"
+                      >
+                        Anular / devolver
+                      </button>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </section>
+        )}
+      </div>
+    </main>
+  );
 }
