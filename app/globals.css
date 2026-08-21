@@ -7,6 +7,24 @@ input, select, textarea { color: #172033; }
 .bg-slate-950 input, .bg-slate-950 select, .bg-slate-950 textarea { color: #f8fafc; }
 .bg-slate-950 input::placeholder, .bg-slate-950 textarea::placeholder { color: #94a3b8; opacity: 1; }
 .bg-slate-950 select option { color: #172033; background: #ffffff; }
+.auth-input {
+  color: #172033 !important;
+  -webkit-text-fill-color: #172033 !important;
+  caret-color: #172033;
+  color-scheme: light;
+}
+.auth-input::placeholder { color: #64748b; opacity: 1; }
+.auth-input:-webkit-autofill,
+.auth-input:-webkit-autofill:hover,
+.auth-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #172033 !important;
+  box-shadow: 0 0 0 1000px #f8fafc inset;
+  caret-color: #172033;
+}
+.auth-input:-moz-autofill {
+  color: #172033 !important;
+  box-shadow: 0 0 0 1000px #f8fafc inset;
+}
 button, a { -webkit-tap-highlight-color: transparent; }
 ::selection { background: #fed7aa; color: #7c2d12; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
