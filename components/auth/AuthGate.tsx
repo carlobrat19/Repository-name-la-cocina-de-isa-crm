@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-export type RolCrm = "Administrador" | "Ventas" | "Producción" | "Reparto" | "Caja" | "Sin acceso";
+export type RolCrm = "Administrador" | "Socio / Propietario" | "Gerencia operativa" | "Ventas" | "Producción" | "Reparto" | "Caja" | "Contador" | "Sin acceso";
 export type ModuloCrm = "inicio" | "dashboard" | "pedidos" | "clientes" | "conversaciones" | "productos" | "recetas_costos" | "ingredientes" | "produccion" | "pendientes" | "cobros_fel" | "flujo_caja" | "reportes" | "integraciones" | "punto_venta" | "sucursales";
 
 type AuthContextValue = {

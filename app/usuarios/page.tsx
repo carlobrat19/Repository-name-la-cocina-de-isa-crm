@@ -10,7 +10,8 @@ type Invitacion = { id: string; email: string; nombre: string | null; rol: RolCr
 type Auditoria = { id: string; usuario_id: string | null; accion: string; detalle: Record<string, string> | null; created_at: string };
 type SucursalAsignable = { id: string; nombre: string };
 
-const roles: RolCrm[] = ["Ventas", "Producción", "Reparto", "Caja", "Sin acceso"];
+const roles: RolCrm[] = ["Socio / Propietario", "Gerencia operativa", "Ventas", "Producción", "Reparto", "Caja", "Contador", "Sin acceso"];
+const etiquetaRol: Record<RolCrm, string> = { Administrador: "Administrador principal", "Socio / Propietario": "Socio / Propietario", "Gerencia operativa": "Gerencia operativa", Ventas: "Ventas", Producción: "Producción", Reparto: "Reparto", Caja: "Caja", Contador: "Contador", "Sin acceso": "Sin acceso" };
 const modulos: { id: ModuloCrm; label: string; detalle: string }[] = [
   { id: "inicio", label: "Inicio", detalle: "Portada y accesos rápidos" }, { id: "dashboard", label: "Resumen", detalle: "Indicadores principales" }, { id: "pedidos", label: "Pedidos", detalle: "Crear y gestionar ventas" },
   { id: "clientes", label: "Clientes", detalle: "Fichas y direcciones" }, { id: "conversaciones", label: "Conversaciones", detalle: "WhatsApp y Meta" },
@@ -21,10 +22,13 @@ const modulos: { id: ModuloCrm; label: string; detalle: string }[] = [
   { id: "integraciones", label: "Integraciones", detalle: "Conexiones externas" },
 ];
 const plantillas: Record<Exclude<RolCrm, "Administrador" | "Sin acceso">, ModuloCrm[]> = {
+  "Socio / Propietario": ["inicio", "dashboard", "pedidos", "clientes", "conversaciones", "productos", "recetas_costos", "ingredientes", "produccion", "pendientes", "punto_venta", "sucursales", "cobros_fel", "flujo_caja", "reportes"],
+  "Gerencia operativa": ["inicio", "dashboard", "pedidos", "clientes", "conversaciones", "productos", "recetas_costos", "ingredientes", "produccion", "pendientes", "punto_venta", "sucursales", "reportes"],
   Ventas: ["inicio", "dashboard", "pedidos", "clientes", "conversaciones", "productos", "punto_venta"],
   Producción: ["inicio", "dashboard", "productos", "recetas_costos", "ingredientes", "produccion", "pendientes", "sucursales"],
   Reparto: ["inicio", "dashboard", "pedidos"],
   Caja: ["inicio", "dashboard", "pedidos", "clientes", "punto_venta", "cobros_fel", "flujo_caja"],
+  Contador: ["inicio", "dashboard", "clientes", "cobros_fel", "flujo_caja", "reportes"],
 };
 const fecha = (valor: string | null) => valor ? new Intl.DateTimeFormat("es-GT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(valor)) : "Sin vencimiento";
 const entradaFecha = (valor: string | null) => valor ? new Date(valor).toISOString().slice(0, 16) : "";
@@ -107,7 +111,7 @@ export default function UsuariosPage() {
 <div className="mt-5 space-y-3">
 <input required value={nombre} onChange={(event) => setNombre(event.target.value)} placeholder="Nombre de la persona" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/>
 <input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="correo@empresa.com" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/>
-<select value={rol} onChange={(event) => aplicarRol(event.target.value as RolCrm)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold">{roles.map((item) => <option key={item}>{item}</option>)}</select>
+<select aria-label="Perfil de acceso" value={rol} onChange={(event) => aplicarRol(event.target.value as RolCrm)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold">{roles.map((item) => <option key={item} value={item}>{etiquetaRol[item]}</option>)}</select>
 <label className="block text-sm font-bold">Vence el acceso (opcional)<input type="datetime-local" value={accesoHasta} onChange={(event) => setAccesoHasta(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/>
 </label>
 </div>
@@ -144,7 +148,7 @@ export default function UsuariosPage() {
 <Clock3 size={12}/>{fecha(perfil.acceso_hasta)}</p>
 </div>
 </div>{!principal && <div className="flex flex-wrap gap-2">
-<select value={perfil.rol} onChange={(event) => void actualizarPerfil(perfil, { rol: event.target.value as RolCrm })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">{roles.map((item) => <option key={item}>{item}</option>)}</select>
+<select aria-label={`Perfil de ${perfil.nombre || perfil.email}`} value={perfil.rol} onChange={(event) => void actualizarPerfil(perfil, { rol: event.target.value as RolCrm })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">{roles.map((item) => <option key={item} value={item}>{etiquetaRol[item]}</option>)}</select>
 <button onClick={() => void actualizarPerfil(perfil, { activo: !perfil.activo })} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold">{perfil.activo ? "Desactivar" : "Activar"}</button>
 <button disabled={guardando === `reset-${perfil.id}`} onClick={() => void restablecer(perfil)} className="rounded-xl bg-orange-50 px-3 py-2 text-xs font-bold text-orange-700">
 <KeyRound className="mr-1 inline h-3.5 w-3.5"/>Restablecer</button>
