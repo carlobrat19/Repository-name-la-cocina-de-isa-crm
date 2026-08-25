@@ -100,7 +100,7 @@ export default function IngredientesPage() {
   const eliminar = async (ingrediente: Ingrediente) => {
     if (
       !window.confirm(
-        `¿Eliminar definitivamente ${ingrediente.nombre}? Esta acción solo está disponible si no se usa en una receta.`,
+        `¿Eliminar definitivamente ${ingrediente.nombre}? Solo se permite si no se usa en una receta ni tiene compras registradas.`,
       )
     )
       return;
