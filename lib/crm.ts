@@ -1,5 +1,17 @@
-export const ESTADOS_PEDIDO = ["Pendiente", "Producción", "Empaquetado", "En Ruta", "Entregado"] as const;
-export const CANALES = ["Manual", "WhatsApp", "Instagram", "Facebook", "Web"] as const;
+export const ESTADOS_PEDIDO = [
+  "Pendiente",
+  "Producción",
+  "Empaquetado",
+  "En Ruta",
+  "Entregado",
+] as const;
+export const CANALES = [
+  "Manual",
+  "WhatsApp",
+  "Instagram",
+  "Facebook",
+  "Web",
+] as const;
 
 export type Cliente = {
   id: string;
@@ -11,6 +23,8 @@ export type Cliente = {
   canal_origen: string;
   saldo: number;
   notas: string | null;
+  estado?: string;
+  fecha_nacimiento?: string | null;
   created_at: string;
 };
 
@@ -24,4 +38,6 @@ export type Conversacion = {
 };
 
 export const moneda = (valor: number | string | null | undefined) =>
-  new Intl.NumberFormat("es-GT", { style: "currency", currency: "GTQ" }).format(Number(valor || 0));
+  new Intl.NumberFormat("es-GT", { style: "currency", currency: "GTQ" }).format(
+    Number(valor || 0),
+  );
