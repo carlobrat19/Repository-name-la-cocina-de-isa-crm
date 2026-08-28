@@ -191,6 +191,7 @@ const fecha = (valor: string | null) =>
     : "Sin vencimiento";
 const entradaFecha = (valor: string | null) =>
   valor ? new Date(valor).toISOString().slice(0, 16) : "";
+const URL_PUBLICA_CRM = "https://repository-name-la-cocina-de-isa-cr.vercel.app";
 
 export default function UsuariosPage() {
   const { id: administradorId, rol: rolActual } = useCrmAuth();
@@ -412,7 +413,7 @@ export default function UsuariosPage() {
   async function restablecer(perfil: Perfil) {
     setGuardando(`reset-${perfil.id}`);
     const { error } = await supabase.auth.resetPasswordForEmail(perfil.email, {
-      redirectTo: `${window.location.origin}/restablecer-contrasena`,
+      redirectTo: `${URL_PUBLICA_CRM}/restablecer-contrasena`,
     });
     setGuardando(null);
     if (error) {
