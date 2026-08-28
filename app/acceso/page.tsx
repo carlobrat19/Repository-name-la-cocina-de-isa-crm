@@ -10,11 +10,14 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
+const URL_PUBLICA_CRM = "https://repository-name-la-cocina-de-isa-cr.vercel.app";
+
 export default function AccesoPage() {
   const [email, setEmail] = useState("");
   const [nombre, setNombre] = useState("");
   const [password, setPassword] = useState("");
   const [modoRegistro, setModoRegistro] = useState(false);
+  const [modoRecuperacion, setModoRecuperacion] = useState(false);
   const [mensaje, setMensaje] = useState("");
   const [enviando, setEnviando] = useState(false);
 
@@ -22,6 +25,18 @@ export default function AccesoPage() {
     event.preventDefault();
     setMensaje("");
     setEnviando(true);
+    if (modoRecuperacion) {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${URL_PUBLICA_CRM}/restablecer-contrasena`,
+      });
+      setEnviando(false);
+      setMensaje(
+        error
+          ? error.message
+          : "Si este correo tiene una cuenta activa, recibirás un enlace seguro para crear una nueva contraseña.",
+      );
+      return;
+    }
     const respuesta = modoRegistro
       ? await supabase.auth.signUp({
           email,
@@ -70,15 +85,21 @@ export default function AccesoPage() {
             Acceso al CRM
           </p>
           <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
-            {modoRegistro ? "Activar cuenta" : "Bienvenido"}
+            {modoRecuperacion
+              ? "Recuperar acceso"
+              : modoRegistro
+                ? "Activar cuenta"
+                : "Bienvenido"}
           </h2>
           <p className="mt-2 text-sm text-slate-500">
-            {modoRegistro
+            {modoRecuperacion
+              ? "Ingresa tu correo y te enviaremos un enlace para definir una contraseña nueva."
+              : modoRegistro
               ? "Solo funciona si el Administrador ya autorizó este correo."
               : "Ingresa con tu cuenta de trabajo."}
           </p>
           <form onSubmit={enviar} className="mt-7 space-y-4">
-            {modoRegistro && (
+            {modoRegistro && !modoRecuperacion && (
               <label className="block text-sm font-bold text-slate-700">
                 Nombre completo
                 <div className="relative mt-1.5">
@@ -107,21 +128,23 @@ export default function AccesoPage() {
                 />
               </div>
             </label>
-            <label className="block text-sm font-bold text-slate-700">
-              Contraseña
-              <div className="relative mt-1.5">
-                <LockKeyhole className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                <input
-                  required
-                  minLength={8}
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  className="auth-input w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 outline-none focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
-                  placeholder="Mínimo 8 caracteres"
-                />
-              </div>
-            </label>
+            {!modoRecuperacion && (
+              <label className="block text-sm font-bold text-slate-700">
+                Contraseña
+                <div className="relative mt-1.5">
+                  <LockKeyhole className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                  <input
+                    required
+                    minLength={8}
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    className="auth-input w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 outline-none focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                    placeholder="Mínimo 8 caracteres"
+                  />
+                </div>
+              </label>
+            )}
             {mensaje && (
               <p className="rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-700">
                 {mensaje}
@@ -133,22 +156,54 @@ export default function AccesoPage() {
             >
               {enviando
                 ? "Procesando…"
-                : modoRegistro
+                : modoRecuperacion
+                  ? "Enviar enlace de recuperación"
+                  : modoRegistro
                   ? "Activar acceso"
                   : "Iniciar sesión"}
             </button>
           </form>
-          <button
-            onClick={() => {
-              setModoRegistro(!modoRegistro);
-              setMensaje("");
-            }}
-            className="mt-5 text-sm font-bold text-orange-600 hover:text-orange-700"
-          >
-            {modoRegistro
-              ? "Ya tengo una cuenta"
-              : "Activar una cuenta autorizada"}
-          </button>
+          <div className="mt-5 flex flex-wrap gap-x-5 gap-y-3">
+            {modoRecuperacion ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setModoRecuperacion(false);
+                  setMensaje("");
+                }}
+                className="text-sm font-bold text-orange-600 hover:text-orange-700"
+              >
+                Volver a iniciar sesión
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModoRegistro(!modoRegistro);
+                    setMensaje("");
+                  }}
+                  className="text-sm font-bold text-orange-600 hover:text-orange-700"
+                >
+                  {modoRegistro
+                    ? "Ya tengo una cuenta"
+                    : "Activar una cuenta autorizada"}
+                </button>
+                {!modoRegistro && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModoRecuperacion(true);
+                      setMensaje("");
+                    }}
+                    className="text-sm font-bold text-slate-600 hover:text-orange-700"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </section>
     </main>
