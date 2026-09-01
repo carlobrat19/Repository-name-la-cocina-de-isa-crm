@@ -29,7 +29,9 @@ type Producto = {
   categoria: string | null;
   precio_venta: number;
   imagen_url: string | null;
+  tipo_producto?: "preparado" | "reventa" | "combo";
 };
+type ComponenteCombo = { combo_id: string; producto_id: string; cantidad: number };
 type Inventario = { producto_id: string; existencia: number };
 type Turno = { id: string; fondo_inicial: number };
 type Cliente = {
@@ -61,6 +63,7 @@ export default function PuntoVentaPage() {
     [sucursalId, setSucursalId] = useState(""),
     [productos, setProductos] = useState<Producto[]>([]),
     [inventario, setInventario] = useState<Inventario[]>([]),
+    [componentesCombo, setComponentesCombo] = useState<ComponenteCombo[]>([]),
     [catalogo, setCatalogo] = useState<string[]>([]),
     [turno, setTurno] = useState<Turno | null>(null),
     [fondo, setFondo] = useState(""),
@@ -92,7 +95,7 @@ export default function PuntoVentaPage() {
         .order("nombre"),
       supabase
         .from("productos")
-        .select("id,nombre,categoria,precio_venta,imagen_url")
+        .select("id,nombre,categoria,precio_venta,imagen_url,tipo_producto")
         .eq("estado", "Activo")
         .order("nombre"),
     ]);
@@ -105,7 +108,7 @@ export default function PuntoVentaPage() {
   }
   async function cargarLocal() {
     if (!sucursalId || !usuarioId) return;
-    const [a, b, c, d] = await Promise.all([
+    const [a, b, c, d, e] = await Promise.all([
       supabase
         .from("inventario_sucursal_productos")
         .select("producto_id,existencia")
@@ -128,12 +131,14 @@ export default function PuntoVentaPage() {
         .eq("estado", "Activo")
         .order("nombre")
         .limit(250),
+      supabase.from("combo_componentes").select("combo_id,producto_id,cantidad"),
     ]);
-    if (a.error || b.error || c.error || d.error)
+    if (a.error || b.error || c.error || d.error || e.error)
       setMensaje(
-        `No se pudo cargar la sucursal: ${(a.error || b.error || c.error || d.error)?.message}`,
+        `No se pudo cargar la sucursal: ${(a.error || b.error || c.error || d.error || e.error)?.message}`,
       );
     setInventario((a.data ?? []) as Inventario[]);
+    setComponentesCombo((e.data ?? []) as ComponenteCombo[]);
     setCatalogo((b.data ?? []).map((x) => x.producto_id));
     setTurno((c.data ?? null) as Turno | null);
     setClientes((d.data ?? []) as Cliente[]);
@@ -151,24 +156,30 @@ export default function PuntoVentaPage() {
     () => new Map(inventario.map((x) => [x.producto_id, Number(x.existencia)])),
     [inventario],
   );
+  const existenciaDisponible = (producto: Producto) => {
+    if (producto.tipo_producto !== "combo") return stock.get(producto.id) ?? 0;
+    const componentes = componentesCombo.filter((componente) => componente.combo_id === producto.id);
+    if (!componentes.length) return 0;
+    return Math.floor(Math.min(...componentes.map((componente) => (stock.get(componente.producto_id) ?? 0) / Number(componente.cantidad))));
+  };
   const disponibles = useMemo(
     () =>
       productos.filter(
         (p) =>
           catalogo.includes(p.id) &&
-          (stock.get(p.id) ?? 0) > 0 &&
+          existenciaDisponible(p) > 0 &&
           `${p.nombre} ${p.categoria ?? ""}`
             .toLowerCase()
             .includes(busqueda.toLowerCase()),
       ),
-    [productos, catalogo, stock, busqueda],
+    [productos, catalogo, stock, componentesCombo, busqueda],
   );
   const total = useMemo(
     () => carrito.reduce((s, x) => s + x.producto.precio_venta * x.cantidad, 0),
     [carrito],
   );
   function agregar(p: Producto) {
-    const e = stock.get(p.id) ?? 0;
+    const e = existenciaDisponible(p);
     setCarrito((xs) => {
       const a = xs.find((x) => x.producto.id === p.id);
       return a
@@ -540,13 +551,13 @@ export default function PuntoVentaPage() {
                     <div>
                       <b className="text-sm">{p.nombre}</b>
                       <p className="mt-1 text-xs text-slate-500">
-                        {p.categoria || "Sin categoría"}
+                        {p.tipo_producto === "combo" ? "Combo / box" : p.categoria || "Sin categoría"}
                       </p>
                     </div>
                   </div>
                   <div className="flex justify-between p-3">
                     <b className="text-emerald-700">{moneda(p.precio_venta)}</b>
-                    <small>{stock.get(p.id)} disponibles</small>
+                    <small>{existenciaDisponible(p)} {p.tipo_producto === "combo" ? "boxes posibles" : "disponibles"}</small>
                   </div>
                 </button>
               ))}

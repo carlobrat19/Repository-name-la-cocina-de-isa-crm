@@ -39,7 +39,11 @@ type Producto = {
   tiempo_preparacion_min?: number | string | null;
   etiquetas?: string[] | null;
   canales_venta?: string[] | null;
+  tipo_producto?: "preparado" | "reventa" | "combo";
+  costo_adicional_combo?: number | string | null;
 };
+
+type ComponenteCombo = { producto_id: string; cantidad: string };
 
 export default function ProductosPage() {
 
@@ -56,6 +60,9 @@ const [etiquetas,setEtiquetas]=useState("");
 const [publicarCatalogo,setPublicarCatalogo]=useState(false);
 const [disponibleOnline,setDisponibleOnline]=useState(true);
 const [canalesVenta,setCanalesVenta]=useState<string[]>(["WhatsApp", "Web"]);
+const [tipoProducto,setTipoProducto]=useState<"preparado" | "reventa" | "combo">("preparado");
+const [componentesCombo,setComponentesCombo]=useState<ComponenteCombo[]>([]);
+const [costoAdicionalCombo,setCostoAdicionalCombo]=useState("0");
 const [fotoProducto,setFotoProducto]=useState<File | null>(null);
 const [fotoActual,setFotoActual]=useState("");
 const [fotoPrevia,setFotoPrevia]=useState("");
@@ -137,6 +144,16 @@ if (recetaRespuesta.error) { console.error(recetaRespuesta.error); return; }
 setRecetaPiloto(recetaRespuesta.data as RecetaPiloto | null);
 }
 
+const costoComponentesCombo = componentesCombo.reduce((total, componente) => total + (Number(productos.find((producto) => producto.id === componente.producto_id)?.costo || 0) * Number(componente.cantidad || 0)), 0);
+const costoTotalCombo = costoComponentesCombo + Number(costoAdicionalCombo || 0);
+const etiquetaTipo = (tipo?: Producto["tipo_producto"]) => tipo === "combo" ? "Combo / box" : tipo === "reventa" ? "Reventa" : "Preparado";
+
+async function cargarComponentesCombo(productoId: string) {
+ const { data, error } = await supabase.from("combo_componentes").select("producto_id,cantidad").eq("combo_id", productoId).order("created_at");
+ if (error) { console.error(error); setComponentesCombo([]); return; }
+ setComponentesCombo((data || []).map((item) => ({ producto_id: item.producto_id, cantidad: String(item.cantidad) })));
+}
+
 function seleccionarFoto(archivo: File | null) {
 if (!archivo) return;
 if (archivo.size > 5 * 1024 * 1024) {
@@ -153,6 +170,7 @@ setNombre(""); setCategoria(""); setPrecio(""); setCosto("");
 setStock("0"); setStockMinimo("0"); setDescripcion(""); setSku("");
 setTiempoPreparacion(""); setEtiquetas(""); setPublicarCatalogo(false);
 setDisponibleOnline(true); setCanalesVenta(["WhatsApp", "Web"]);
+setTipoProducto("preparado"); setComponentesCombo([]); setCostoAdicionalCombo("0");
 setFotoProducto(null); setFotoActual(""); setFotoPrevia("");
 }
 
@@ -197,11 +215,15 @@ if(
 ||
 !precio
 ||
-!costo
+(tipoProducto !== "combo" && !costo)
+||
+(tipoProducto === "combo" && componentesCombo.length === 0)
+||
+(tipoProducto === "combo" && componentesCombo.some((componente) => !componente.producto_id || !Number.isFinite(Number(componente.cantidad)) || Number(componente.cantidad) <= 0))
 ){
 
 alert(
-"Completa campos"
+tipoProducto === "combo" ? "Agrega componentes válidos al combo." : "Completa campos"
 );
 
 return;
@@ -224,8 +246,9 @@ return;
  nombre,
  categoria: categoria || null,
  precio_venta: Number(precio),
- costo: Number(costo),
- stock: Number(stock || 0),
+ costo: tipoProducto === "combo" ? costoTotalCombo : Number(costo),
+ // El stock de un combo es virtual: depende de sus componentes, no se duplica.
+ stock: tipoProducto === "combo" ? 0 : Number(stock || 0),
  stock_minimo: Number(stockMinimo || 0),
  descripcion: descripcion.trim() || null,
  sku: sku.trim() || null,
@@ -235,8 +258,11 @@ return;
  publicar_catalogo: publicarCatalogo,
  disponible_online: disponibleOnline,
  canales_venta: canalesVenta,
+ tipo_producto: tipoProducto,
+ costo_adicional_combo: tipoProducto === "combo" ? Number(costoAdicionalCombo || 0) : 0,
  };
 
+ let productoId = productoEditando;
 if(
 productoEditando
 ){
@@ -269,10 +295,13 @@ await supabase
 "productos"
 )
 
-.insert([{ ...datosProducto, estado: "Activo" }]);
+.insert([{ ...datosProducto, estado: "Activo" }])
+.select("id")
+.single();
 
 error =
 resultado.error;
+ productoId = resultado.data?.id || null;
 
 }
 
@@ -286,6 +315,15 @@ alert(
 
 return;
 
+}
+
+if (productoId) {
+  const { error: eliminarComponentesError } = await supabase.from("combo_componentes").delete().eq("combo_id", productoId);
+  if (eliminarComponentesError) { console.error(eliminarComponentesError); alert("El producto se guardó, pero no se pudo actualizar su composición."); return; }
+}
+if (tipoProducto === "combo" && productoId) {
+  const { error: componentesError } = await supabase.from("combo_componentes").insert(componentesCombo.map((componente) => ({ combo_id: productoId, producto_id: componente.producto_id, cantidad: Number(componente.cantidad) })));
+  if (componentesError) { console.error(componentesError); alert("El producto se guardó, pero no se pudo guardar su composición."); return; }
 }
 
 alert(
@@ -455,16 +493,20 @@ e.target.value
 )}
 />
 
+<label className="text-sm font-bold text-slate-700">Tipo de producto<select value={tipoProducto} onChange={(e) => setTipoProducto(e.target.value as "preparado" | "reventa" | "combo")} className="mt-2 w-full border border-slate-200 bg-white p-4 rounded-2xl outline-none transition focus:border-orange-500"><option value="preparado">Preparado con receta</option><option value="reventa">Artículo de reventa</option><option value="combo">Combo / box</option></select><span className="mt-1 block text-xs font-normal text-slate-500">{tipoProducto === "combo" ? "Se vende como una sola box y descuenta sus componentes." : tipoProducto === "reventa" ? "Se compra listo para vender, como Lays o bebidas." : "Se produce a partir de su receta estándar."}</span></label>
+
+{tipoProducto === "combo" && <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4 sm:col-span-2"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="font-black text-slate-950">Composición de la box</p><p className="mt-1 text-xs text-slate-600">Al venderla, el POS descuenta cada componente. No asignes existencias al combo.</p></div><button type="button" onClick={() => setComponentesCombo((actual) => [...actual, { producto_id: "", cantidad: "1" }])} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white">+ Agregar componente</button></div><div className="mt-4 space-y-2">{componentesCombo.map((componente, indice) => <div key={indice} className="grid gap-2 sm:grid-cols-[1fr_130px_auto]"><select value={componente.producto_id} onChange={(e) => setComponentesCombo((actual) => actual.map((item, posicion) => posicion === indice ? { ...item, producto_id: e.target.value } : item))} className="rounded-xl border border-orange-200 bg-white p-3 text-sm"><option value="">Seleccionar producto</option>{productos.filter((producto) => producto.id !== productoEditando && producto.tipo_producto !== "combo").map((producto) => <option key={producto.id} value={producto.id}>{producto.nombre} · Q{Number(producto.costo || 0).toFixed(2)}</option>)}</select><input type="number" min="0.001" step="0.001" value={componente.cantidad} onChange={(e) => setComponentesCombo((actual) => actual.map((item, posicion) => posicion === indice ? { ...item, cantidad: e.target.value } : item))} className="rounded-xl border border-orange-200 bg-white p-3 text-sm" placeholder="Cantidad"/><button type="button" onClick={() => setComponentesCombo((actual) => actual.filter((_, posicion) => posicion !== indice))} className="rounded-xl px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100">Quitar</button></div>)}{!componentesCombo.length && <p className="rounded-xl bg-white p-3 text-sm text-slate-500">Agrega los productos que van dentro de la box, por ejemplo: Trío tres leches, Lays y Jamaica.</p>}</div><div className="mt-4 grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-white p-3"><p className="text-xs font-bold text-slate-500">Costo componentes</p><p className="mt-1 text-lg font-black text-slate-950">Q{costoComponentesCombo.toFixed(2)}</p></div><label className="rounded-xl bg-white p-3 text-xs font-bold text-slate-600">Empaque / directo adicional (Q)<input type="number" min="0" step="0.01" value={costoAdicionalCombo} onChange={(e) => setCostoAdicionalCombo(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-2 text-sm text-slate-900"/></label><div className="rounded-xl bg-orange-500 p-3 text-white"><p className="text-xs font-bold text-orange-100">Costo de la box</p><p className="mt-1 text-lg font-black">Q{costoTotalCombo.toFixed(2)}</p></div></div></div>}
+
 <textarea className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 sm:col-span-2" placeholder="Descripción comercial: qué incluye, sabor, tamaño y condiciones" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
 <input className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" placeholder="SKU o código interno" value={sku} onChange={(e) => setSku(e.target.value)} />
 <label className="text-sm font-bold text-slate-700">Tiempo de preparación (minutos)<input type="number" min="0" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={tiempoPreparacion} onChange={(e) => setTiempoPreparacion(e.target.value)} /></label>
-<label className="text-sm font-bold text-slate-700">Existencias disponibles para vender<input type="number" min="0" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={stock} onChange={(e) => setStock(e.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-500">Unidades listas para aceptar pedidos.</span></label>
+{tipoProducto === "combo" ? <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900"><b>Existencia virtual</b><p className="mt-1 text-xs">El máximo vendible depende del componente con menor disponibilidad en cada sucursal. No se ingresa inventario propio para esta box.</p></div> : <label className="text-sm font-bold text-slate-700">Existencias disponibles para vender<input type="number" min="0" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={stock} onChange={(e) => setStock(e.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-500">Unidades listas para aceptar pedidos.</span></label>}
 <label className="text-sm font-bold text-slate-700">Stock mínimo de alerta<input type="number" min="0" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={stockMinimo} onChange={(e) => setStockMinimo(e.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-500">El sistema marcará stock bajo al llegar a esta cantidad.</span></label>
 <input className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 sm:col-span-2" placeholder="Etiquetas separadas por coma: regalo, postre, aniversario" value={etiquetas} onChange={(e) => setEtiquetas(e.target.value)} />
 <label className="rounded-2xl border border-dashed border-orange-300 bg-orange-50/50 p-4 text-sm font-bold text-slate-700 sm:col-span-2">Foto principal para catálogo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => seleccionarFoto(e.target.files?.[0] || null)} className="mt-2 block w-full text-sm font-normal" /><span className="mt-2 block text-xs font-normal text-slate-500">JPG, PNG o WebP · máximo 5 MB · idealmente imagen cuadrada o vertical.</span>{(fotoPrevia || fotoActual) && <div className="mt-4 flex items-center gap-3 rounded-xl bg-white p-3"><Image src={fotoPrevia || fotoActual} alt="Vista previa del producto" width={72} height={72} className="size-[72px] rounded-xl border border-slate-200 object-cover" /><span className="text-xs font-normal text-emerald-700">{fotoPrevia ? "Nueva foto lista para guardar." : "Este producto ya tiene una foto. Selecciona otra solo si deseas reemplazarla."}</span></div>}</label>
 <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 sm:col-span-2"><p className="text-sm font-black text-slate-900">Catálogo y canales de venta</p><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={publicarCatalogo} onChange={(e) => setPublicarCatalogo(e.target.checked)} /> Publicar en el catálogo digital</label><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={disponibleOnline} onChange={(e) => setDisponibleOnline(e.target.checked)} /> Disponible para pedidos en línea</label><div className="flex flex-wrap gap-3">{["WhatsApp", "Web", "Facebook", "Instagram", "PedidosYa", "Uber Eats"].map((canal) => <label key={canal} className="flex items-center gap-1 text-xs font-semibold"><input type="checkbox" checked={canalesVenta.includes(canal)} onChange={(e) => setCanalesVenta(e.target.checked ? [...canalesVenta, canal] : canalesVenta.filter((actual) => actual !== canal))} /> {canal}</label>)}</div></div>
 
-<label className="text-sm font-bold text-slate-700">Costo actual (Q)<input type="number" min="0" step="0.01" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={costo} onChange={(e) => setCosto(e.target.value)} /></label>
+{tipoProducto !== "combo" && <label className="text-sm font-bold text-slate-700">Costo actual (Q)<input type="number" min="0" step="0.01" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={costo} onChange={(e) => setCosto(e.target.value)} /></label>}
 
 <button
 
@@ -526,6 +568,8 @@ Producto y código
 Categoría
 </th>
 
+<th className="p-5 text-left">Tipo</th>
+
 <th className="p-5 text-left">
 Inventario
 </th>
@@ -580,6 +624,8 @@ producto.categoria
 }
 
 </td>
+
+<td className="p-5"><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${producto.tipo_producto === "combo" ? "bg-orange-100 text-orange-700" : producto.tipo_producto === "reventa" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700"}`}>{etiquetaTipo(producto.tipo_producto)}</span></td>
 
 <td className="p-5"><p className={`font-black ${Number(producto.stock || 0) <= 0 ? "text-rose-600" : Number(producto.stock || 0) <= Number(producto.stock_minimo || 0) ? "text-amber-600" : "text-emerald-700"}`}>{Number(producto.stock || 0)} u.</p><p className="mt-1 text-[11px] text-slate-500">Mínimo: {Number(producto.stock_minimo || 0)}</p></td>
 
@@ -673,6 +719,7 @@ setEditorAbierto(true);
 setNombre(
 producto.nombre
 );
+setTipoProducto(producto.tipo_producto || "preparado"); setCostoAdicionalCombo(String(producto.costo_adicional_combo ?? 0)); void cargarComponentesCombo(producto.id);
 
 setCategoria(
 producto.categoria ?? ""
@@ -735,7 +782,7 @@ Eliminar
 
 }
 
-{productosFiltrados.length === 0 && <tr><td colSpan={9} className="p-12 text-center text-slate-500">No encontramos productos con esos filtros.</td></tr>}
+{productosFiltrados.length === 0 && <tr><td colSpan={10} className="p-12 text-center text-slate-500">No encontramos productos con esos filtros.</td></tr>}
 </tbody>
 
 </table>

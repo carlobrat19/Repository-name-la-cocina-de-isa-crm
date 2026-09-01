@@ -8,7 +8,8 @@ const ETAPAS = ["Pendiente", "Producción", "Empaquetado", "En Ruta", "Entregado
 type Etapa = (typeof ETAPAS)[number];
 type Pedido = { id: string; codigo: string | null; cliente: string | null; estado: string | null; vendedor: string | null; fecha_pedido: string | null; fecha_entrega: string | null; observaciones: string | null };
 type Detalle = { pedido_id: string; producto_id: string | null; cantidad: number | string | null };
-type Producto = { id: string; nombre: string; categoria: string | null };
+type Producto = { id: string; nombre: string; categoria: string | null; tipo_producto?: "preparado" | "reventa" | "combo" };
+type ComponenteCombo = { combo_id: string; producto_id: string; cantidad: number | string };
 
 const color: Record<Etapa, string> = { Pendiente: "bg-amber-50 text-amber-800", Producción: "bg-blue-50 text-blue-800", Empaquetado: "bg-violet-50 text-violet-800", "En Ruta": "bg-orange-50 text-orange-800", Entregado: "bg-emerald-50 text-emerald-800" };
 const estadoPedido = (valor: string | null): Etapa => ETAPAS.includes(valor as Etapa) ? valor as Etapa : "Pendiente";
@@ -17,6 +18,7 @@ export default function ProduccionPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [detalles, setDetalles] = useState<Detalle[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [componentesCombo, setComponentesCombo] = useState<ComponenteCombo[]>([]);
   const [vista, setVista] = useState<"pedidos" | "productos">("pedidos");
   const [busqueda, setBusqueda] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState("Todos");
@@ -32,15 +34,17 @@ export default function ProduccionPage() {
 
   async function cargar() {
     setCargando(true); setErrorCarga("");
-    const [pedidosRespuesta, detallesRespuesta, productosRespuesta] = await Promise.all([
+    const [pedidosRespuesta, detallesRespuesta, productosRespuesta, componentesRespuesta] = await Promise.all([
       supabase.from("pedidos").select("id,codigo,cliente,estado,vendedor,fecha_pedido,fecha_entrega,observaciones").order("fecha_entrega", { ascending: true }).limit(250),
       supabase.from("pedido_detalle").select("pedido_id,producto_id,cantidad"),
-      supabase.from("productos").select("id,nombre,categoria"),
+      supabase.from("productos").select("id,nombre,categoria,tipo_producto"),
+      supabase.from("combo_componentes").select("combo_id,producto_id,cantidad"),
     ]);
-    if (pedidosRespuesta.error || detallesRespuesta.error || productosRespuesta.error) { const error = pedidosRespuesta.error || detallesRespuesta.error || productosRespuesta.error; console.error(error); setErrorCarga("No se pudo actualizar el panel. Revisa tu conexión e inténtalo de nuevo."); setCargando(false); return; }
+    if (pedidosRespuesta.error || detallesRespuesta.error || productosRespuesta.error || componentesRespuesta.error) { const error = pedidosRespuesta.error || detallesRespuesta.error || productosRespuesta.error || componentesRespuesta.error; console.error(error); setErrorCarga("No se pudo actualizar el panel. Revisa tu conexión e inténtalo de nuevo."); setCargando(false); return; }
     setPedidos((pedidosRespuesta.data || []) as Pedido[]);
     setDetalles((detallesRespuesta.data || []) as Detalle[]);
     setProductos((productosRespuesta.data || []) as Producto[]);
+    setComponentesCombo((componentesRespuesta.data || []) as ComponenteCombo[]);
     setUltimaActualizacion(new Date().toLocaleTimeString("es-GT", { hour: "2-digit", minute: "2-digit" })); setCargando(false);
   }
 
@@ -67,12 +71,14 @@ export default function ProduccionPage() {
   const resumenProductos = useMemo(() => {
     const resumen = new Map<string, { producto?: Producto; total: number; porEtapa: Record<Etapa, number> }>();
     pedidosFiltrados.forEach((pedido) => detalles.filter((detalle) => detalle.pedido_id === pedido.id).forEach((detalle) => {
-      const clave = detalle.producto_id || "eliminado";
-      const actual = resumen.get(clave) || { producto: detalle.producto_id ? productosPorId.get(detalle.producto_id) : undefined, total: 0, porEtapa: { Pendiente: 0, Producción: 0, Empaquetado: 0, "En Ruta": 0, Entregado: 0 } };
-      const cantidad = Number(detalle.cantidad || 0); actual.total += cantidad; actual.porEtapa[estadoPedido(pedido.estado)] += cantidad; resumen.set(clave, actual);
+      const producto = detalle.producto_id ? productosPorId.get(detalle.producto_id) : undefined;
+      const cantidad = Number(detalle.cantidad || 0);
+      const componentes = producto?.tipo_producto === "combo" ? componentesCombo.filter((componente) => componente.combo_id === producto.id) : [];
+      const requeridos = componentes.length ? componentes.map((componente) => ({ productoId: componente.producto_id, cantidad: cantidad * Number(componente.cantidad) })) : [{ productoId: detalle.producto_id || "eliminado", cantidad }];
+      requeridos.forEach((requerido) => { const actual = resumen.get(requerido.productoId) || { producto: requerido.productoId === "eliminado" ? undefined : productosPorId.get(requerido.productoId), total: 0, porEtapa: { Pendiente: 0, Producción: 0, Empaquetado: 0, "En Ruta": 0, Entregado: 0 } }; actual.total += requerido.cantidad; actual.porEtapa[estadoPedido(pedido.estado)] += requerido.cantidad; resumen.set(requerido.productoId, actual); });
     }));
     return Array.from(resumen.values()).sort((a, b) => b.total - a.total);
-  }, [pedidosFiltrados, detalles, productosPorId]);
+  }, [pedidosFiltrados, detalles, productosPorId, componentesCombo]);
   const limpiar = () => { setBusqueda(""); setEstadoFiltro("Todos"); setVendedorFiltro("Todos"); setFechaPedidoInicio(""); setFechaPedidoFin(""); setFechaEntregaInicio(""); setFechaEntregaFin(""); };
 
   return <main className="min-h-screen bg-slate-100 px-4 py-7 sm:px-7 lg:px-10"><div className="mx-auto max-w-[1600px]">
