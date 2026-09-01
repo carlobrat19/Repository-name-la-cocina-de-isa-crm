@@ -28,6 +28,7 @@ type RecetaCargada = {
   margen_pct: number | string;
   iva_pct: number | string;
   recargo_carta_pct: number | string;
+  comision_canal_pct: number | string;
   costos_adicionales: number | string;
   receta_ingredientes: LineaReceta[];
 };
@@ -47,9 +48,10 @@ export default function RecetasPage() {
   const [rendimiento, setRendimiento] = useState("1");
   const [unidadRendimiento, setUnidadRendimiento] = useState("unidad");
   const [merma, setMerma] = useState("0");
-  const [margen, setMargen] = useState("35");
+  const [costosIndirectos, setCostosIndirectos] = useState("35");
   const [iva, setIva] = useState("12");
-  const [recargo, setRecargo] = useState("0");
+  const [recargoCarta, setRecargoCarta] = useState("50");
+  const [comisionCanal, setComisionCanal] = useState("0");
   const [costosAdicionales, setCostosAdicionales] = useState("0");
   const [lineas, setLineas] = useState<LineaReceta[]>([]);
   const [ingredienteSeleccionado, setIngredienteSeleccionado] = useState("");
@@ -96,7 +98,7 @@ export default function RecetasPage() {
     const { data, error } = await supabase
       .from("recetas_estandar")
       .select(
-        "id,rendimiento,unidad_rendimiento,merma_pct,margen_pct,iva_pct,recargo_carta_pct,costos_adicionales,receta_ingredientes(ingrediente_id,cantidad)",
+        "id,rendimiento,unidad_rendimiento,merma_pct,margen_pct,iva_pct,recargo_carta_pct,comision_canal_pct,costos_adicionales,receta_ingredientes(ingrediente_id,cantidad)",
       )
       .eq("producto_id", id)
       .maybeSingle();
@@ -110,9 +112,10 @@ export default function RecetasPage() {
       setRendimiento("1");
       setUnidadRendimiento("unidad");
       setMerma("0");
-      setMargen("35");
+      setCostosIndirectos("35");
       setIva("12");
-      setRecargo("0");
+      setRecargoCarta("50");
+      setComisionCanal("0");
       setCostosAdicionales("0");
       return;
     }
@@ -120,9 +123,10 @@ export default function RecetasPage() {
     setRendimiento(String(receta.rendimiento));
     setUnidadRendimiento(receta.unidad_rendimiento || "unidad");
     setMerma(String(Number(receta.merma_pct) * 100));
-    setMargen(String(Number(receta.margen_pct) * 100));
+    setCostosIndirectos(String(Number(receta.margen_pct) * 100));
     setIva(String(Number(receta.iva_pct) * 100));
-    setRecargo(String(Number(receta.recargo_carta_pct) * 100));
+    setRecargoCarta(String(Number(receta.recargo_carta_pct) * 100));
+    setComisionCanal(String(Number(receta.comision_canal_pct || 0) * 100));
     setCostosAdicionales(String(Number(receta.costos_adicionales || 0)));
     setLineas(
       (receta.receta_ingredientes || []).map((linea) => ({
@@ -176,14 +180,20 @@ export default function RecetasPage() {
     0,
   );
   const costoConMerma = costoBase * (1 + Number(merma || 0) / 100);
-  const costoTotalLote = costoConMerma + Number(costosAdicionales || 0);
-  const costoPorUnidad =
-    costoTotalLote / Math.max(0.001, Number(rendimiento || 1));
-  const margenObjetivo = Number(margen || 0) / 100;
-  const comisionCanal = Number(recargo || 0) / 100;
+  const costoDirectoLote = costoConMerma + Number(costosAdicionales || 0);
+  const costoDirectoPorUnidad =
+    costoDirectoLote / Math.max(0.001, Number(rendimiento || 1));
+  const costosIndirectosMonto =
+    costoDirectoPorUnidad * (Number(costosIndirectos || 0) / 100);
+  const costoCompletoPorUnidad = costoDirectoPorUnidad + costosIndirectosMonto;
+  const utilidadCartaMonto =
+    costoCompletoPorUnidad * (Number(recargoCarta || 0) / 100);
+  const precioAntesComision = costoCompletoPorUnidad + utilidadCartaMonto;
   const precioSinIva =
-    costoPorUnidad / Math.max(0.01, 1 - margenObjetivo - comisionCanal);
-  const precioSugerido = precioSinIva * (1 + Number(iva || 0) / 100);
+    precioAntesComision /
+    Math.max(0.01, 1 - Number(comisionCanal || 0) / 100);
+  const ivaMonto = precioSinIva * (Number(iva || 0) / 100);
+  const precioSugerido = precioSinIva + ivaMonto;
   const productoActual = productos.find(
     (producto) => producto.id === productoId,
   );
@@ -209,8 +219,8 @@ export default function RecetasPage() {
       );
       return;
     }
-    if (Number(margen || 0) + Number(recargo || 0) >= 99) {
-      alert("El margen objetivo más la comisión debe ser menor a 99%.");
+    if (Number(comisionCanal || 0) >= 99) {
+      alert("La comisión del canal debe ser menor a 99%.");
       return;
     }
     setGuardando(true);
@@ -222,7 +232,7 @@ export default function RecetasPage() {
           nombre: nombreProductoNuevo.trim(),
           categoria: categoriaProductoNueva.trim() || null,
           precio_venta: Number(precioVentaNuevo),
-          costo: costoPorUnidad,
+          costo: costoCompletoPorUnidad,
           estado: "Activo",
         })
         .select("id")
@@ -244,9 +254,10 @@ export default function RecetasPage() {
           rendimiento: Number(rendimiento),
           unidad_rendimiento: unidadRendimiento,
           merma_pct: Number(merma || 0) / 100,
-          margen_pct: Number(margen || 0) / 100,
+          margen_pct: Number(costosIndirectos || 0) / 100,
           iva_pct: Number(iva || 0) / 100,
-          recargo_carta_pct: Number(recargo || 0) / 100,
+          recargo_carta_pct: Number(recargoCarta || 0) / 100,
+          comision_canal_pct: Number(comisionCanal || 0) / 100,
           costos_adicionales: Number(costosAdicionales || 0),
           activa: true,
         },
@@ -281,7 +292,7 @@ export default function RecetasPage() {
       );
     const { error: costoError } = await supabase
       .from("productos")
-      .update({ costo: costoPorUnidad })
+      .update({ costo: costoCompletoPorUnidad })
       .eq("id", productoParaReceta);
     setGuardando(false);
     if (detalleError || costoError) {
@@ -506,15 +517,16 @@ export default function RecetasPage() {
                   />
                 </label>
                 <label className="text-sm font-bold text-slate-700">
-                  Margen objetivo (%)
+                  Costos indirectos de producción (%)
                   <input
                     type="number"
                     min="0"
                     step="0.01"
-                    value={margen}
-                    onChange={(event) => setMargen(event.target.value)}
+                    value={costosIndirectos}
+                    onChange={(event) => setCostosIndirectos(event.target.value)}
                     className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500"
                   />
+                  <span className="mt-1 block text-xs font-normal text-slate-500">Luz, agua, gas, salarios, alquiler y otros costos fijos.</span>
                 </label>
                 <label className="text-sm font-bold text-slate-700">
                   IVA (%)
@@ -528,18 +540,31 @@ export default function RecetasPage() {
                   />
                 </label>
                 <label className="text-sm font-bold text-slate-700">
+                  Utilidad / recargo de carta (%)
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={recargoCarta}
+                    onChange={(event) => setRecargoCarta(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500"
+                  />
+                  <span className="mt-1 block text-xs font-normal text-slate-500">Recargo comercial definido por el negocio. Ej.: 50%.</span>
+                </label>
+                <label className="text-sm font-bold text-slate-700">
                   Comisión POS / plataforma (%)
                   <input
                     type="number"
                     min="0"
                     step="0.01"
-                    value={recargo}
-                    onChange={(event) => setRecargo(event.target.value)}
+                    value={comisionCanal}
+                    onChange={(event) => setComisionCanal(event.target.value)}
                     className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500"
                   />
+                  <span className="mt-1 block text-xs font-normal text-slate-500">Solo si aplica: tarjeta, plataforma o marketplace. Déjalo en 0 para venta directa.</span>
                 </label>
                 <label className="text-sm font-bold text-slate-700">
-                  Costos adicionales del lote (Q)
+                  Costos adicionales directos del lote (Q)
                   <input
                     type="number"
                     min="0"
@@ -548,7 +573,7 @@ export default function RecetasPage() {
                     onChange={(event) =>
                       setCostosAdicionales(event.target.value)
                     }
-                    placeholder="Empaque, gas o mano de obra"
+                    placeholder="Empaque especial u otro costo directo"
                     className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500"
                   />
                 </label>
@@ -712,9 +737,33 @@ export default function RecetasPage() {
                   </p>
                 </div>
                 <div className="rounded-2xl bg-white/10 p-4">
-                  <p className="text-xs text-slate-300">Con merma</p>
+                  <p className="text-xs text-slate-300">Con merma y directos</p>
                   <p className="mt-1 text-2xl font-black">
-                    {dinero(costoConMerma)}
+                    {dinero(costoDirectoPorUnidad)}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white/10 p-4">
+                  <p className="text-xs text-slate-300">Costos indirectos</p>
+                  <p className="mt-1 text-2xl font-black">
+                    {dinero(costosIndirectosMonto)}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white/10 p-4">
+                  <p className="text-xs text-slate-300">Costo completo / porción</p>
+                  <p className="mt-1 text-2xl font-black">
+                    {dinero(costoCompletoPorUnidad)}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white/10 p-4">
+                  <p className="text-xs text-slate-300">Utilidad de carta</p>
+                  <p className="mt-1 text-2xl font-black">
+                    {dinero(utilidadCartaMonto)}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white/10 p-4">
+                  <p className="text-xs text-slate-300">IVA</p>
+                  <p className="mt-1 text-2xl font-black">
+                    {dinero(ivaMonto)}
                   </p>
                 </div>
                 <div className="rounded-2xl bg-orange-500 p-4">
@@ -725,8 +774,9 @@ export default function RecetasPage() {
                 </div>
               </div>
               <p className="mt-5 text-xs leading-5 text-slate-400">
-                Al guardar, el costo con merma se sincroniza al producto. No
-                modifica tu precio final de venta.
+                Fórmula Intecap: merma → indirectos → utilidad de carta →
+                comisión del canal (si aplica) → IVA. Al guardar, el costo
+                completo se sincroniza al producto; no modifica tu precio final.
               </p>
             </section>
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
