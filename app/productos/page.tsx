@@ -58,6 +58,7 @@ const [disponibleOnline,setDisponibleOnline]=useState(true);
 const [canalesVenta,setCanalesVenta]=useState<string[]>(["WhatsApp", "Web"]);
 const [fotoProducto,setFotoProducto]=useState<File | null>(null);
 const [fotoActual,setFotoActual]=useState("");
+const [fotoPrevia,setFotoPrevia]=useState("");
 const [subiendoFoto,setSubiendoFoto]=useState(false);
 
 const [productos,setProductos]=
@@ -121,10 +122,6 @@ setProductos(
 productosCargados
 );
 
-const productoInicial = productosCargados.find((producto) => producto.nombre === "PAN DE BANANO") || productosCargados[0];
-if (productoInicial && !productoReceta) {
-void cargarResumenProducto(productoInicial);
-}
 }
 
 async function cargarResumenProducto(producto: Producto) {
@@ -137,6 +134,16 @@ const recetaRespuesta = await supabase
 .maybeSingle();
 if (recetaRespuesta.error) { console.error(recetaRespuesta.error); return; }
 setRecetaPiloto(recetaRespuesta.data as RecetaPiloto | null);
+}
+
+function seleccionarFoto(archivo: File | null) {
+if (!archivo) return;
+if (archivo.size > 5 * 1024 * 1024) {
+alert("La foto debe pesar menos de 5 MB.");
+return;
+}
+setFotoProducto(archivo);
+setFotoPrevia(URL.createObjectURL(archivo));
 }
 
 async function guardarPrecioFinalPan() {
@@ -286,7 +293,7 @@ setCategoria("");
 setPrecio("");
 
 setCosto("");
-setStock("0"); setStockMinimo("0"); setDescripcion(""); setSku(""); setTiempoPreparacion(""); setEtiquetas(""); setPublicarCatalogo(false); setDisponibleOnline(true); setCanalesVenta(["WhatsApp", "Web"]); setFotoProducto(null); setFotoActual("");
+setStock("0"); setStockMinimo("0"); setDescripcion(""); setSku(""); setTiempoPreparacion(""); setEtiquetas(""); setPublicarCatalogo(false); setDisponibleOnline(true); setCanalesVenta(["WhatsApp", "Web"]); setFotoProducto(null); setFotoActual(""); setFotoPrevia("");
 
 setProductoEditando(
 null
@@ -358,7 +365,7 @@ return(
 <div className="max-w-7xl mx-auto">
 
 {productoReceta && (() => {
-if (!recetaPiloto) return <section className="mb-10 rounded-[35px] bg-slate-950 p-8 text-white shadow-2xl"><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Producto seleccionado · {productoReceta.categoria || "Sin categoría"}</p><h1 className="mt-2 text-4xl font-black">{productoReceta.nombre}</h1><p className="mt-3 max-w-2xl text-sm text-slate-300">Este producto todavía no tiene una receta estándar. Créala para calcular sus costos automáticamente desde ingredientes e inventario.</p><Link href="/recetas" className="mt-6 inline-block rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white hover:bg-orange-400">Crear receta para este producto</Link></section>;
+if (!recetaPiloto) return <section className="mb-10 rounded-[35px] bg-slate-950 p-8 text-white shadow-2xl"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Ficha del producto · {productoReceta.categoria || "Sin categoría"}</p><h1 className="mt-2 text-4xl font-black">{productoReceta.nombre}</h1></div><button type="button" onClick={() => setProductoReceta(null)} className="rounded-lg border border-white/30 px-3 py-2 text-xs font-bold hover:bg-white/10">Cerrar</button></div><p className="mt-3 max-w-2xl text-sm text-slate-300">Este producto todavía no tiene una receta estándar. Créala para calcular sus costos automáticamente desde ingredientes e inventario.</p><Link href="/recetas" className="mt-6 inline-block rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white hover:bg-orange-400">Crear receta para este producto</Link></section>;
 const costoBase = recetaPiloto.receta_ingredientes.reduce((total, detalle) => total + Number(detalle.cantidad || 0) * Number(detalle.ingredientes?.costo_referencia || 0), 0);
 const conMerma = costoBase * (1 + Number(recetaPiloto.merma_pct || 0));
 const costoDirectoLote = conMerma + Number(recetaPiloto.costos_adicionales || 0);
@@ -370,8 +377,8 @@ const precioAntesComision = costoCompleto + utilidadCarta;
 const precioSinIva = precioAntesComision / Math.max(0.01, 1 - Number(recetaPiloto.comision_canal_pct || 0));
 const precioSugerido = precioSinIva * (1 + Number(recetaPiloto.iva_pct || 0));
 return <section className="mb-10 overflow-hidden rounded-[35px] bg-slate-950 p-8 text-white shadow-2xl">
-<p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Receta estándar · {productoReceta.categoria || "Sin categoría"}</p>
-<h1 className="mt-2 text-4xl font-black">{productoReceta.nombre}</h1>
+<div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Ficha y receta estándar · {productoReceta.categoria || "Sin categoría"}</p>
+<h1 className="mt-2 text-4xl font-black">{productoReceta.nombre}</h1></div><button type="button" onClick={() => setProductoReceta(null)} className="rounded-lg border border-white/30 px-3 py-2 text-xs font-bold hover:bg-white/10">Cerrar ficha</button></div>
 <p className="mt-2 text-sm text-slate-300">Costo calculado automáticamente desde los ingredientes de tu receta estándar.</p>
 <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo ingredientes</p><b className="text-2xl">Q{costoBase.toFixed(2)}</b></div><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo con merma</p><b className="text-2xl">Q{costoDirectoPorUnidad.toFixed(2)}</b></div><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo completo</p><b className="text-2xl">Q{costoCompleto.toFixed(2)}</b></div><div className="rounded-2xl bg-orange-500 p-4"><p className="text-xs text-orange-100">Precio sugerido con IVA</p><b className="text-2xl">Q{precioSugerido.toFixed(2)}</b></div></div>
 <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-orange-400/40 bg-orange-500/10 p-4 sm:flex-row sm:items-end"><div className="flex-1"><label className="block text-xs font-bold uppercase tracking-wide text-orange-200">Precio final de venta</label><p className="mt-1 text-xs text-slate-300">Este es el precio que verá el cliente y el que se usará en los pedidos.</p><div className="mt-2 flex max-w-xs overflow-hidden rounded-xl bg-white"><span className="px-3 py-3 font-bold text-slate-600">Q</span><input aria-label={`Precio final de venta de ${productoReceta.nombre}`} type="number" min="0" step="0.01" className="w-full bg-white py-3 pr-3 text-lg font-bold text-slate-900 outline-none" value={precioFinalProducto} onChange={(event) => setPrecioFinalProducto(event.target.value)} /></div></div><button type="button" onClick={guardarPrecioFinalPan} disabled={guardandoPrecioFinal} className="rounded-xl bg-orange-500 px-5 py-3 font-bold text-white transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60">{guardandoPrecioFinal ? "Guardando..." : "Guardar precio final"}</button></div>
@@ -439,7 +446,7 @@ e.target.value
 <label className="text-sm font-bold text-slate-700">Existencias disponibles para vender<input type="number" min="0" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={stock} onChange={(e) => setStock(e.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-500">Unidades listas para aceptar pedidos.</span></label>
 <label className="text-sm font-bold text-slate-700">Stock mínimo de alerta<input type="number" min="0" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={stockMinimo} onChange={(e) => setStockMinimo(e.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-500">El sistema marcará stock bajo al llegar a esta cantidad.</span></label>
 <input className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 sm:col-span-2" placeholder="Etiquetas separadas por coma: regalo, postre, aniversario" value={etiquetas} onChange={(e) => setEtiquetas(e.target.value)} />
-<label className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm font-bold text-slate-700 sm:col-span-2">Foto principal del producto<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setFotoProducto(e.target.files?.[0] || null)} className="mt-2 block w-full text-sm font-normal" />{fotoActual && <span className="mt-2 block text-xs font-normal text-emerald-700">Este producto ya tiene una foto. Selecciona otra solo si deseas reemplazarla.</span>}</label>
+<label className="rounded-2xl border border-dashed border-orange-300 bg-orange-50/50 p-4 text-sm font-bold text-slate-700 sm:col-span-2">Foto principal para catálogo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => seleccionarFoto(e.target.files?.[0] || null)} className="mt-2 block w-full text-sm font-normal" /><span className="mt-2 block text-xs font-normal text-slate-500">JPG, PNG o WebP · máximo 5 MB · idealmente imagen cuadrada o vertical.</span>{(fotoPrevia || fotoActual) && <div className="mt-4 flex items-center gap-3 rounded-xl bg-white p-3"><Image src={fotoPrevia || fotoActual} alt="Vista previa del producto" width={72} height={72} className="size-[72px] rounded-xl border border-slate-200 object-cover" /><span className="text-xs font-normal text-emerald-700">{fotoPrevia ? "Nueva foto lista para guardar." : "Este producto ya tiene una foto. Selecciona otra solo si deseas reemplazarla."}</span></div>}</label>
 <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 sm:col-span-2"><p className="text-sm font-black text-slate-900">Catálogo y canales de venta</p><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={publicarCatalogo} onChange={(e) => setPublicarCatalogo(e.target.checked)} /> Publicar en el catálogo digital</label><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={disponibleOnline} onChange={(e) => setDisponibleOnline(e.target.checked)} /> Disponible para pedidos en línea</label><div className="flex flex-wrap gap-3">{["WhatsApp", "Web", "Facebook", "Instagram", "PedidosYa", "Uber Eats"].map((canal) => <label key={canal} className="flex items-center gap-1 text-xs font-semibold"><input type="checkbox" checked={canalesVenta.includes(canal)} onChange={(e) => setCanalesVenta(e.target.checked ? [...canalesVenta, canal] : canalesVenta.filter((actual) => actual !== canal))} /> {canal}</label>)}</div></div>
 
 <label className="text-sm font-bold text-slate-700">Costo actual (Q)<input type="number" min="0" step="0.01" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={costo} onChange={(e) => setCosto(e.target.value)} /></label>
@@ -617,15 +624,31 @@ producto.estado
 
 <td className="p-5">
 
-<div className="flex gap-3">
+<div className="flex flex-wrap gap-3">
+
+<button
+
+className="border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition hover:border-orange-500 hover:text-orange-700"
+
+onClick={()=>{
+
+void cargarResumenProducto(producto);
+
+window.scrollTo({ top: 0, behavior: "smooth" });
+
+}}
+
+>
+
+Ver ficha
+
+</button>
 
 <button
 
 className="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition hover:bg-amber-600"
 
 onClick={()=>{
-
-void cargarResumenProducto(producto);
 
 setProductoEditando(
 producto.id
@@ -650,7 +673,7 @@ String(
 producto.costo
 )
 );
-setStock(String(producto.stock ?? 0)); setStockMinimo(String(producto.stock_minimo ?? 0)); setDescripcion(producto.descripcion ?? ""); setSku(producto.sku ?? ""); setTiempoPreparacion(producto.tiempo_preparacion_min == null ? "" : String(producto.tiempo_preparacion_min)); setEtiquetas((producto.etiquetas || []).join(", ")); setPublicarCatalogo(Boolean(producto.publicar_catalogo)); setDisponibleOnline(producto.disponible_online !== false); setCanalesVenta(producto.canales_venta?.length ? producto.canales_venta : ["WhatsApp", "Web"]); setFotoActual(producto.imagen_url ?? ""); setFotoProducto(null);
+setStock(String(producto.stock ?? 0)); setStockMinimo(String(producto.stock_minimo ?? 0)); setDescripcion(producto.descripcion ?? ""); setSku(producto.sku ?? ""); setTiempoPreparacion(producto.tiempo_preparacion_min == null ? "" : String(producto.tiempo_preparacion_min)); setEtiquetas((producto.etiquetas || []).join(", ")); setPublicarCatalogo(Boolean(producto.publicar_catalogo)); setDisponibleOnline(producto.disponible_online !== false); setCanalesVenta(producto.canales_venta?.length ? producto.canales_venta : ["WhatsApp", "Web"]); setFotoActual(producto.imagen_url ?? ""); setFotoProducto(null); setFotoPrevia("");
 
 window.scrollTo({
 
@@ -665,7 +688,7 @@ behavior:
 
 >
 
-Editar
+Editar / foto
 
 </button>
 
