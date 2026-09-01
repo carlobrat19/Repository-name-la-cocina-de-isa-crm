@@ -37,6 +37,13 @@ export default function IngredientesPage() {
   const [ingredientes, setIngredientes] = useState<Ingrediente[]>([]);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [busqueda, setBusqueda] = useState("");
+  const [filtroUnidad, setFiltroUnidad] = useState<"todos" | Unidad>("todos");
+  const [filtroExistencia, setFiltroExistencia] = useState<
+    "todos" | "con_existencia" | "sin_existencia"
+  >("todos");
+  const [pagina, setPagina] = useState(1);
+  const [formularioAbierto, setFormularioAbierto] = useState(false);
+  const [movimientosAbiertos, setMovimientosAbiertos] = useState(false);
   const [seleccionado, setSeleccionado] = useState<Ingrediente | null>(null);
   const [nombre, setNombre] = useState("");
   const [unidad, setUnidad] = useState<Unidad>("g");
@@ -95,6 +102,7 @@ export default function IngredientesPage() {
     setStock(String(ingrediente.stock_actual));
     setCosto(String(ingrediente.costo_referencia));
     setNota("");
+    setFormularioAbierto(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const eliminar = async (ingrediente: Ingrediente) => {
@@ -170,12 +178,20 @@ export default function IngredientesPage() {
 
   const filtrados = useMemo(
     () =>
-      ingredientes.filter((ingrediente) =>
-        ingrediente.nombre
+      ingredientes.filter((ingrediente) => {
+        const coincideNombre = ingrediente.nombre
           .toLowerCase()
-          .includes(busqueda.trim().toLowerCase()),
-      ),
-    [ingredientes, busqueda],
+          .includes(busqueda.trim().toLowerCase());
+        const coincideUnidad =
+          filtroUnidad === "todos" || ingrediente.unidad_base === filtroUnidad;
+        const tieneExistencia = Number(ingrediente.stock_actual) > 0;
+        const coincideExistencia =
+          filtroExistencia === "todos" ||
+          (filtroExistencia === "con_existencia" && tieneExistencia) ||
+          (filtroExistencia === "sin_existencia" && !tieneExistencia);
+        return coincideNombre && coincideUnidad && coincideExistencia;
+      }),
+    [ingredientes, busqueda, filtroUnidad, filtroExistencia],
   );
   const valorInventario = ingredientes.reduce(
     (total, ingrediente) =>
@@ -183,6 +199,22 @@ export default function IngredientesPage() {
       Number(ingrediente.stock_actual) * Number(ingrediente.costo_referencia),
     0,
   );
+  const conExistencias = ingredientes.filter(
+    (ingrediente) => Number(ingrediente.stock_actual) > 0,
+  ).length;
+  const sinExistencias = ingredientes.length - conExistencias;
+  const sinCosto = ingredientes.filter(
+    (ingrediente) => Number(ingrediente.costo_referencia) <= 0,
+  ).length;
+  const porPagina = 10;
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / porPagina));
+  const paginaSegura = Math.min(pagina, totalPaginas);
+  const ingredientesPagina = filtrados.slice(
+    (paginaSegura - 1) * porPagina,
+    paginaSegura * porPagina,
+  );
+
+  useEffect(() => setPagina(1), [busqueda, filtroUnidad, filtroExistencia]);
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-8 sm:px-8 lg:px-10">
@@ -208,10 +240,41 @@ export default function IngredientesPage() {
             Ir a recetas y costos
           </Link>
         </header>
-        <div className="grid gap-6 xl:grid-cols-[390px_minmax(0,1fr)]">
-          <form
+        <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Ingredientes</p>
+            <p className="mt-2 text-3xl font-black text-slate-950">{ingredientes.length}</p>
+            <p className="mt-1 text-sm text-slate-500">materias primas registradas</p>
+          </div>
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Con existencias</p>
+            <p className="mt-2 text-3xl font-black text-emerald-800">{conExistencias}</p>
+            <p className="mt-1 text-sm text-emerald-700">{sinExistencias} sin existencia</p>
+          </div>
+          <div className="rounded-2xl border border-orange-100 bg-orange-50 p-5 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wide text-orange-700">Valor estimado</p>
+            <p className="mt-2 text-2xl font-black text-orange-800">{dinero(valorInventario, 2)}</p>
+            <p className="mt-1 text-sm text-orange-700">stock × costo de referencia</p>
+          </div>
+          <div className={`rounded-2xl border p-5 shadow-sm ${sinCosto ? "border-rose-100 bg-rose-50" : "border-sky-100 bg-sky-50"}`}>
+            <p className={`text-xs font-bold uppercase tracking-wide ${sinCosto ? "text-rose-700" : "text-sky-700"}`}>Costos por completar</p>
+            <p className={`mt-2 text-3xl font-black ${sinCosto ? "text-rose-800" : "text-sky-800"}`}>{sinCosto}</p>
+            <p className={`mt-1 text-sm ${sinCosto ? "text-rose-700" : "text-sky-700"}`}>{sinCosto ? "ingredientes con costo Q0.00" : "todos tienen costo"}</p>
+          </div>
+        </section>
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[.2em] text-orange-500">Registro y ajustes</p>
+              <h2 className="mt-1 text-xl font-black text-slate-950">{seleccionado ? `Editando: ${seleccionado.nombre}` : "Agregar materia prima"}</h2>
+            </div>
+            <button type="button" onClick={() => { if (formularioAbierto && !seleccionado) limpiar(); setFormularioAbierto((abierto) => !abierto); }} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600">
+              {formularioAbierto ? "Cerrar formulario" : "+ Nuevo ingrediente"}
+            </button>
+          </div>
+          {formularioAbierto && <form
             onSubmit={guardar}
-            className="h-fit rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+            className="p-6"
           >
             <p className="text-xs font-bold uppercase tracking-[.2em] text-orange-500">
               {seleccionado ? "Editar ingrediente" : "Nueva materia prima"}
@@ -223,8 +286,8 @@ export default function IngredientesPage() {
               Un cambio de costo o existencia se guarda también en el historial
               como ajuste.
             </p>
-            <div className="mt-6 space-y-4">
-              <label className="block text-sm font-bold text-slate-700">
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <label className="block text-sm font-bold text-slate-700 md:col-span-2">
                 Nombre
                 <input
                   value={nombre}
@@ -260,7 +323,7 @@ export default function IngredientesPage() {
                   />
                 </label>
               </div>
-              <label className="block text-sm font-bold text-slate-700">
+              <label className="block text-sm font-bold text-slate-700 md:col-span-2">
                 Costo por {unidad}
                 <input
                   type="number"
@@ -284,6 +347,7 @@ export default function IngredientesPage() {
                   className="mt-2 min-h-24 w-full rounded-xl border border-slate-200 p-3"
                 />
               </label>
+              <div className="md:col-span-2 flex flex-wrap gap-3">
               <button
                 disabled={guardando}
                 className="w-full rounded-xl bg-orange-500 p-3 font-bold text-white transition hover:bg-orange-600 disabled:opacity-60"
@@ -303,9 +367,11 @@ export default function IngredientesPage() {
                   Cancelar edición
                 </button>
               )}
+              </div>
             </div>
-          </form>
-          <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          </form>}
+        </section>
+        <section className="mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 p-6">
               <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
                 <div>
@@ -325,12 +391,16 @@ export default function IngredientesPage() {
                   </p>
                 </div>
               </div>
-              <input
-                value={busqueda}
-                onChange={(event) => setBusqueda(event.target.value)}
-                placeholder="Buscar ingrediente"
-                className="mt-5 w-full rounded-xl border border-slate-200 bg-slate-50 p-3 outline-none focus:border-orange-500"
-              />
+              <div className="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_170px_190px]">
+                <input value={busqueda} onChange={(event) => setBusqueda(event.target.value)} placeholder="Buscar ingrediente" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 outline-none focus:border-orange-500" />
+                <select value={filtroUnidad} onChange={(event) => setFiltroUnidad(event.target.value as "todos" | Unidad)} className="rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold">
+                  <option value="todos">Todas las unidades</option><option value="g">Gramos (g)</option><option value="ml">Mililitros (ml)</option><option value="unidad">Unidades</option>
+                </select>
+                <select value={filtroExistencia} onChange={(event) => setFiltroExistencia(event.target.value as "todos" | "con_existencia" | "sin_existencia")} className="rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold">
+                  <option value="todos">Todo el inventario</option><option value="con_existencia">Con existencias</option><option value="sin_existencia">Sin existencia</option>
+                </select>
+              </div>
+              <p className="mt-3 text-sm text-slate-500">Mostrando {filtrados.length} de {ingredientes.length} ingredientes.</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
@@ -352,7 +422,7 @@ export default function IngredientesPage() {
                       </td>
                     </tr>
                   ) : (
-                    filtrados.map((ingrediente) => (
+                    ingredientesPagina.map((ingrediente) => (
                       <tr
                         key={ingrediente.id}
                         className="border-t border-slate-100"
@@ -411,18 +481,28 @@ export default function IngredientesPage() {
                 </tbody>
               </table>
             </div>
+            {!cargando && filtrados.length > porPagina && (
+              <div className="flex items-center justify-between gap-3 border-t border-slate-100 p-4">
+                <p className="text-sm text-slate-500">Página {paginaSegura} de {totalPaginas}</p>
+                <div className="flex gap-2"><button type="button" disabled={paginaSegura === 1} onClick={() => setPagina((actual) => Math.max(1, actual - 1))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold disabled:opacity-40">Anterior</button><button type="button" disabled={paginaSegura === totalPaginas} onClick={() => setPagina((actual) => Math.min(totalPaginas, actual + 1))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold disabled:opacity-40">Siguiente</button></div>
+              </div>
+            )}
           </section>
-        </div>
         <section className="mt-7 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 p-6">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 p-6">
+            <div>
             <p className="text-xs font-bold uppercase tracking-[.2em] text-orange-500">
               Trazabilidad
             </p>
             <h2 className="mt-2 text-2xl font-black text-slate-950">
               Últimos movimientos
             </h2>
+            </div>
+            <button type="button" onClick={() => setMovimientosAbiertos((abierto) => !abierto)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:border-orange-400">
+              {movimientosAbiertos ? "Ocultar" : `Ver ${movimientos.length} movimientos`}
+            </button>
           </div>
-          <div className="overflow-x-auto">
+          {movimientosAbiertos && <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
                 <tr>
@@ -474,6 +554,7 @@ export default function IngredientesPage() {
               </tbody>
             </table>
           </div>
+          }
         </section>
       </div>
     </main>
