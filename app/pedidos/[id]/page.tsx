@@ -10,11 +10,14 @@ import {
   ClipboardList,
   FileText,
   MessageCircle,
+  Minus,
   Package,
   Pencil,
+  Plus,
   Printer,
   Save,
   ShieldCheck,
+  Trash2,
   Truck,
   UserRound,
   WalletCards,
@@ -56,6 +59,12 @@ type Detalle = {
   cantidad?: number | null;
   precio?: number | string | null;
   productos?: { nombre?: string | null } | null;
+};
+type Producto = {
+  id: string;
+  nombre?: string | null;
+  precio_venta?: number | string | null;
+  costo?: number | string | null;
 };
 type ClienteFiscal = {
   id: string;
@@ -101,11 +110,14 @@ const etiquetaEstado = (estado?: string | null) =>
       : "bg-amber-100 text-amber-800";
 const ESTADOS_PEDIDO = ["Pendiente", "Producción", "Empaquetado", "En Ruta", "Entregado", "Cancelado"];
 const ESTADOS_PAGO = ["Pendiente", "Pago parcial", "Pagado"];
+const VENDEDORES = ["REDES", "LUCIA", "CARLO", "ISA", "MONICA", "RENATA"];
 
 export default function DetallePedidoPage() {
   const { id } = useParams<{ id: string }>();
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [detalles, setDetalles] = useState<Detalle[]>([]);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [productoAAgregar, setProductoAAgregar] = useState("");
   const [clienteFiscal, setClienteFiscal] = useState<ClienteFiscal | null>(
     null,
   );
@@ -137,6 +149,7 @@ export default function DetallePedidoPage() {
       facturaRespuesta,
       clienteRespuesta,
       responsableRespuesta,
+      productosRespuesta,
     ] = await Promise.all([
       supabase
         .from("pedido_detalle")
@@ -164,6 +177,11 @@ export default function DetallePedidoPage() {
       pedidoActual.responsable_id
         ? supabase.from("perfiles_crm").select("nombre,email").eq("id", pedidoActual.responsable_id).maybeSingle()
         : Promise.resolve({ data: null }),
+      supabase
+        .from("productos")
+        .select("id,nombre,precio_venta,costo")
+        .eq("estado", "Activo")
+        .order("nombre"),
     ]);
     setPedido(pedidoActual);
     setDetalles((detallesRespuesta.data ?? []) as Detalle[]);
@@ -171,6 +189,7 @@ export default function DetallePedidoPage() {
     setFactura((facturaRespuesta.data ?? null) as Factura | null);
     setClienteFiscal((clienteRespuesta.data ?? null) as ClienteFiscal | null);
     setResponsableNombre(responsableRespuesta.data ? (responsableRespuesta.data.nombre || responsableRespuesta.data.email) : null);
+    setProductos((productosRespuesta.data ?? []) as Producto[]);
     setCargando(false);
   }, [id]);
   useEffect(() => {
@@ -178,22 +197,18 @@ export default function DetallePedidoPage() {
     return () => window.clearTimeout(timer);
   }, [cargarPedido]);
 
-  const subtotal = useMemo(
-    () =>
-      pedido
-        ? Number(
-            pedido.subtotal_productos ??
-              detalles.reduce(
-                (total, item) =>
-                  total + Number(item.precio || 0) * Number(item.cantidad || 0),
-                0,
-              ),
-          )
-        : 0,
-    [pedido, detalles],
+  const subtotalEditado = useMemo(
+    () => detalles.reduce((acumulado, item) => acumulado + Number(item.precio || 0) * Number(item.cantidad || 0), 0),
+    [detalles],
   );
+  const puedeEditarProductos = pedido?.estado === "Pendiente" && !factura;
+  const subtotal = pedido
+    ? editando && puedeEditarProductos
+      ? subtotalEditado
+      : Number(pedido.subtotal_productos ?? subtotalEditado)
+    : 0;
   const envio = Number(pedido?.costo_envio || 0);
-  const total = Number(pedido?.total || subtotal + envio);
+  const total = editando && puedeEditarProductos ? subtotal + envio : Number(pedido?.total || subtotal + envio);
   const abonadoRegistrado = pagos.reduce(
     (suma, pago) => suma + Number(pago.monto || 0),
     0,
@@ -217,10 +232,10 @@ export default function DetallePedidoPage() {
   async function guardarCambios() {
     if (!pedido) return;
     setGuardando(true);
-    const { error } = await supabase
-      .from("pedidos")
-      .update({
-        forma_pago: pedido.forma_pago,
+    const { error } = await supabase.rpc("editar_pedido_y_detalle_seguro", {
+      p_datos: {
+        pedido_id: pedido.id,
+        forma_pago: pedido.forma_pago || "Efectivo",
         fecha_entrega: pedido.fecha_entrega || null,
         hora_entrega: pedido.hora_entrega || null,
         direccion: pedido.direccion || null,
@@ -229,8 +244,17 @@ export default function DetallePedidoPage() {
         zona_entrega: pedido.zona_entrega || null,
         observaciones: pedido.observaciones || null,
         vendedor: pedido.vendedor || null,
-      })
-      .eq("id", pedido.id);
+        costo_envio: envio,
+        ...(puedeEditarProductos
+          ? {
+              lineas: detalles.map((detalle) => ({
+                producto_id: detalle.producto_id,
+                cantidad: Number(detalle.cantidad || 0),
+              })),
+            }
+          : {}),
+      },
+    });
     if (!error && clienteFiscal)
       await supabase
         .from("clientes")
@@ -278,6 +302,45 @@ export default function DetallePedidoPage() {
   }
   function actualizar<K extends keyof Pedido>(campo: K, valor: Pedido[K]) {
     setPedido((actual) => (actual ? { ...actual, [campo]: valor } : actual));
+  }
+
+  function agregarProductoAlPedido() {
+    const producto = productos.find((item) => item.id === productoAAgregar);
+    if (!producto) return;
+    setDetalles((actuales) => {
+      const existente = actuales.find((item) => item.producto_id === producto.id);
+      if (existente) {
+        return actuales.map((item) =>
+          item.producto_id === producto.id
+            ? { ...item, cantidad: Number(item.cantidad || 0) + 1 }
+            : item,
+        );
+      }
+      return [
+        ...actuales,
+        {
+          producto_id: producto.id,
+          cantidad: 1,
+          precio: producto.precio_venta || 0,
+          productos: { nombre: producto.nombre },
+        },
+      ];
+    });
+    setProductoAAgregar("");
+  }
+
+  function cambiarCantidadDetalle(indice: number, cambio: number) {
+    setDetalles((actuales) =>
+      actuales.map((detalle, posicion) =>
+        posicion === indice
+          ? { ...detalle, cantidad: Math.max(1, Number(detalle.cantidad || 1) + cambio) }
+          : detalle,
+      ),
+    );
+  }
+
+  function quitarDetalle(indice: number) {
+    setDetalles((actuales) => actuales.filter((_, posicion) => posicion !== indice));
   }
 
   async function actualizarEstadoRapido(campo: "estado" | "pago_estado", valor: string) {
@@ -564,6 +627,19 @@ export default function DetallePedidoPage() {
                       value={pedido.hora_entrega || ""}
                       onChange={(value) => actualizar("hora_entrega", value)}
                     />
+                    <label className="block text-xs font-bold text-slate-600">
+                      Vendedor responsable
+                      <select
+                        value={pedido.vendedor || ""}
+                        onChange={(event) => actualizar("vendedor", event.target.value)}
+                        className={`${input} mt-1.5`}
+                      >
+                        <option value="">Sin asignar</option>
+                        {VENDEDORES.map((vendedor) => (
+                          <option key={vendedor} value={vendedor}>{vendedor}</option>
+                        ))}
+                      </select>
+                    </label>
                   </>
                 ) : (
                   <>
@@ -601,6 +677,33 @@ export default function DetallePedidoPage() {
                 />
               </div>
               <div className="divide-y divide-slate-100">
+                {editando && puedeEditarProductos && (
+                  <div className="flex flex-col gap-2 bg-orange-50 px-5 py-4 sm:flex-row sm:items-end sm:px-6">
+                    <label className="min-w-0 flex-1 text-xs font-bold text-slate-700">
+                      Agregar producto
+                      <select
+                        value={productoAAgregar}
+                        onChange={(event) => setProductoAAgregar(event.target.value)}
+                        className={`${input} mt-1.5`}
+                      >
+                        <option value="">Selecciona un producto</option>
+                        {productos.map((producto) => (
+                          <option key={producto.id} value={producto.id}>
+                            {producto.nombre || "Producto"} · {dinero(producto.precio_venta)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={agregarProductoAlPedido}
+                      disabled={!productoAAgregar}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    >
+                      <Plus className="h-4 w-4" /> Agregar
+                    </button>
+                  </div>
+                )}
                 {detalles.map((detalle, indice) => (
                   <div
                     key={detalle.id || indice}
@@ -614,14 +717,28 @@ export default function DetallePedidoPage() {
                         {detalle.cantidad || 0} × {dinero(detalle.precio)}
                       </p>
                     </div>
-                    <p className="whitespace-nowrap text-base font-black text-slate-950">
-                      {dinero(
-                        Number(detalle.precio || 0) *
-                          Number(detalle.cantidad || 0),
+                    <div className="flex items-center gap-3">
+                      {editando && puedeEditarProductos && (
+                        <div className="flex items-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+                          <button type="button" onClick={() => cambiarCantidadDetalle(indice, -1)} className="p-2 text-slate-600 hover:bg-slate-50" aria-label="Reducir cantidad"><Minus className="h-3.5 w-3.5" /></button>
+                          <span className="w-8 text-center text-sm font-black text-slate-800">{detalle.cantidad || 0}</span>
+                          <button type="button" onClick={() => cambiarCantidadDetalle(indice, 1)} className="p-2 text-slate-600 hover:bg-slate-50" aria-label="Aumentar cantidad"><Plus className="h-3.5 w-3.5" /></button>
+                        </div>
                       )}
-                    </p>
+                      <p className="whitespace-nowrap text-base font-black text-slate-950">
+                        {dinero(Number(detalle.precio || 0) * Number(detalle.cantidad || 0))}
+                      </p>
+                      {editando && puedeEditarProductos && (
+                        <button type="button" onClick={() => quitarDetalle(indice)} disabled={detalles.length === 1} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:text-slate-300" aria-label="Quitar producto"><Trash2 className="h-4 w-4" /></button>
+                      )}
+                    </div>
                   </div>
                 ))}
+                {editando && !puedeEditarProductos && (
+                  <p className="bg-amber-50 px-5 py-3 text-xs font-semibold text-amber-800 sm:px-6">
+                    Los productos se bloquean al iniciar producción o después de facturar, para que el inventario y los costos no se alteren. El vendedor y los datos de entrega sí se pueden actualizar.
+                  </p>
+                )}
               </div>
               <div className="bg-slate-50 px-5 py-4 sm:px-6">
                 <div className="ml-auto max-w-xs space-y-2 text-sm">
