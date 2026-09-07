@@ -53,9 +53,12 @@ export default function ProduccionPage() {
   async function cambiarEstado(pedido: Pedido, nuevoEstado: Etapa) {
     if (nuevoEstado === pedido.estado) return;
     setActualizando(pedido.id);
-    const { error } = await supabase.from("pedidos").update({ estado: nuevoEstado }).eq("id", pedido.id);
+    const { error } = await supabase.rpc("cambiar_estado_pedido_seguro", {
+      p_pedido_id: pedido.id,
+      p_estado: nuevoEstado,
+    });
     setActualizando(null);
-    if (error) { alert("No se pudo cambiar la etapa."); console.error(error); return; }
+    if (error) { alert(`No se pudo cambiar la etapa: ${error.message}`); console.error(error); return; }
     await cargar();
   }
 
