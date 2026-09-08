@@ -19,6 +19,11 @@ type Ingrediente = {
   stock_actual: number | string;
   activo: boolean;
 };
+type CuentaCompra = {
+  id: string;
+  nombre: string;
+  tipo: string;
+};
 type LineaReceta = { ingrediente_id: string; cantidad: number };
 type RecetaCargada = {
   id: string;
@@ -38,6 +43,7 @@ const dinero = (valor: number) => `Q${valor.toFixed(2)}`;
 export default function RecetasPage() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [ingredientes, setIngredientes] = useState<Ingrediente[]>([]);
+  const [cuentasCompra, setCuentasCompra] = useState<CuentaCompra[]>([]);
   const [modoProducto, setModoProducto] = useState<"existente" | "nuevo">(
     "existente",
   );
@@ -67,7 +73,7 @@ export default function RecetasPage() {
   const [registrandoCompra, setRegistrandoCompra] = useState(false);
 
   const cargarBase = async () => {
-    const [productosRespuesta, ingredientesRespuesta] = await Promise.all([
+    const [productosRespuesta, ingredientesRespuesta, cuentasRespuesta] = await Promise.all([
       supabase
         .from("productos")
         .select("id,nombre,categoria,precio_venta,costo")
@@ -78,11 +84,14 @@ export default function RecetasPage() {
         .select("id,nombre,unidad_base,costo_referencia,stock_actual,activo")
         .eq("activo", true)
         .order("nombre"),
+      supabase.rpc("cuentas_para_compras_ingredientes"),
     ]);
     if (productosRespuesta.error) console.error(productosRespuesta.error);
     if (ingredientesRespuesta.error) console.error(ingredientesRespuesta.error);
+    if (cuentasRespuesta.error) console.error(cuentasRespuesta.error);
     setProductos((productosRespuesta.data || []) as Producto[]);
     setIngredientes((ingredientesRespuesta.data || []) as Ingrediente[]);
+    setCuentasCompra((cuentasRespuesta.data || []) as CuentaCompra[]);
   };
 
   useEffect(() => {
@@ -204,6 +213,24 @@ export default function RecetasPage() {
     Number(cantidadCompra) > 0
       ? Number(totalCompra || 0) / Number(cantidadCompra)
       : 0;
+  const tiposCuentaPorMetodo: Record<string, string[]> = {
+    Efectivo: ["Caja"],
+    Transferencia: ["Banco", "Billetera digital"],
+    "Tarjeta de crédito": ["Tarjeta de crédito"],
+    "Tarjeta débito": ["Banco"],
+    POS: ["POS"],
+  };
+  const cuentasDisponiblesCompra = cuentasCompra.filter((cuenta) =>
+    (tiposCuentaPorMetodo[metodoCompra] || []).includes(cuenta.tipo),
+  );
+
+  const cambiarMetodoCompra = (metodo: string) => {
+    setMetodoCompra(metodo);
+    const cuentaCompatible = cuentasCompra.find((cuenta) =>
+      (tiposCuentaPorMetodo[metodo] || []).includes(cuenta.tipo),
+    );
+    setCuentaCompra(cuentaCompatible?.nombre || "");
+  };
 
   const guardarReceta = async () => {
     if (
@@ -312,10 +339,11 @@ export default function RecetasPage() {
       !Number(cantidadCompra) ||
       Number(cantidadCompra) <= 0 ||
       totalCompra === "" ||
-      Number(totalCompra) < 0
+      Number(totalCompra) < 0 ||
+      !cuentaCompra
     ) {
       alert(
-        "Selecciona un ingrediente e ingresa una cantidad y total pagado válidos.",
+        "Selecciona un ingrediente, una cuenta e ingresa una cantidad y total pagado válidos.",
       );
       return;
     }
@@ -862,7 +890,7 @@ export default function RecetasPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <select
                     value={metodoCompra}
-                    onChange={(event) => setMetodoCompra(event.target.value)}
+                    onChange={(event) => cambiarMetodoCompra(event.target.value)}
                     className="rounded-xl border border-emerald-200 bg-white p-3"
                   >
                     <option>Efectivo</option>
@@ -875,10 +903,17 @@ export default function RecetasPage() {
                     value={cuentaCompra}
                     onChange={(event) => setCuentaCompra(event.target.value)}
                     className="rounded-xl border border-emerald-200 bg-white p-3"
+                    disabled={!cuentasDisponiblesCompra.length}
                   >
-                    <option>Caja</option>
-                    <option>Banco</option>
-                    <option>Tarjeta de crédito</option>
+                    {!cuentasDisponiblesCompra.length ? (
+                      <option value="">Sin cuenta disponible</option>
+                    ) : (
+                      cuentasDisponiblesCompra.map((cuenta) => (
+                        <option key={cuenta.id} value={cuenta.nombre}>
+                          {cuenta.nombre}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
                 <input
