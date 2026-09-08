@@ -59,7 +59,20 @@ type DireccionCliente = {
   veces_usada?: number | null;
 };
 
-const VENDEDORES = ["REDES", "LUCIA", "CARLO", "ISA", "MONICA", "RENATA"];
+const VENDEDORES = ["LUCIA", "CARLO", "ISA", "MONICA", "RENATA"];
+const CANALES_ORIGEN = [
+  { valor: "Manual", etiqueta: "Manual / sin canal identificado" },
+  { valor: "WhatsApp", etiqueta: "WhatsApp" },
+  { valor: "Instagram", etiqueta: "Instagram" },
+  { valor: "Facebook", etiqueta: "Facebook" },
+  { valor: "Web", etiqueta: "Tienda en línea / web" },
+  { valor: "Llamada", etiqueta: "Llamada telefónica" },
+  { valor: "Mostrador", etiqueta: "Mostrador" },
+  { valor: "Referido", etiqueta: "Referido" },
+  { valor: "PedidosYa", etiqueta: "PedidosYa" },
+  { valor: "Uber Eats", etiqueta: "Uber Eats" },
+  { valor: "Otro", etiqueta: "Otro" },
+];
 const ESTADOS = [
   "Pendiente",
   "Producción",
@@ -124,7 +137,7 @@ export default function PedidosPage() {
   const [abonoInicial, setAbonoInicial] = useState(0);
   const [formaPago, setFormaPago] = useState("Efectivo");
   const [observaciones, setObservaciones] = useState("");
-  const [vendedor, setVendedor] = useState("REDES");
+  const [vendedor, setVendedor] = useState("");
   const [conversacionId, setConversacionId] = useState<string | null>(null);
   const [responsableId, setResponsableId] = useState<string | null>(null);
   const [canalOrigen, setCanalOrigen] = useState("Manual");
@@ -745,10 +758,27 @@ export default function PedidosPage() {
                     onChange={(event) => setVendedor(event.target.value)}
                     className={fieldClass}
                   >
+                    <option value="">Sin asignar</option>
                     {VENDEDORES.map((item) => (
-                      <option key={item}>{item}</option>
+                      <option key={item} value={item}>{item}</option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <InputLabel>Canal de origen</InputLabel>
+                  <select
+                    value={canalOrigen}
+                    onChange={(event) => setCanalOrigen(event.target.value)}
+                    disabled={Boolean(conversacionId)}
+                    className={`${fieldClass} disabled:cursor-not-allowed disabled:bg-slate-100`}
+                  >
+                    {CANALES_ORIGEN.map((canal) => (
+                      <option key={canal.valor} value={canal.valor}>{canal.etiqueta}</option>
+                    ))}
+                  </select>
+                  {conversacionId && (
+                    <p className="mt-1 text-xs font-semibold text-emerald-700">Se toma automáticamente de la conversación.</p>
+                  )}
                 </div>
                 <div>
                   <InputLabel>Estado inicial</InputLabel>

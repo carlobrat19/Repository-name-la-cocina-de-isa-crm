@@ -110,7 +110,20 @@ const etiquetaEstado = (estado?: string | null) =>
       : "bg-amber-100 text-amber-800";
 const ESTADOS_PEDIDO = ["Pendiente", "Producción", "Empaquetado", "En Ruta", "Entregado", "Cancelado"];
 const ESTADOS_PAGO = ["Pendiente", "Pago parcial", "Pagado"];
-const VENDEDORES = ["REDES", "LUCIA", "CARLO", "ISA", "MONICA", "RENATA"];
+const VENDEDORES = ["LUCIA", "CARLO", "ISA", "MONICA", "RENATA"];
+const CANALES_ORIGEN = [
+  { valor: "Manual", etiqueta: "Manual / sin canal identificado" },
+  { valor: "WhatsApp", etiqueta: "WhatsApp" },
+  { valor: "Instagram", etiqueta: "Instagram" },
+  { valor: "Facebook", etiqueta: "Facebook" },
+  { valor: "Web", etiqueta: "Tienda en línea / web" },
+  { valor: "Llamada", etiqueta: "Llamada telefónica" },
+  { valor: "Mostrador", etiqueta: "Mostrador" },
+  { valor: "Referido", etiqueta: "Referido" },
+  { valor: "PedidosYa", etiqueta: "PedidosYa" },
+  { valor: "Uber Eats", etiqueta: "Uber Eats" },
+  { valor: "Otro", etiqueta: "Otro" },
+];
 
 export default function DetallePedidoPage() {
   const { id } = useParams<{ id: string }>();
@@ -244,6 +257,7 @@ export default function DetallePedidoPage() {
         zona_entrega: pedido.zona_entrega || null,
         observaciones: pedido.observaciones || null,
         vendedor: pedido.vendedor || null,
+        canal_origen: pedido.canal_origen || "Manual",
         costo_envio: envio,
         ...(puedeEditarProductos
           ? {
@@ -635,8 +649,23 @@ export default function DetallePedidoPage() {
                         className={`${input} mt-1.5`}
                       >
                         <option value="">Sin asignar</option>
+                        {pedido.vendedor && !VENDEDORES.includes(pedido.vendedor) && (
+                          <option value={pedido.vendedor}>{pedido.vendedor} (histórico)</option>
+                        )}
                         {VENDEDORES.map((vendedor) => (
                           <option key={vendedor} value={vendedor}>{vendedor}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-xs font-bold text-slate-600">
+                      Canal de origen
+                      <select
+                        value={pedido.canal_origen || "Manual"}
+                        onChange={(event) => actualizar("canal_origen", event.target.value)}
+                        className={`${input} mt-1.5`}
+                      >
+                        {CANALES_ORIGEN.map((canal) => (
+                          <option key={canal.valor} value={canal.valor}>{canal.etiqueta}</option>
                         ))}
                       </select>
                     </label>
@@ -655,6 +684,10 @@ export default function DetallePedidoPage() {
                     <Field
                       label="Responsable"
                       value={pedido.vendedor || "Sin asignar"}
+                    />
+                    <Field
+                      label="Canal de origen"
+                      value={CANALES_ORIGEN.find((canal) => canal.valor === (pedido.canal_origen || "Manual"))?.etiqueta || pedido.canal_origen || "Manual"}
                     />
                     <Field
                       label="Fecha de entrega"
