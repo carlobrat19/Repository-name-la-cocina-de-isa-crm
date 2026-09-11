@@ -143,6 +143,7 @@ export default function PedidosPage() {
   const [canalOrigen, setCanalOrigen] = useState("Manual");
   const [cotizacionId, setCotizacionId] = useState<string | null>(null);
   const [requiereEnvio, setRequiereEnvio] = useState(false);
+  const [entregaMensajero, setEntregaMensajero] = useState(false);
   const [departamentoEntrega, setDepartamentoEntrega] = useState("");
   const [municipioEntrega, setMunicipioEntrega] = useState("");
   const [zonaEntrega, setZonaEntrega] = useState("");
@@ -333,8 +334,9 @@ export default function PedidosPage() {
     setPagoEstado("Pendiente");
     setFormaPago("Efectivo");
     setObservaciones("");
-    setVendedor("REDES");
+    setVendedor("");
     setRequiereEnvio(false);
+    setEntregaMensajero(false);
     setDepartamentoEntrega("");
     setMunicipioEntrega("");
     setZonaEntrega("");
@@ -377,7 +379,7 @@ export default function PedidosPage() {
           cliente: cliente.trim(), telefono: telefono.trim(), nit: nit.trim(), razon_social: razonSocial.trim(), correo_fiscal: correoFiscal.trim(), direccion_fiscal: direccionFiscal.trim(),
           direccion: direccion.trim(), fecha_pedido: fechaCreacion || null, fecha_entrega: fechaEntrega || null, estado, forma_pago: formaPago,
           costo_envio: requiereEnvio ? costoEnvio : 0, departamento_entrega: departamentoEntrega.trim(), municipio_entrega: municipioEntrega.trim(), zona_entrega: zonaEntrega.trim(),
-          requiere_envio: requiereEnvio, guardar_direccion: guardarDireccion, abono_inicial: abono, canal_origen: canalOrigen,
+          requiere_envio: requiereEnvio, entrega_mensajero: requiereEnvio && entregaMensajero, guardar_direccion: guardarDireccion, abono_inicial: abono, canal_origen: canalOrigen,
           conversacion_id: conversacionId, responsable_id: responsableId, cotizacion_id: cotizacionId, observaciones: observaciones.trim(), vendedor,
           items: carrito.map((item) => ({ id: item.id, cantidad: item.cantidad, precio: item.precio, costo: item.costo })),
         },
@@ -603,7 +605,7 @@ export default function PedidosPage() {
               <div className="mb-5 grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setRequiereEnvio(false)}
+                  onClick={() => { setRequiereEnvio(false); setEntregaMensajero(false); }}
                   className={`rounded-xl border p-3 text-left transition ${!requiereEnvio ? "border-orange-400 bg-orange-50 ring-2 ring-orange-100" : "border-slate-200 hover:border-slate-300"}`}
                 >
                   <span className="block text-sm font-bold text-slate-900">
@@ -626,6 +628,22 @@ export default function PedidosPage() {
                   </span>
                 </button>
               </div>
+              {requiereEnvio && (
+                <div className="mb-5 rounded-xl border border-violet-200 bg-violet-50 p-4">
+                  <p className="text-sm font-bold text-slate-900">¿Quién realiza esta entrega?</p>
+                  <p className="mt-1 text-xs text-slate-600">Esto identifica la operación. El costo de envío se registra por separado.</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <button type="button" onClick={() => setEntregaMensajero(false)} className={`rounded-xl border p-3 text-left transition ${!entregaMensajero ? "border-violet-500 bg-white ring-2 ring-violet-100" : "border-violet-100 bg-violet-50 hover:border-violet-300"}`}>
+                      <span className="block text-sm font-bold text-slate-900">Nuestro equipo</span>
+                      <span className="mt-1 block text-xs text-slate-500">La entrega la realiza La Cocina de Isa.</span>
+                    </button>
+                    <button type="button" onClick={() => setEntregaMensajero(true)} className={`rounded-xl border p-3 text-left transition ${entregaMensajero ? "border-violet-500 bg-white ring-2 ring-violet-100" : "border-violet-100 bg-violet-50 hover:border-violet-300"}`}>
+                      <span className="block text-sm font-bold text-slate-900">Mensajería externa</span>
+                      <span className="mt-1 block text-xs text-slate-500">El pedido será entregado por mensajero.</span>
+                    </button>
+                  </div>
+                </div>
+              )}
               {clienteId && direccionesCliente.length > 0 && (
                 <div className="mb-5 rounded-xl border border-orange-200 bg-orange-50 p-3">
                   <p className="text-xs font-black text-orange-900">
@@ -970,7 +988,7 @@ export default function PedidosPage() {
                   {requiereEnvio && (
                     <div className="flex justify-between text-slate-600">
                       <span>
-                        Envío
+                        {entregaMensajero ? "Envío · mensajería externa" : "Envío · nuestro equipo"}
                         {departamentoEntrega ? ` · ${departamentoEntrega}` : ""}
                         {municipioEntrega ? `, ${municipioEntrega}` : ""}
                         {zonaEntrega ? `, ${zonaEntrega}` : ""}
@@ -1006,7 +1024,7 @@ export default function PedidosPage() {
                   <div className="mt-2 flex items-center gap-2">
                     <Truck className="h-4 w-4 text-orange-500" />{" "}
                     {requiereEnvio
-                      ? "Con envío a domicilio"
+                      ? entregaMensajero ? "Entrega por mensajería externa" : "Entrega por nuestro equipo"
                       : "Recoge en tienda"}
                   </div>
                 </div>

@@ -42,6 +42,7 @@ type Pedido = {
   forma_pago?: string | null;
   vendedor?: string | null;
   requiere_envio?: boolean | null;
+  entrega_mensajero?: boolean | null;
   total?: number | string | null;
   subtotal_productos?: number | string | null;
   costo_envio?: number | string | null;
@@ -258,6 +259,7 @@ export default function DetallePedidoPage() {
         observaciones: pedido.observaciones || null,
         vendedor: pedido.vendedor || null,
         canal_origen: pedido.canal_origen || "Manual",
+        entrega_mensajero: Boolean(pedido.requiere_envio) && Boolean(pedido.entrega_mensajero),
         costo_envio: envio,
         ...(puedeEditarProductos
           ? {
@@ -299,7 +301,7 @@ export default function DetallePedidoPage() {
     const ventana = window.open("", "_blank", "width=900,height=700");
     if (!ventana) return;
     ventana.document.write(
-      `<!doctype html><html><head><meta charset="utf-8"/><title>${pedido.codigo || "Pedido"}</title><style>body{font-family:Arial,sans-serif;color:#172033;padding:32px}header{display:flex;justify-content:space-between;border-bottom:3px solid #f97316;padding-bottom:18px}.code{font-weight:bold;color:#ea580c}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:11px;border-bottom:1px solid #ddd;text-align:left}.m{text-align:right}.c{text-align:center}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:22px}.box{background:#f8fafc;padding:14px;border-radius:10px}.label{font-size:10px;text-transform:uppercase;font-weight:bold;color:#64748b}.total{margin-top:22px;text-align:right;font-size:20px;font-weight:bold}.note{margin-top:20px;padding:14px;background:#fff7ed;border-radius:10px;white-space:pre-wrap}</style></head><body><header><div><div class="code">${pedido.codigo || "PEDIDO"}</div><h1>Comprobante de pedido</h1></div><div><b>La Cocina de Isa</b><br/>${fecha(pedido.fecha_pedido)}</div></header><section class="grid"><div class="box"><div class="label">Cliente</div><b>${pedido.cliente || "Sin nombre"}</b><br/>${pedido.telefono || "Sin teléfono"}</div><div class="box"><div class="label">Entrega</div>${fecha(pedido.fecha_entrega)} · ${pedido.hora_entrega || "Hora por confirmar"}<br/>${pedido.requiere_envio ? "Envío a domicilio" : "Recoge en tienda"}</div><div class="box"><div class="label">Dirección</div>${pedido.direccion || "Recoger en tienda"}<br/>${ubicacion || ""}</div><div class="box"><div class="label">Cobro</div>${pedido.pago_estado || "Pendiente"} · ${pedido.forma_pago || ""}</div></section><table><thead><tr><th>Producto</th><th class="c">Cant.</th><th class="m">Precio</th><th class="m">Subtotal</th></tr></thead><tbody>${filas}</tbody></table><div class="total">Total: ${dinero(total)}</div>${pedido.observaciones ? `<div class="note"><b>Notas</b><br/>${pedido.observaciones}</div>` : ""}<script>window.onload=()=>window.print()<\/script></body></html>`,
+      `<!doctype html><html><head><meta charset="utf-8"/><title>${pedido.codigo || "Pedido"}</title><style>body{font-family:Arial,sans-serif;color:#172033;padding:32px}header{display:flex;justify-content:space-between;border-bottom:3px solid #f97316;padding-bottom:18px}.code{font-weight:bold;color:#ea580c}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:11px;border-bottom:1px solid #ddd;text-align:left}.m{text-align:right}.c{text-align:center}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:22px}.box{background:#f8fafc;padding:14px;border-radius:10px}.label{font-size:10px;text-transform:uppercase;font-weight:bold;color:#64748b}.total{margin-top:22px;text-align:right;font-size:20px;font-weight:bold}.note{margin-top:20px;padding:14px;background:#fff7ed;border-radius:10px;white-space:pre-wrap}</style></head><body><header><div><div class="code">${pedido.codigo || "PEDIDO"}</div><h1>Comprobante de pedido</h1></div><div><b>La Cocina de Isa</b><br/>${fecha(pedido.fecha_pedido)}</div></header><section class="grid"><div class="box"><div class="label">Cliente</div><b>${pedido.cliente || "Sin nombre"}</b><br/>${pedido.telefono || "Sin teléfono"}</div><div class="box"><div class="label">Entrega</div>${fecha(pedido.fecha_entrega)} · ${pedido.hora_entrega || "Hora por confirmar"}<br/>${pedido.requiere_envio ? (pedido.entrega_mensajero ? "Mensajería externa" : "Entrega por nuestro equipo") : "Recoge en tienda"}</div><div class="box"><div class="label">Dirección</div>${pedido.direccion || "Recoger en tienda"}<br/>${ubicacion || ""}</div><div class="box"><div class="label">Cobro</div>${pedido.pago_estado || "Pendiente"} · ${pedido.forma_pago || ""}</div></section><table><thead><tr><th>Producto</th><th class="c">Cant.</th><th class="m">Precio</th><th class="m">Subtotal</th></tr></thead><tbody>${filas}</tbody></table><div class="total">Total: ${dinero(total)}</div>${pedido.observaciones ? `<div class="note"><b>Notas</b><br/>${pedido.observaciones}</div>` : ""}<script>window.onload=()=>window.print()<\/script></body></html>`,
     );
     ventana.document.close();
   }
@@ -641,6 +643,13 @@ export default function DetallePedidoPage() {
                       value={pedido.hora_entrega || ""}
                       onChange={(value) => actualizar("hora_entrega", value)}
                     />
+                    {pedido.requiere_envio && <label className="block text-xs font-bold text-slate-600">
+                      Tipo de entrega
+                      <select value={pedido.entrega_mensajero ? "mensajeria" : "propia"} onChange={(event) => actualizar("entrega_mensajero", event.target.value === "mensajeria")} className={`${input} mt-1.5`}>
+                        <option value="propia">Nuestro equipo</option>
+                        <option value="mensajeria">Mensajería externa</option>
+                      </select>
+                    </label>}
                     <label className="block text-xs font-bold text-slate-600">
                       Vendedor responsable
                       <select
@@ -680,6 +689,10 @@ export default function DetallePedidoPage() {
                     <Field
                       label="Ubicación"
                       value={ubicacion || "Sin ubicación registrada"}
+                    />
+                    <Field
+                      label="Tipo de entrega"
+                      value={pedido.requiere_envio ? (pedido.entrega_mensajero ? "Mensajería externa" : "Nuestro equipo") : "Recoger en tienda"}
                     />
                     <Field
                       label="Responsable"
