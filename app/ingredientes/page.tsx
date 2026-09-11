@@ -36,6 +36,8 @@ const dinero = (valor: number | string | null | undefined, decimales = 4) =>
 export default function IngredientesPage() {
   const [ingredientes, setIngredientes] = useState<Ingrediente[]>([]);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
+  const [busquedaMovimientos, setBusquedaMovimientos] = useState("");
+  const [cargandoMovimientos, setCargandoMovimientos] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [filtroUnidad, setFiltroUnidad] = useState<"todos" | Unidad>("todos");
   const [filtroExistencia, setFiltroExistencia] = useState<
@@ -86,6 +88,28 @@ export default function IngredientesPage() {
     const timer = window.setTimeout(() => void cargar(), 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (!movimientosAbiertos) return;
+    const timer = window.setTimeout(async () => {
+      setCargandoMovimientos(true);
+      const termino = busquedaMovimientos.trim().replace(/[%,_]/g, "");
+      let consulta = supabase
+        .from("compras_ingredientes")
+        .select("id,ingrediente_id,tipo,cantidad,costo_unitario,total,nota,created_at,ingredientes!inner(nombre,unidad_base)")
+        .order("created_at", { ascending: false })
+        .limit(termino ? 100 : 25);
+      if (termino) consulta = consulta.ilike("ingredientes.nombre", `%${termino}%`);
+      const { data, error } = await consulta;
+      setCargandoMovimientos(false);
+      if (error) {
+        console.error(error);
+        return;
+      }
+      setMovimientos((data || []) as unknown as Movimiento[]);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [movimientosAbiertos, busquedaMovimientos]);
 
   const limpiar = () => {
     setSeleccionado(null);
@@ -489,7 +513,7 @@ export default function IngredientesPage() {
             )}
           </section>
         <section className="mt-7 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between gap-4 border-b border-slate-100 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 p-6">
             <div>
             <p className="text-xs font-bold uppercase tracking-[.2em] text-orange-500">
               Trazabilidad
@@ -502,7 +526,7 @@ export default function IngredientesPage() {
               {movimientosAbiertos ? "Ocultar" : `Ver ${movimientos.length} movimientos`}
             </button>
           </div>
-          {movimientosAbiertos && <div className="overflow-x-auto">
+          {movimientosAbiertos && <><div className="border-b border-slate-100 bg-slate-50/70 px-6 py-4"><label className="block max-w-md text-xs font-bold text-slate-600">Buscar movimientos por ingrediente<input value={busquedaMovimientos} onChange={(event) => setBusquedaMovimientos(event.target.value)} placeholder="Ej. Champurradas" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-800 outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" /></label><p className="mt-2 text-xs text-slate-500">{cargandoMovimientos ? "Buscando movimientos…" : busquedaMovimientos.trim() ? `${movimientos.length} movimiento${movimientos.length === 1 ? "" : "s"} encontrado${movimientos.length === 1 ? "" : "s"}.` : "Muestra los 25 movimientos más recientes."}</p></div><div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
                 <tr>
@@ -544,16 +568,16 @@ export default function IngredientesPage() {
                     </td>
                   </tr>
                 ))}
-                {!movimientos.length && (
+                {!cargandoMovimientos && !movimientos.length && (
                   <tr>
                     <td className="p-8 text-center text-slate-500" colSpan={6}>
-                      Aún no hay compras ni ajustes registrados.
+                      {busquedaMovimientos.trim() ? "No encontramos movimientos para ese ingrediente." : "Aún no hay compras ni ajustes registrados."}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
-          </div>
+          </div></>
           }
         </section>
       </div>
