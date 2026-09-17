@@ -20,6 +20,7 @@ type Movimiento = { tipo: string | null; monto: number | null; fecha: string | n
 const etapas = ["Pendiente", "Producción", "Empaquetado", "En Ruta"];
 const estadoNormalizado = (estado: string | null) => (estado || "Pendiente").trim().toLowerCase();
 const esCerrado = (estado: string | null) => ["entregado", "cancelado", "anulado"].includes(estadoNormalizado(estado));
+const esAnulado = (estado: string | null) => ["cancelado", "anulado"].includes(estadoNormalizado(estado));
 const inicioDelMes = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 const fechaLocal = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
@@ -54,10 +55,11 @@ export default function DashboardPage() {
     const cobrado = pagos.filter((pago) => dentroPeriodo(pago.fecha)).reduce((sum, pago) => sum + Number(pago.monto || 0), 0);
     const utilidad = detalles.filter((detalle) => detalle.pedido_id && idsPeriodo.has(detalle.pedido_id)).reduce((sum, detalle) => sum + (Number(detalle.precio || 0) - Number(detalle.costo || 0)) * Number(detalle.cantidad || 0), 0);
     const activos = pedidos.filter((pedido) => !esCerrado(pedido.estado));
-    const saldo = activos.reduce((sum, pedido) => sum + Math.max(0, Number(pedido.saldo_pendiente ?? Number(pedido.total || 0) - (pagosPorPedido.get(pedido.id) || 0))), 0);
+    const pedidosConCobroPendiente = pedidos.filter((pedido) => !esAnulado(pedido.estado));
+    const saldo = pedidosConCobroPendiente.reduce((sum, pedido) => sum + Math.max(0, Number(pedido.saldo_pendiente ?? Number(pedido.total || 0) - (pagosPorPedido.get(pedido.id) || 0))), 0);
     const entregasHoy = activos.filter((pedido) => pedido.fecha_entrega === hoy);
     const etapasResumen = etapas.map((etapa) => ({ etapa, total: activos.filter((pedido) => estadoNormalizado(pedido.estado) === estadoNormalizado(etapa)).length }));
-    const pendientesFel = activos.filter((pedido) => Number(pedido.saldo_pendiente ?? Number(pedido.total || 0) - (pagosPorPedido.get(pedido.id) || 0)) <= 0 && !facturas.some((factura) => factura.pedido_id === pedido.id && estadoNormalizado(factura.estado) !== "anulado")).length;
+    const pendientesFel = pedidosConCobroPendiente.filter((pedido) => Number(pedido.saldo_pendiente ?? Number(pedido.total || 0) - (pagosPorPedido.get(pedido.id) || 0)) <= 0 && !facturas.some((factura) => factura.pedido_id === pedido.id && estadoNormalizado(factura.estado) !== "anulado")).length;
     const emitidas = facturas.filter((factura) => estadoNormalizado(factura.estado).includes("emit")).length;
     const alertasProducto = productos.filter((producto) => Number(producto.stock || 0) <= Number(producto.stock_minimo || 0));
     const alertasIngredientes = ingredientes.filter((ingrediente) => Number(ingrediente.stock_actual || 0) <= 0);
