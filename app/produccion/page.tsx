@@ -64,13 +64,14 @@ export default function ProduccionPage() {
   }
 
   const productosPorId = useMemo(() => new Map(productos.map((producto) => [producto.id, producto])), [productos]);
-  const vendedores = useMemo(() => Array.from(new Set(pedidos.map((pedido) => pedido.vendedor).filter(Boolean))) as string[], [pedidos]);
-  const pedidosFiltrados = useMemo(() => pedidos.filter((pedido) => {
+  const pedidosOperativos = useMemo(() => pedidos.filter((pedido) => !["Cancelado", "Anulado"].includes(pedido.estado || "")), [pedidos]);
+  const vendedores = useMemo(() => Array.from(new Set(pedidosOperativos.map((pedido) => pedido.vendedor).filter(Boolean))) as string[], [pedidosOperativos]);
+  const pedidosFiltrados = useMemo(() => pedidosOperativos.filter((pedido) => {
     const texto = `${pedido.codigo || ""} ${pedido.cliente || ""} ${pedido.vendedor || ""}`.toLowerCase();
     const fechaPedido = pedido.fecha_pedido || ""; const fechaEntrega = pedido.fecha_entrega || "";
     const coincideEntrega = tipoEntregaFiltro === "Todos" || (tipoEntregaFiltro === "Mensajería externa" ? pedido.requiere_envio && pedido.entrega_mensajero : tipoEntregaFiltro === "Nuestro equipo" ? pedido.requiere_envio && !pedido.entrega_mensajero : !pedido.requiere_envio);
     return texto.includes(busqueda.toLowerCase()) && (estadoFiltro === "Todos" || pedido.estado === estadoFiltro) && (vendedorFiltro === "Todos" || pedido.vendedor === vendedorFiltro) && coincideEntrega && (!fechaPedidoInicio || fechaPedido >= fechaPedidoInicio) && (!fechaPedidoFin || fechaPedido <= fechaPedidoFin) && (!fechaEntregaInicio || fechaEntrega >= fechaEntregaInicio) && (!fechaEntregaFin || fechaEntrega <= fechaEntregaFin);
-  }), [pedidos, busqueda, estadoFiltro, vendedorFiltro, tipoEntregaFiltro, fechaPedidoInicio, fechaPedidoFin, fechaEntregaInicio, fechaEntregaFin]);
+  }), [pedidosOperativos, busqueda, estadoFiltro, vendedorFiltro, tipoEntregaFiltro, fechaPedidoInicio, fechaPedidoFin, fechaEntregaInicio, fechaEntregaFin]);
   const itemsPedido = (pedidoId: string) => detalles.filter((detalle) => detalle.pedido_id === pedidoId);
   const metricas = useMemo(() => Object.fromEntries(ETAPAS.map((estado) => [estado, pedidosFiltrados.filter((pedido) => estadoPedido(pedido.estado) === estado).length])) as Record<Etapa, number>, [pedidosFiltrados]);
   const resumenProductos = useMemo(() => {

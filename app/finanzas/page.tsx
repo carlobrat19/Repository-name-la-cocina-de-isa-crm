@@ -33,11 +33,12 @@ export default function FinanzasPage() {
   useEffect(() => { const timer = window.setTimeout(() => void cargar(), 0); return () => window.clearTimeout(timer); }, []);
 
   const pedidosPorId = useMemo(() => new Map(pedidos.map((pedido) => [pedido.id, pedido])), [pedidos]);
-  const cuentasPendientes = useMemo(() => pedidos.filter((pedido) => Number(pedido.saldo_pendiente || 0) > 0).sort((a, b) => Number(b.saldo_pendiente || 0) - Number(a.saldo_pendiente || 0)), [pedidos]);
+  const pedidosOperativos = useMemo(() => pedidos.filter((pedido) => !["Cancelado", "Anulado"].includes(pedido.estado || "")), [pedidos]);
+  const cuentasPendientes = useMemo(() => pedidosOperativos.filter((pedido) => Number(pedido.saldo_pendiente || 0) > 0).sort((a, b) => Number(b.saldo_pendiente || 0) - Number(a.saldo_pendiente || 0)), [pedidosOperativos]);
   const totalPendiente = cuentasPendientes.reduce((suma, pedido) => suma + Number(pedido.saldo_pendiente || 0), 0);
   const cobradoPeriodo = pagos.filter((pago) => (!fechaInicio || (pago.fecha || "") >= fechaInicio) && (!fechaFin || (pago.fecha || "") <= fechaFin)).reduce((suma, pago) => suma + Number(pago.monto || 0), 0);
   const facturaPorPedido = useMemo(() => new Map(facturas.map((factura) => [factura.pedido_id || "", factura])), [facturas]);
-  const pendientesFEL = useMemo(() => pedidos.filter((pedido) => pedido.pago_estado === "Pagado" && !facturaPorPedido.has(pedido.id)), [pedidos, facturaPorPedido]);
+  const pendientesFEL = useMemo(() => pedidosOperativos.filter((pedido) => pedido.pago_estado === "Pagado" && !facturaPorPedido.has(pedido.id)), [pedidosOperativos, facturaPorPedido]);
   const facturasFiltradas = useMemo(() => facturas.filter((factura) => {
     const pedido = pedidosPorId.get(factura.pedido_id || ""); const texto = `${factura.serie || ""} ${factura.numero || ""} ${factura.uuid_fel || ""} ${pedido?.codigo || ""} ${pedido?.cliente || ""}`.toLowerCase();
     const fechaFactura = (factura.emitida_at || factura.created_at || "").slice(0, 10); const grupo = esFacturaEmitida(factura.estado) ? "Emitidas" : "Pendientes";
