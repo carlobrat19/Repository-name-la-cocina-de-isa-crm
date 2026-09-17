@@ -101,6 +101,7 @@ export default function ClientesPage() {
   );
   const [form, setForm] = useState<FormCliente>(nuevoFormulario);
   const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [formularioAbierto, setFormularioAbierto] = useState(false);
   const [buscar, setBuscar] = useState("");
   const [canalFiltro, setCanalFiltro] = useState("Todos");
   const [estadoFiltro, setEstadoFiltro] = useState("Activos");
@@ -153,6 +154,12 @@ export default function ClientesPage() {
   function limpiar() {
     setEditandoId(null);
     setForm(nuevoFormulario);
+    setFormularioAbierto(false);
+  }
+  function nuevoCliente() {
+    setEditandoId(null);
+    setForm(nuevoFormulario);
+    setFormularioAbierto(true);
   }
   function editar(cliente: Cliente) {
     const principal =
@@ -176,7 +183,7 @@ export default function ClientesPage() {
       zona: principal?.zona || "",
       referencia: principal?.referencia || "",
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setFormularioAbierto(true);
   }
   async function guardar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -346,6 +353,8 @@ export default function ClientesPage() {
   const cumpleanerosEsteMes = clientes.filter(
     (cliente) => cliente.fecha_nacimiento?.slice(5, 7) === mesActual,
   ).length;
+  const clientesConSaldo = clientes.filter((cliente) => Number(cliente.saldo || 0) > 0).length;
+  const saldoPorCobrar = clientes.reduce((total, cliente) => total + Number(cliente.saldo || 0), 0);
   const productosMasComprados = useMemo(() => {
     const acumulados = new Map<
       string,
@@ -396,7 +405,7 @@ export default function ClientesPage() {
             pedidos.
           </p>
         </div>
-        <div className="grid grid-cols-3 overflow-hidden rounded-2xl bg-slate-950 text-white shadow-sm">
+        <div className="grid grid-cols-2 overflow-hidden rounded-2xl bg-slate-950 text-white shadow-sm sm:grid-cols-4">
           <div className="px-4 py-3">
             <p className="text-xs text-slate-300">Registrados</p>
             <p className="text-xl font-black">{clientes.length}</p>
@@ -413,27 +422,28 @@ export default function ClientesPage() {
               {cumpleanerosEsteMes}
             </p>
           </div>
+          <div className="border-t border-slate-700 px-4 py-3 sm:border-l sm:border-t-0">
+            <p className="text-xs text-slate-300">Con saldo pendiente</p>
+            <p className="text-xl font-black text-amber-300">{clientesConSaldo}</p>
+            <p className="text-xs font-semibold text-amber-100">{moneda(saldoPorCobrar)}</p>
+          </div>
         </div>
       </header>
-      <div className="grid gap-6 xl:grid-cols-[410px_minmax(0,1fr)]">
+      <div className="min-w-0">
+        <div className="mb-4 flex justify-end">
+          <button type="button" onClick={nuevoCliente} className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-orange-600"><Plus size={18}/> Nuevo cliente</button>
+        </div>
+        {formularioAbierto && <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/50 p-3 backdrop-blur-sm sm:p-6">
         <form
           onSubmit={guardar}
-          className="h-fit space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+          className="mx-auto max-h-[calc(100vh-3rem)] max-w-2xl space-y-4 overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl"
         >
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-xl font-black text-slate-950">
               {editandoId ? <Pencil size={20} /> : <Plus size={20} />}{" "}
               {editandoId ? "Editar cliente" : "Nuevo cliente"}
             </h2>
-            {editandoId && (
-              <button
-                type="button"
-                onClick={limpiar}
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
-              >
-                <X size={18} />
-              </button>
-            )}
+            <button type="button" onClick={limpiar} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Cerrar formulario"><X size={18} /></button>
           </div>
           <input
             required
@@ -555,6 +565,7 @@ export default function ClientesPage() {
                 : "Crear cliente"}
           </button>
         </form>
+        </div>}
         <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="space-y-3 border-b p-5">
             <label className="flex items-center gap-2 rounded-xl bg-slate-50 px-3">
@@ -613,7 +624,7 @@ export default function ClientesPage() {
           {loading ? (
             <p className="p-8 text-slate-500">Cargando clientes…</p>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="max-h-[68vh] divide-y divide-slate-100 overflow-y-auto">
               {filtrados.map((cliente) => {
                 const principal =
                   (direcciones[cliente.id] || []).find(
