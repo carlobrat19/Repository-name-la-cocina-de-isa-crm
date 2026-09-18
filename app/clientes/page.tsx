@@ -75,6 +75,7 @@ type ConversacionCliente = {
   ultimo_mensaje_at: string | null;
   created_at: string;
 };
+type ClienteCoincidente = { nombre: string | null; telefono: string | null };
 const nuevoFormulario: FormCliente = {
   nombre: "",
   telefono: "",
@@ -199,7 +200,7 @@ export default function ClientesPage() {
       }
       const nombreNormalizado = form.nombre.trim().toLowerCase();
       const telefonoNormalizado = form.telefono.replace(/\D/g, "");
-      const duplicado = (coincidencias || []).find((clienteExistente) =>
+      const duplicado = ((coincidencias || []) as ClienteCoincidente[]).find((clienteExistente) =>
         String(clienteExistente.nombre || "").trim().toLowerCase() === nombreNormalizado ||
         (telefonoNormalizado.length >= 3 && String(clienteExistente.telefono || "").replace(/\D/g, "") === telefonoNormalizado),
       );
