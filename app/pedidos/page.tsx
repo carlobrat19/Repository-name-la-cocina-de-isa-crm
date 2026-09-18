@@ -212,15 +212,37 @@ export default function PedidosPage() {
       return;
     }
     setBuscandoClientes(true);
-    const { data, error } = await supabase.rpc("buscar_clientes_referencia", {
-      p_nombre: nombreLimpio,
-      p_telefono: telefonoLimpio,
-    });
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("id, nombre, telefono, email, nit, razon_social, direccion")
+      .limit(500);
     if (error) {
       console.error(error);
       setCoincidenciasClientes([]);
     } else {
-      setCoincidenciasClientes((data || []) as Cliente[]);
+      const nombreNormalizado = nombreLimpio.toLowerCase();
+      const coincidencias = ((data || []) as Cliente[])
+        .filter((clienteExistente) => {
+          const nombreExistente = (clienteExistente.nombre || "").trim().toLowerCase();
+          const telefonoExistente = (clienteExistente.telefono || "").replace(/\D/g, "");
+          return (nombreNormalizado.length >= 2 && nombreExistente.includes(nombreNormalizado)) ||
+            (telefonoLimpio.length >= 3 && telefonoExistente.includes(telefonoLimpio));
+        })
+        .map((clienteExistente) => {
+          const nombreExistente = (clienteExistente.nombre || "").trim().toLowerCase();
+          const telefonoExistente = (clienteExistente.telefono || "").replace(/\D/g, "");
+          return {
+            ...clienteExistente,
+            coincidencia: telefonoLimpio && telefonoExistente === telefonoLimpio
+              ? "Mismo teléfono"
+              : nombreNormalizado && nombreExistente === nombreNormalizado
+                ? "Mismo nombre"
+                : telefonoLimpio ? "Teléfono similar" : "Nombre similar",
+          };
+        })
+        .sort((a, b) => (a.coincidencia === "Mismo teléfono" ? -1 : 0) - (b.coincidencia === "Mismo teléfono" ? -1 : 0))
+        .slice(0, 8);
+      setCoincidenciasClientes(coincidencias);
     }
     setBuscandoClientes(false);
   }
