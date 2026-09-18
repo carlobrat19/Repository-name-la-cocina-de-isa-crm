@@ -44,6 +44,7 @@ type Cliente = {
   nit?: string | null;
   razon_social?: string | null;
   direccion?: string | null;
+  coincidencia?: string | null;
 };
 
 type DireccionCliente = {
@@ -203,23 +204,23 @@ export default function PedidosPage() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  async function buscarClientes(termino: string) {
-    const busqueda = termino.trim();
-    if (busqueda.length < 2) {
+  async function buscarClientes(nombreBusqueda: string, telefonoBusqueda = telefono) {
+    const nombreLimpio = nombreBusqueda.trim();
+    const telefonoLimpio = telefonoBusqueda.replace(/\D/g, "");
+    if (nombreLimpio.length < 2 && telefonoLimpio.length < 3) {
       setCoincidenciasClientes([]);
       return;
     }
     setBuscandoClientes(true);
-    const patron = `%${busqueda.replace(/[%_]/g, "")}%`;
-    const [porNombre, porTelefono] = await Promise.all([
-      supabase.from("clientes").select("id, nombre, telefono, email, nit, razon_social, direccion").ilike("nombre", patron).limit(6),
-      supabase.from("clientes").select("id, nombre, telefono, email, nit, razon_social, direccion").ilike("telefono", patron).limit(6),
-    ]);
-    if (porNombre.error || porTelefono.error) {
-      console.error(porNombre.error || porTelefono.error);
+    const { data, error } = await supabase.rpc("buscar_clientes_referencia", {
+      p_nombre: nombreLimpio,
+      p_telefono: telefonoLimpio,
+    });
+    if (error) {
+      console.error(error);
       setCoincidenciasClientes([]);
     } else {
-      setCoincidenciasClientes(Array.from(new Map([...(porNombre.data || []), ...(porTelefono.data || [])].map((item) => [item.id, item])).values()) as Cliente[]);
+      setCoincidenciasClientes((data || []) as Cliente[]);
     }
     setBuscandoClientes(false);
   }
@@ -253,9 +254,12 @@ export default function PedidosPage() {
   }
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => void buscarClientes(cliente), 250);
+    if (clienteId) return;
+    const timeout = window.setTimeout(() => void buscarClientes(cliente, telefono), 250);
     return () => window.clearTimeout(timeout);
-  }, [cliente]);
+    // La búsqueda usa los valores actuales escritos por el usuario.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cliente, telefono, clienteId]);
 
   const productoActual = useMemo(
     () => productos.find((producto) => producto.id === productoSeleccionado),
@@ -462,24 +466,26 @@ export default function PedidosPage() {
                   <input
                     value={cliente}
                     onChange={(event) => { setCliente(event.target.value); setClienteId(null); }}
-                    onFocus={() => void buscarClientes(cliente)}
+                    onFocus={() => void buscarClientes(cliente, telefono)}
                     placeholder="Busca por nombre o teléfono"
                     autoComplete="off"
                     className={fieldClass}
                   />
-                  {(buscandoClientes || coincidenciasClientes.length > 0) && <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">{buscandoClientes ? <p className="px-3 py-3 text-xs text-slate-500">Buscando clientes…</p> : coincidenciasClientes.map((clienteExistente) => <button key={clienteExistente.id} type="button" onMouseDown={(event) => { event.preventDefault(); void seleccionarCliente(clienteExistente); }} className="block w-full border-b border-slate-100 px-3 py-3 text-left last:border-0 hover:bg-orange-50"><span className="block text-sm font-bold text-slate-900">{clienteExistente.nombre}</span><span className="mt-0.5 block text-xs text-slate-500">{clienteExistente.telefono || "Sin teléfono"}{clienteExistente.nit ? ` · NIT ${clienteExistente.nit}` : ""}</span></button>)}</div>}
+                  {cliente.trim() && (buscandoClientes || coincidenciasClientes.length > 0) && <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">{buscandoClientes ? <p className="px-3 py-3 text-xs text-slate-500">Buscando clientes…</p> : coincidenciasClientes.map((clienteExistente) => <button key={clienteExistente.id} type="button" onMouseDown={(event) => { event.preventDefault(); void seleccionarCliente(clienteExistente); }} className="block w-full border-b border-slate-100 px-3 py-3 text-left last:border-0 hover:bg-orange-50"><span className="block text-sm font-bold text-slate-900">{clienteExistente.nombre}</span><span className="mt-0.5 block text-xs text-slate-500">{clienteExistente.telefono || "Sin teléfono"}{clienteExistente.nit ? ` · NIT ${clienteExistente.nit}` : ""}{clienteExistente.coincidencia ? ` · ${clienteExistente.coincidencia}` : ""}</span></button>)}</div>}
                 </div>
-                <div>
+                <div className="relative">
                   <InputLabel>Teléfono</InputLabel>
                   <div className="relative">
                     <Phone className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
                     <input
                       value={telefono}
-                      onChange={(event) => setTelefono(event.target.value)}
+                      onChange={(event) => { setTelefono(event.target.value); setClienteId(null); }}
+                      onFocus={() => void buscarClientes(cliente, telefono)}
                       placeholder="Ej. 5555 5555"
                       className={`${fieldClass} pl-9`}
                     />
                   </div>
+                  {!cliente.trim() && (buscandoClientes || coincidenciasClientes.length > 0) && <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">{buscandoClientes ? <p className="px-3 py-3 text-xs text-slate-500">Buscando clientes…</p> : coincidenciasClientes.map((clienteExistente) => <button key={clienteExistente.id} type="button" onMouseDown={(event) => { event.preventDefault(); void seleccionarCliente(clienteExistente); }} className="block w-full border-b border-slate-100 px-3 py-3 text-left last:border-0 hover:bg-orange-50"><span className="block text-sm font-bold text-slate-900">{clienteExistente.nombre}</span><span className="mt-0.5 block text-xs text-slate-500">{clienteExistente.telefono || "Sin teléfono"}{clienteExistente.coincidencia ? ` · ${clienteExistente.coincidencia}` : ""}</span></button>)}</div>}
                 </div>
                 <div>
                   <InputLabel>NIT / CF</InputLabel>
@@ -498,6 +504,7 @@ export default function PedidosPage() {
                   <input value={direccionFiscal} onChange={(event) => setDireccionFiscal(event.target.value)} placeholder="Dirección para FEL" className={fieldClass} />
                 </div>
               </div>
+              {!clienteId && coincidenciasClientes.length > 0 && <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Encontramos un cliente relacionado. Selecciónalo como referencia para no duplicar su historial.</p>}
               {clienteId && <p className="mt-4 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Cliente existente seleccionado. Sus datos se actualizarán al guardar el pedido.</p>}
             </section>
 

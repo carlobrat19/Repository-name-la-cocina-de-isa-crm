@@ -188,6 +188,26 @@ export default function ClientesPage() {
   async function guardar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form.nombre.trim()) return;
+    if (!editandoId) {
+      const { data: coincidencias, error: errorCoincidencias } = await supabase.rpc("buscar_clientes_referencia", {
+        p_nombre: form.nombre.trim(),
+        p_telefono: form.telefono,
+      });
+      if (errorCoincidencias) {
+        alert(`No se pudo validar clientes existentes: ${errorCoincidencias.message}`);
+        return;
+      }
+      const nombreNormalizado = form.nombre.trim().toLowerCase();
+      const telefonoNormalizado = form.telefono.replace(/\D/g, "");
+      const duplicado = (coincidencias || []).find((clienteExistente) =>
+        String(clienteExistente.nombre || "").trim().toLowerCase() === nombreNormalizado ||
+        (telefonoNormalizado.length >= 3 && String(clienteExistente.telefono || "").replace(/\D/g, "") === telefonoNormalizado),
+      );
+      if (duplicado) {
+        alert(`Ya existe ${duplicado.nombre}${duplicado.telefono ? ` (${duplicado.telefono})` : ""}. Usa su ficha para editarlo o regístrale el pedido desde Pedidos.`);
+        return;
+      }
+    }
     setSaving(true);
     const datosCliente = {
       nombre: form.nombre.trim(),
