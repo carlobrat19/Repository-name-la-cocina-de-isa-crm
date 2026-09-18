@@ -556,7 +556,7 @@ subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
 
 <table className="w-full min-w-[1180px] table-auto text-sm">
 
-<thead className="sticky top-0 z-10">
+<thead>
 
 <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
 
