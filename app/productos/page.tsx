@@ -552,7 +552,7 @@ subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
 </div>
 </div>
 
-<div className="h-[440px] overflow-auto p-3 sm:p-5">
+<div className="h-[440px] overflow-auto px-3 sm:px-5">
 
 <table className="w-full min-w-[1180px] table-auto text-sm">
 
