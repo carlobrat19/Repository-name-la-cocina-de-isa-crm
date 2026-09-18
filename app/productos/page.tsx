@@ -552,11 +552,11 @@ subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
 </div>
 </div>
 
-<div className="overflow-x-auto p-3 sm:p-5">
+<div className="max-h-[68vh] overflow-auto p-3 sm:p-5">
 
 <table className="w-full min-w-[1180px] table-auto text-sm">
 
-<thead>
+<thead className="sticky top-0 z-10">
 
 <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
 
