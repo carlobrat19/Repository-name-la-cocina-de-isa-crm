@@ -55,6 +55,20 @@ export default function IngredientesPage() {
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
 
+  useEffect(() => {
+    if (!formularioAbierto) return;
+    const overflowAnterior = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const cerrarConEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFormularioAbierto(false);
+    };
+    document.addEventListener("keydown", cerrarConEscape);
+    return () => {
+      document.body.style.overflow = overflowAnterior;
+      document.removeEventListener("keydown", cerrarConEscape);
+    };
+  }, [formularioAbierto]);
+
   const cargar = async () => {
     setCargando(true);
     const [ingredientesRespuesta, movimientosRespuesta] = await Promise.all([
@@ -127,7 +141,6 @@ export default function IngredientesPage() {
     setCosto(String(ingrediente.costo_referencia));
     setNota("");
     setFormularioAbierto(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const eliminar = async (ingrediente: Ingrediente) => {
     if (
@@ -197,6 +210,7 @@ export default function IngredientesPage() {
       alert("Ingrediente creado.");
     }
     limpiar();
+    setFormularioAbierto(false);
     await cargar();
   };
 
@@ -289,20 +303,24 @@ export default function IngredientesPage() {
           <div className="flex flex-col gap-4 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[.2em] text-orange-500">Registro y ajustes</p>
-              <h2 className="mt-1 text-xl font-black text-slate-950">{seleccionado ? `Editando: ${seleccionado.nombre}` : "Agregar materia prima"}</h2>
+              <h2 className="mt-1 text-xl font-black text-slate-950">Ingredientes guardados</h2>
             </div>
-            <button type="button" onClick={() => { if (formularioAbierto && !seleccionado) limpiar(); setFormularioAbierto((abierto) => !abierto); }} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600">
-              {formularioAbierto ? "Cerrar formulario" : "+ Nuevo ingrediente"}
+            <button type="button" onClick={() => { limpiar(); setFormularioAbierto(true); }} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600">
+              + Nuevo ingrediente
             </button>
           </div>
-          {formularioAbierto && <form
+          {formularioAbierto && <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"><form
             onSubmit={guardar}
-            className="p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-formulario-ingrediente"
+            className="mx-auto max-h-[calc(100dvh-1.5rem)] max-w-2xl overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl sm:max-h-[calc(100dvh-3rem)] sm:p-6"
           >
+            <div className="flex justify-end"><button type="button" autoFocus onClick={() => setFormularioAbierto(false)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100">Cerrar</button></div>
             <p className="text-xs font-bold uppercase tracking-[.2em] text-orange-500">
               {seleccionado ? "Editar ingrediente" : "Nueva materia prima"}
             </p>
-            <h2 className="mt-2 text-2xl font-black text-slate-950">
+            <h2 id="titulo-formulario-ingrediente" className="mt-2 text-2xl font-black text-slate-950">
               {seleccionado ? seleccionado.nombre : "Agregar ingrediente"}
             </h2>
             <p className="mt-2 text-sm text-slate-500">
@@ -384,7 +402,7 @@ export default function IngredientesPage() {
               {seleccionado && (
                 <button
                   type="button"
-                  onClick={limpiar}
+                  onClick={() => { limpiar(); setFormularioAbierto(false); }}
                   className="w-full text-sm font-bold text-slate-500 underline"
                 >
                   Cancelar edición
@@ -392,7 +410,7 @@ export default function IngredientesPage() {
               )}
               </div>
             </div>
-          </form>}
+          </form></div>}
         </section>
         <section className="mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 p-6">

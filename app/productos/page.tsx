@@ -102,6 +102,22 @@ useState<string|null>(
 null
 );
 
+useEffect(() => {
+  if (!editorAbierto && !productoReceta) return;
+  const overflowAnterior = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+  const cerrarConEscape = (event: KeyboardEvent) => {
+    if (event.key !== "Escape") return;
+    setEditorAbierto(false);
+    setProductoReceta(null);
+  };
+  document.addEventListener("keydown", cerrarConEscape);
+  return () => {
+    document.body.style.overflow = overflowAnterior;
+    document.removeEventListener("keydown", cerrarConEscape);
+  };
+}, [editorAbierto, productoReceta]);
+
 // ======================
 // OBTENER PRODUCTOS
 // ======================
@@ -175,8 +191,8 @@ setFotoProducto(null); setFotoActual(""); setFotoPrevia("");
 
 function abrirNuevoProducto() {
 limpiarFormulario();
+setProductoReceta(null);
 setEditorAbierto(true);
-window.setTimeout(() => document.getElementById("editor-producto")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
 }
 
 async function guardarPrecioFinalPan() {
@@ -422,11 +438,12 @@ const productosMargenBajo = productosConMargen.filter((producto) => (metricasGan
 const productosActivos = productos.filter((producto) => producto.estado === "Activo").length;
 const productosPublicados = productos.filter((producto) => producto.publicar_catalogo).length;
 function verFicha(producto: Producto) {
+  setEditorAbierto(false);
   void cargarResumenProducto(producto);
-  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function editarProducto(producto: Producto) {
+  setProductoReceta(null);
   setProductoEditando(producto.id);
   setEditorAbierto(true);
   setNombre(producto.nombre);
@@ -448,7 +465,6 @@ function editarProducto(producto: Producto) {
   setFotoActual(producto.imagen_url ?? "");
   setFotoProducto(null);
   setFotoPrevia("");
-  window.setTimeout(() => document.getElementById("editor-producto")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
 }
 
 // ======================
@@ -470,8 +486,8 @@ return(
   <div className={`rounded-2xl border p-5 shadow-sm ${productosMargenBajo ? "border-rose-100 bg-rose-50" : "border-amber-100 bg-amber-50"}`}><p className={`text-xs font-bold uppercase tracking-wide ${productosMargenBajo ? "text-rose-700" : "text-amber-700"}`}>Margen bajo</p><p className={`mt-2 text-3xl font-black ${productosMargenBajo ? "text-rose-800" : "text-amber-800"}`}>{productosMargenBajo}</p><p className={`mt-1 text-sm ${productosMargenBajo ? "text-rose-700" : "text-amber-700"}`}>productos bajo 20%</p></div>
 </section>
 
-{productoReceta && (() => {
-if (!recetaPiloto) return <section className="mb-10 rounded-[35px] bg-slate-950 p-8 text-white shadow-2xl"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Ficha del producto · {productoReceta.categoria || "Sin categoría"}</p><h1 className="mt-2 text-4xl font-black">{productoReceta.nombre}</h1></div><button type="button" onClick={() => setProductoReceta(null)} className="rounded-lg border border-white/30 px-3 py-2 text-xs font-bold hover:bg-white/10">Cerrar</button></div><p className="mt-3 max-w-2xl text-sm text-slate-300">Este producto todavía no tiene una receta estándar. Créala para calcular sus costos automáticamente desde ingredientes e inventario.</p><Link href="/recetas" className="mt-6 inline-block rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white hover:bg-orange-400">Crear receta para este producto</Link></section>;
+{productoReceta && <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"><div role="dialog" aria-modal="true" aria-label={`Ficha de ${productoReceta.nombre}`} className="mx-auto max-h-[calc(100dvh-1.5rem)] max-w-5xl overflow-y-auto rounded-[32px] shadow-2xl sm:max-h-[calc(100dvh-3rem)]">{(() => {
+if (!recetaPiloto) return <section className="rounded-[32px] bg-slate-950 p-6 text-white sm:p-8"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Ficha del producto · {productoReceta.categoria || "Sin categoría"}</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">{productoReceta.nombre}</h1></div><button type="button" autoFocus onClick={() => setProductoReceta(null)} className="rounded-lg border border-white/30 px-3 py-2 text-xs font-bold hover:bg-white/10">Cerrar</button></div><p className="mt-3 max-w-2xl text-sm text-slate-300">Este producto todavía no tiene una receta estándar. Créala para calcular sus costos automáticamente desde ingredientes e inventario.</p><Link href="/recetas" className="mt-6 inline-block rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white hover:bg-orange-400">Crear receta para este producto</Link></section>;
 const costoBase = recetaPiloto.receta_ingredientes.reduce((total, detalle) => total + Number(detalle.cantidad || 0) * Number(detalle.ingredientes?.costo_referencia || 0), 0);
 const conMerma = costoBase * (1 + Number(recetaPiloto.merma_pct || 0));
 const costoDirectoLote = conMerma + Number(recetaPiloto.costos_adicionales || 0);
@@ -482,25 +498,20 @@ const utilidadCarta = costoCompleto * Number(recetaPiloto.recargo_carta_pct || 0
 const precioAntesComision = costoCompleto + utilidadCarta;
 const precioSinIva = precioAntesComision / Math.max(0.01, 1 - Number(recetaPiloto.comision_canal_pct || 0));
 const precioSugerido = precioSinIva * (1 + Number(recetaPiloto.iva_pct || 0));
-return <section className="mb-10 overflow-hidden rounded-[35px] bg-slate-950 p-8 text-white shadow-2xl">
+return <section className="overflow-hidden rounded-[32px] bg-slate-950 p-6 text-white sm:p-8">
 <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Ficha y receta estándar · {productoReceta.categoria || "Sin categoría"}</p>
-<h1 className="mt-2 text-4xl font-black">{productoReceta.nombre}</h1></div><button type="button" onClick={() => setProductoReceta(null)} className="rounded-lg border border-white/30 px-3 py-2 text-xs font-bold hover:bg-white/10">Cerrar ficha</button></div>
+<h1 className="mt-2 text-3xl font-black sm:text-4xl">{productoReceta.nombre}</h1></div><button type="button" autoFocus onClick={() => setProductoReceta(null)} className="rounded-lg border border-white/30 px-3 py-2 text-xs font-bold hover:bg-white/10">Cerrar ficha</button></div>
 <p className="mt-2 text-sm text-slate-300">Costo calculado automáticamente desde los ingredientes de tu receta estándar.</p>
 <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo ingredientes</p><b className="text-2xl">Q{costoBase.toFixed(2)}</b></div><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo con merma</p><b className="text-2xl">Q{costoDirectoPorUnidad.toFixed(2)}</b></div><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo completo</p><b className="text-2xl">Q{costoCompleto.toFixed(2)}</b></div><div className="rounded-2xl bg-orange-500 p-4"><p className="text-xs text-orange-100">Precio sugerido con IVA</p><b className="text-2xl">Q{precioSugerido.toFixed(2)}</b></div></div>
 <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-orange-400/40 bg-orange-500/10 p-4 sm:flex-row sm:items-end"><div className="flex-1"><label className="block text-xs font-bold uppercase tracking-wide text-orange-200">Precio final de venta</label><p className="mt-1 text-xs text-slate-300">Este es el precio que verá el cliente y el que se usará en los pedidos.</p><div className="mt-2 flex max-w-xs overflow-hidden rounded-xl bg-white"><span className="px-3 py-3 font-bold text-slate-600">Q</span><input aria-label={`Precio final de venta de ${productoReceta.nombre}`} type="number" min="0" step="0.01" className="w-full bg-white py-3 pr-3 text-lg font-bold text-slate-900 outline-none" value={precioFinalProducto} onChange={(event) => setPrecioFinalProducto(event.target.value)} /></div></div><button type="button" onClick={guardarPrecioFinalPan} disabled={guardandoPrecioFinal} className="rounded-xl bg-orange-500 px-5 py-3 font-bold text-white transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60">{guardandoPrecioFinal ? "Guardando..." : "Guardar precio final"}</button></div>
 <div className="mt-7 overflow-x-auto rounded-2xl bg-white text-slate-900"><table className="w-full text-sm"><thead className="bg-slate-100 text-left text-xs uppercase text-slate-500"><tr><th className="p-3">Ingrediente</th><th className="p-3">Cantidad</th><th className="p-3">Costo unitario</th><th className="p-3 text-right">Costo receta</th><th className="p-3 text-right">Stock</th></tr></thead><tbody>{recetaPiloto.receta_ingredientes.map((detalle) => <tr key={detalle.ingredientes?.nombre} className="border-t"><td className="p-3 font-bold">{detalle.ingredientes?.nombre}</td><td className="p-3">{Number(detalle.cantidad).toFixed(detalle.ingredientes?.unidad_base === "g" ? 1 : 2)} {detalle.ingredientes?.unidad_base}</td><td className="p-3">Q{Number(detalle.ingredientes?.costo_referencia || 0).toFixed(detalle.ingredientes?.unidad_base === "g" ? 4 : 2)}</td><td className="p-3 text-right font-bold">Q{(Number(detalle.cantidad) * Number(detalle.ingredientes?.costo_referencia || 0)).toFixed(2)}</td><td className="p-3 text-right">{Number(detalle.ingredientes?.stock_actual || 0).toFixed(detalle.ingredientes?.unidad_base === "g" ? 1 : 0)} {detalle.ingredientes?.unidad_base}</td></tr>)}</tbody></table></div>
 <p className="mt-4 text-xs text-slate-300">Regla Intecap: {(Number(recetaPiloto.merma_pct) * 100).toFixed(0)}% merma · {(Number(recetaPiloto.margen_pct) * 100).toFixed(0)}% costos indirectos · {(Number(recetaPiloto.recargo_carta_pct) * 100).toFixed(0)}% utilidad de carta · {(Number(recetaPiloto.comision_canal_pct || 0) * 100).toFixed(0)}% comisión de canal · {(Number(recetaPiloto.iva_pct) * 100).toFixed(0)}% IVA.</p>
 </section>;
-})()}
+})()}</div></div>}
 
-{editorAbierto && <div id="editor-producto" className="mb-10 grid gap-8 rounded-[32px] border border-slate-200 bg-white p-6 shadow-xl lg:grid-cols-[.85fr_1.15fr] lg:p-9">
+{editorAbierto && <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"><div id="editor-producto" role="dialog" aria-modal="true" aria-labelledby="titulo-editor-producto" className="mx-auto max-h-[calc(100dvh-1.5rem)] max-w-3xl overflow-y-auto rounded-[32px] border border-slate-200 bg-white p-5 shadow-2xl sm:max-h-[calc(100dvh-3rem)] sm:p-8">
 
-<div className="rounded-3xl bg-slate-950 p-7 text-white">
-<p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Catálogo comercial</p>
-<h2 className="mt-3 text-3xl font-black">{productoEditando ? "Editando producto" : "Crea un producto listo para vender"}</h2>
-<p className="mt-3 text-sm leading-6 text-slate-300">El precio final es el que se mostrará al cliente. El costo sirve para medir la utilidad mientras completas la receta estándar.</p>
-<div className="mt-8 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Productos</p><p className="mt-1 text-2xl font-black">{productos.length}</p></div><div className="rounded-2xl bg-orange-500 p-4"><p className="text-xs text-orange-100">Activos</p><p className="mt-1 text-2xl font-black">{productos.filter((producto) => producto.estado === "Activo").length}</p></div></div>
-</div>
+<div className="mb-5 flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-500">Catálogo comercial</p><h2 id="titulo-editor-producto" className="mt-2 text-2xl font-black text-slate-950">{productoEditando ? `Editar ${nombre}` : "Nuevo producto"}</h2></div><button type="button" autoFocus onClick={() => { limpiarFormulario(); setEditorAbierto(false); }} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100">Cerrar</button></div>
 
 <div>
 
@@ -594,7 +605,7 @@ subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
 
 </div>
 
-</div>}
+</div></div>}
 
 <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-xl">
 
