@@ -567,55 +567,51 @@ subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
 
 <div className="h-[440px] overflow-auto px-3 sm:px-5">
 
-<table className="w-full min-w-[1420px] table-auto text-sm">
+<table className="w-full min-w-[1240px] table-auto text-sm">
 
 <thead className="sticky -top-5 z-20 bg-slate-50 shadow-sm">
 
 <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
 
-<th className="p-5 text-left">
+<th className="p-3 text-left">
 Producto y código
 </th>
 
-<th className="p-5 text-left">
+<th className="p-3 text-left">
 Categoría
 </th>
 
-<th className="p-5 text-left">Tipo</th>
+<th className="p-3 text-left">Tipo</th>
 
-<th className="p-5 text-left">
+<th className="p-3 text-left">
 Inventario
 </th>
 
-<th className="p-5 text-left">
+<th className="p-3 text-left">
 Catálogo
 </th>
 
-<th className="p-5 text-left">
+<th className="p-3 text-left">
 Precio final
 </th>
 
-<th className="p-5 text-left">
+<th className="p-3 text-left">
 Costo
 </th>
 
-<th className="p-5 text-left">
-Ganancia
-</th>
-
-<th className="p-5 text-left">
+<th className="p-3 text-left">
 Margen completo
 </th>
 
-<th className="p-5 text-left">
+<th className="p-3 text-left">
 Margen ingredientes
 </th>
 
-<th className="p-5 text-left">
+<th className="p-3 text-left">
 Estado
 </th>
 
-<th className="p-5 text-left">
+<th className="sticky right-0 z-30 bg-slate-50 p-3 text-left shadow-[-8px_0_10px_-10px_rgba(15,23,42,0.45)]">
 Acciones
 </th>
 
@@ -636,9 +632,9 @@ producto.id
 }
 >
 
-<td className="p-5"><div className="flex min-w-[230px] items-center gap-3">{producto.imagen_url ? <Image src={producto.imagen_url} alt={producto.nombre} width={48} height={48} className="size-12 rounded-xl border border-slate-200 object-cover" /> : <div className="grid size-12 place-items-center rounded-xl bg-orange-50 text-xs font-black text-orange-600">SIN<br/>FOTO</div>}<div><p className="font-bold text-slate-950">{producto.nombre}</p><p className="mt-1 font-mono text-[11px] font-bold uppercase text-slate-500">{producto.sku || "SIN CÓDIGO"}</p>{producto.descripcion && <p className="mt-1 max-w-[240px] truncate text-xs text-slate-500">{producto.descripcion}</p>}</div></div></td>
+<td className="p-3"><div className="flex min-w-[190px] items-center gap-3">{producto.imagen_url ? <Image src={producto.imagen_url} alt={producto.nombre} width={48} height={48} className="size-12 rounded-xl border border-slate-200 object-cover" /> : <div className="grid size-12 place-items-center rounded-xl bg-orange-50 text-xs font-black text-orange-600">SIN<br/>FOTO</div>}<div><p className="font-bold text-slate-950">{producto.nombre}</p><p className="mt-1 font-mono text-[11px] font-bold uppercase text-slate-500">{producto.sku || "SIN CÓDIGO"}</p>{producto.descripcion && <p className="mt-1 max-w-[190px] truncate text-xs text-slate-500">{producto.descripcion}</p>}</div></div></td>
 
-<td className="p-5 text-slate-600">
+<td className="p-3 text-slate-600">
 
 {
 producto.categoria
@@ -646,13 +642,13 @@ producto.categoria
 
 </td>
 
-<td className="p-5"><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${producto.tipo_producto === "combo" ? "bg-orange-100 text-orange-700" : producto.tipo_producto === "reventa" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700"}`}>{etiquetaTipo(producto.tipo_producto)}</span></td>
+<td className="p-3"><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${producto.tipo_producto === "combo" ? "bg-orange-100 text-orange-700" : producto.tipo_producto === "reventa" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700"}`}>{etiquetaTipo(producto.tipo_producto)}</span></td>
 
-<td className="p-5"><p className={`font-black ${Number(producto.stock || 0) <= 0 ? "text-rose-600" : Number(producto.stock || 0) <= Number(producto.stock_minimo || 0) ? "text-amber-600" : "text-emerald-700"}`}>{Number(producto.stock || 0)} u.</p><p className="mt-1 text-[11px] text-slate-500">Mínimo: {Number(producto.stock_minimo || 0)}</p></td>
+<td className="p-3"><p className={`font-black ${Number(producto.stock || 0) <= 0 ? "text-rose-600" : Number(producto.stock || 0) <= Number(producto.stock_minimo || 0) ? "text-amber-600" : "text-emerald-700"}`}>{Number(producto.stock || 0)} u.</p><p className="mt-1 text-[11px] text-slate-500">Mínimo: {Number(producto.stock_minimo || 0)}</p></td>
 
-<td className="p-5"><div className="flex flex-col items-start gap-1">{producto.publicar_catalogo ? <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-700">Publicado</span> : <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">Interno</span>}<span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${producto.disponible_online && Number(producto.stock || 0) > 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{producto.disponible_online && Number(producto.stock || 0) > 0 ? "Disponible online" : "No disponible"}</span></div></td>
+<td className="p-3"><div className="flex flex-col items-start gap-1">{producto.publicar_catalogo ? <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-700">Publicado</span> : <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">Interno</span>}<span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${producto.disponible_online && Number(producto.stock || 0) > 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{producto.disponible_online && Number(producto.stock || 0) > 0 ? "Disponible online" : "No disponible"}</span></div></td>
 
-<td className="p-5 text-emerald-700 font-bold">
+<td className="p-3 text-emerald-700 font-bold">
 
 Q{
 Number(
@@ -662,7 +658,7 @@ producto.precio_venta
 
 </td>
 
-<td className="p-5 text-rose-600">
+<td className="p-3 text-rose-600">
 
 Q{
 Number(
@@ -672,31 +668,11 @@ producto.costo || 0
 
 </td>
 
-<td className="p-5 text-blue-700 font-black">
+<td className="p-3"><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="completo" /></td>
 
-Q{
+<td className="p-3"><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="ingredientes" /></td>
 
-(
-Number(
-producto.precio_venta
-)
--
-
-Number(
-producto.costo
-)
-
-).toFixed(2)
-
-}
-
-</td>
-
-<td className="p-5"><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="completo" /></td>
-
-<td className="p-5"><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="ingredientes" /></td>
-
-<td className="p-5">
+<td className="p-3">
 
 <span className="bg-emerald-100 text-emerald-700 px-3 py-1.5 text-xs font-bold rounded-full">
 
@@ -708,7 +684,7 @@ producto.estado
 
 </td>
 
-<td className="p-5">
+<td className="sticky right-0 z-10 bg-white p-3 shadow-[-8px_0_10px_-10px_rgba(15,23,42,0.45)]">
 
 <div className="flex flex-wrap gap-3">
 
