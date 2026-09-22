@@ -45,13 +45,15 @@ type Producto = {
 };
 
 type ComponenteCombo = { producto_id: string; cantidad: string };
-type MetricaGanancia = { costoIngredientes: number | null; margenCompleto: number; margenIngredientes: number | null; porcentajeCompleto: number; porcentajeIngredientes: number | null; tieneReceta: boolean };
+type MetricaGanancia = { costoTotal: number; costoIngredientes: number | null; margenCompleto: number; margenIngredientes: number | null; porcentajeCompleto: number; porcentajeIngredientes: number | null; tieneReceta: boolean };
 
 function MargenProducto({ metrica, tipo }: { metrica?: MetricaGanancia; tipo: "completo" | "ingredientes" }) {
   const porcentaje = tipo === "completo" ? metrica?.porcentajeCompleto : metrica?.porcentajeIngredientes;
   if (!metrica || porcentaje == null) return <span className="text-xs font-semibold text-slate-400">Sin receta</span>;
   const bajo = porcentaje < 20;
-  return <div><p className={`font-black ${bajo ? "text-rose-700" : porcentaje < 35 ? "text-amber-700" : "text-emerald-700"}`}>{porcentaje.toFixed(1)}%</p><p className="mt-1 text-[10px] font-medium text-slate-500">{tipo === "completo" ? "después de IVA" : "solo insumos"}</p></div>;
+  const margen = tipo === "completo" ? metrica.margenCompleto : metrica.margenIngredientes;
+  const costo = tipo === "completo" ? metrica.costoTotal : metrica.costoIngredientes;
+  return <div className="min-w-[128px]"><p className={`font-black ${bajo ? "text-rose-700" : porcentaje < 35 ? "text-amber-700" : "text-emerald-700"}`}>{porcentaje.toFixed(1)}%</p><p className="mt-1 text-xs font-bold text-slate-700">Ganancia Q{margen?.toFixed(2)}</p><p className="mt-1 text-[11px] text-slate-500">{tipo === "completo" ? "Costo total" : "Costo ingredientes"} Q{costo?.toFixed(2)}</p></div>;
 }
 
 export default function ProductosPage() {
@@ -404,9 +406,11 @@ const costoIngredientes = receta ? receta.receta_ingredientes.reduce((total, lin
 const precioFinal = Number(producto.precio_venta || 0);
 const ventaSinIva = receta ? precioFinal / (1 + Number(receta.iva_pct || 0)) : precioFinal;
 const comisionPrevista = ventaSinIva * Number(receta?.comision_canal_pct || 0);
-const margenCompleto = ventaSinIva - comisionPrevista - Number(producto.costo || 0);
+const costoProduccion = Number(producto.costo || 0);
+const costoTotal = costoProduccion + (precioFinal - ventaSinIva) + comisionPrevista;
+const margenCompleto = precioFinal - costoTotal;
 const margenIngredientes = costoIngredientes == null ? null : ventaSinIva - comisionPrevista - costoIngredientes;
-return [producto.id, { costoIngredientes, margenCompleto, margenIngredientes, porcentajeCompleto: ventaSinIva > 0 ? margenCompleto / ventaSinIva * 100 : 0, porcentajeIngredientes: margenIngredientes != null && ventaSinIva > 0 ? margenIngredientes / ventaSinIva * 100 : null, tieneReceta: Boolean(receta) }];
+return [producto.id, { costoTotal, costoIngredientes, margenCompleto, margenIngredientes, porcentajeCompleto: ventaSinIva > 0 ? margenCompleto / ventaSinIva * 100 : 0, porcentajeIngredientes: margenIngredientes != null && ventaSinIva > 0 ? margenIngredientes / ventaSinIva * 100 : null, tieneReceta: Boolean(receta) }];
 }));
 }, [productos, recetasCatalogo]);
 const productosConMargen = productos.filter((producto) => metricasGanancia.get(producto.id)?.tieneReceta);
@@ -596,7 +600,7 @@ Precio final
 </th>
 
 <th className="p-3 text-left">
-Costo
+Costo producción
 </th>
 
 <th className="p-3 text-left">
