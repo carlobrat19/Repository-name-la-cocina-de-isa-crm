@@ -595,213 +595,26 @@ subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
 </div>
 </div>
 
-<div className="max-h-[65vh] divide-y divide-slate-100 overflow-y-auto lg:hidden">
+<div className="max-h-[68vh] divide-y divide-slate-100 overflow-y-auto">
 {productosFiltrados.map((producto) => (
-  <article key={producto.id} className="space-y-4 p-4 sm:p-5">
-    <div className="flex min-w-0 items-center gap-3">
+  <article key={producto.id} className="grid min-w-0 gap-4 p-4 sm:p-5 lg:grid-cols-2 2xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.5fr)_auto] 2xl:items-center">
+    <div className="flex min-w-0 items-start gap-3">
       {producto.imagen_url ? <Image src={producto.imagen_url} alt={producto.nombre} width={48} height={48} className="size-12 shrink-0 rounded-xl border border-slate-200 object-cover" /> : <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-orange-50 text-[10px] font-black text-orange-600">SIN FOTO</div>}
-      <div className="min-w-0"><h3 className="break-words font-bold text-slate-950">{producto.nombre}</h3><p className="text-xs text-slate-500">{producto.sku || "Sin código"} · {producto.categoria || "Sin categoría"}</p></div>
+      <div className="min-w-0"><h3 className="break-words font-bold text-slate-950">{producto.nombre}</h3><p className="text-xs text-slate-500">{producto.sku || "Sin código"} · {producto.categoria || "Sin categoría"}</p><p className="mt-2 text-xs text-slate-600">{etiquetaTipo(producto.tipo_producto)} · {producto.estado || "Sin estado"}</p></div>
     </div>
-    <div className="grid grid-cols-2 gap-3 text-sm">
+    <div className="grid min-w-0 grid-cols-2 gap-3 text-sm">
       <div><p className="text-xs text-slate-500">Precio final</p><p className="font-bold text-emerald-700">Q{Number(producto.precio_venta).toFixed(2)}</p></div>
       <div><p className="text-xs text-slate-500">Costo producción</p><p className="font-bold text-rose-600">Q{Number(producto.costo || 0).toFixed(2)}</p></div>
       <div><p className="text-xs text-slate-500">Existencia</p><p className="font-bold text-slate-900">{Number(producto.stock || 0)} u.</p></div>
-      <div><p className="text-xs text-slate-500">Catálogo</p><p className="font-bold text-slate-900">{producto.publicar_catalogo ? "Publicado" : "Interno"}</p></div>
+      <div><p className="text-xs text-slate-500">Catálogo</p><p className="font-bold text-slate-900">{producto.publicar_catalogo ? "Publicado" : "Interno"}</p><p className="text-[11px] text-slate-500">{producto.disponible_online && Number(producto.stock || 0) > 0 ? "Disponible online" : "No disponible"}</p></div>
     </div>
-    <div className="grid gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-2"><div><p className="mb-1 text-xs font-bold text-slate-600">Margen completo</p><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="completo" /></div><div><p className="mb-1 text-xs font-bold text-slate-600">Margen ingredientes</p><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="ingredientes" /></div></div>
-    <div className="flex flex-wrap gap-2"><button type="button" onClick={() => verFicha(producto)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700">Ver ficha</button><button type="button" onClick={() => editarProducto(producto)} className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-bold text-white">Editar / foto</button><button type="button" onClick={() => void eliminarProducto(producto.id, producto.nombre)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white">Eliminar</button></div>
+    <div className="grid min-w-0 gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-2 lg:col-span-2 2xl:col-span-1"><div><p className="mb-1 text-xs font-bold text-slate-600">Margen completo</p><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="completo" /></div><div><p className="mb-1 text-xs font-bold text-slate-600">Margen ingredientes</p><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="ingredientes" /></div></div>
+    <div className="flex flex-wrap gap-2 lg:col-span-2 2xl:col-span-1 2xl:w-28 2xl:flex-col"><button type="button" onClick={() => verFicha(producto)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700">Ver ficha</button><button type="button" onClick={() => editarProducto(producto)} className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-bold text-white">Editar / foto</button><button type="button" onClick={() => void eliminarProducto(producto.id, producto.nombre)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white">Eliminar</button></div>
   </article>
 ))}
 {productosFiltrados.length === 0 && <p className="p-8 text-center text-sm text-slate-500">No encontramos productos con esos filtros.</p>}
 </div>
 
-<div className="hidden h-[440px] overflow-auto px-3 sm:px-5 lg:block">
-
-<table className="w-full min-w-[1240px] table-auto text-sm">
-
-<thead className="sticky -top-5 z-20 bg-slate-50 shadow-sm">
-
-<tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-
-<th className="p-3 text-left">
-Producto y código
-</th>
-
-<th className="p-3 text-left">
-Categoría
-</th>
-
-<th className="p-3 text-left">Tipo</th>
-
-<th className="p-3 text-left">
-Inventario
-</th>
-
-<th className="p-3 text-left">
-Catálogo
-</th>
-
-<th className="p-3 text-left">
-Precio final
-</th>
-
-<th className="p-3 text-left">
-Costo producción
-</th>
-
-<th className="p-3 text-left">
-Margen completo
-</th>
-
-<th className="p-3 text-left">
-Margen ingredientes
-</th>
-
-<th className="p-3 text-left">
-Estado
-</th>
-
-<th className="sticky right-0 z-30 bg-slate-50 p-3 text-left shadow-[-8px_0_10px_-10px_rgba(15,23,42,0.45)]">
-Acciones
-</th>
-
-</tr>
-
-</thead>
-
-<tbody className="divide-y">
-
-{
-
-productosFiltrados.map(
-(producto)=>(
-
-<tr className="border-b border-slate-100 transition hover:bg-orange-50/40"
-key={
-producto.id
-}
->
-
-<td className="p-3"><div className="flex min-w-[190px] items-center gap-3">{producto.imagen_url ? <Image src={producto.imagen_url} alt={producto.nombre} width={48} height={48} className="size-12 rounded-xl border border-slate-200 object-cover" /> : <div className="grid size-12 place-items-center rounded-xl bg-orange-50 text-xs font-black text-orange-600">SIN<br/>FOTO</div>}<div><p className="font-bold text-slate-950">{producto.nombre}</p><p className="mt-1 font-mono text-[11px] font-bold uppercase text-slate-500">{producto.sku || "SIN CÓDIGO"}</p>{producto.descripcion && <p className="mt-1 max-w-[190px] truncate text-xs text-slate-500">{producto.descripcion}</p>}</div></div></td>
-
-<td className="p-3 text-slate-600">
-
-{
-producto.categoria
-}
-
-</td>
-
-<td className="p-3"><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${producto.tipo_producto === "combo" ? "bg-orange-100 text-orange-700" : producto.tipo_producto === "reventa" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700"}`}>{etiquetaTipo(producto.tipo_producto)}</span></td>
-
-<td className="p-3"><p className={`font-black ${Number(producto.stock || 0) <= 0 ? "text-rose-600" : Number(producto.stock || 0) <= Number(producto.stock_minimo || 0) ? "text-amber-600" : "text-emerald-700"}`}>{Number(producto.stock || 0)} u.</p><p className="mt-1 text-[11px] text-slate-500">Mínimo: {Number(producto.stock_minimo || 0)}</p></td>
-
-<td className="p-3"><div className="flex flex-col items-start gap-1">{producto.publicar_catalogo ? <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-700">Publicado</span> : <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">Interno</span>}<span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${producto.disponible_online && Number(producto.stock || 0) > 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{producto.disponible_online && Number(producto.stock || 0) > 0 ? "Disponible online" : "No disponible"}</span></div></td>
-
-<td className="p-3 text-emerald-700 font-bold">
-
-Q{
-Number(
-producto.precio_venta
-).toFixed(2)
-}
-
-</td>
-
-<td className="p-3 text-rose-600">
-
-Q{
-Number(
-producto.costo || 0
-).toFixed(2)
-}
-
-</td>
-
-<td className="p-3"><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="completo" /></td>
-
-<td className="p-3"><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="ingredientes" /></td>
-
-<td className="p-3">
-
-<span className="bg-emerald-100 text-emerald-700 px-3 py-1.5 text-xs font-bold rounded-full">
-
-{
-producto.estado
-}
-
-</span>
-
-</td>
-
-<td className="sticky right-0 z-10 bg-white p-3 shadow-[-8px_0_10px_-10px_rgba(15,23,42,0.45)]">
-
-<div className="flex flex-wrap gap-3">
-
-<button
-
-className="border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition hover:border-orange-500 hover:text-orange-700"
-
-onClick={() => verFicha(producto)}
-
->
-
-Ver ficha
-
-</button>
-
-<button
-
-className="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition hover:bg-amber-600"
-
-onClick={() => editarProducto(producto)}
-
->
-
-Editar / foto
-
-</button>
-
-<button
-
-className="bg-rose-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition hover:bg-rose-700"
-
-onClick={()=>
-
-eliminarProducto(
-
-producto.id,
-
-producto.nombre
-
-)
-
-}
-
->
-
-Eliminar
-
-</button>
-
-</div>
-
-</td>
-
-</tr>
-
-)
-
-)
-
-}
-
-{productosFiltrados.length === 0 && <tr><td colSpan={12} className="p-12 text-center text-slate-500">No encontramos productos con esos filtros.</td></tr>}
-</tbody>
-
-</table>
-
-</div>
 
 </div>
 
