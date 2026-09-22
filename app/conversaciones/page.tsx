@@ -108,6 +108,7 @@ const nombrePerfil = (perfil: Perfil) => perfil.nombre?.trim() || perfil.email;
 
 export default function ConversacionesPage() {
   const router = useRouter();
+  const [vistaMovil, setVistaMovil] = useState<"lista" | "chat" | "detalle">("lista");
   const [conversaciones, setConversaciones] = useState<Conversacion[]>([]),
     [perfiles, setPerfiles] = useState<Perfil[]>([]),
     [seleccionada, setSeleccionada] = useState<Conversacion | null>(null),
@@ -709,8 +710,11 @@ export default function ConversacionesPage() {
           {aviso}
         </p>
       )}
-      <div className="grid min-h-[650px] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[340px_minmax(0,1fr)_320px]">
-        <aside className="border-b border-slate-200 lg:border-b-0 lg:border-r">
+      <div className="mb-3 grid grid-cols-3 gap-2 lg:hidden" role="tablist" aria-label="Vistas de conversaciones">
+        {(["lista", "chat", "detalle"] as const).map((vista) => <button key={vista} type="button" role="tab" aria-selected={vistaMovil === vista} onClick={() => setVistaMovil(vista)} className={`rounded-xl px-2 py-2.5 text-xs font-bold ${vistaMovil === vista ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{vista === "lista" ? "Conversaciones" : vista === "chat" ? "Chat" : "Detalles"}</button>)}
+      </div>
+      <div className="grid min-h-[60vh] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:min-h-[650px] lg:grid-cols-[340px_minmax(0,1fr)_320px]">
+        <aside className={`${vistaMovil === "lista" ? "block" : "hidden"} border-b border-slate-200 lg:block lg:border-b-0 lg:border-r`}>
           <div className="border-b p-4">
             <input
               value={filtro}
@@ -726,7 +730,7 @@ export default function ConversacionesPage() {
             {visibles.map((item) => (
               <button
                 key={item.id}
-                onClick={() => void seleccionar(item)}
+                onClick={() => { void seleccionar(item); setVistaMovil("chat"); }}
                 className={`w-full p-4 text-left transition hover:bg-orange-50 ${seleccionada?.id === item.id ? "bg-orange-50" : ""}`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -757,7 +761,7 @@ export default function ConversacionesPage() {
             )}
           </div>
         </aside>
-        <main className="flex min-h-[500px] flex-col">
+        <main className={`${vistaMovil === "chat" ? "flex" : "hidden"} min-h-[60vh] min-w-0 flex-col lg:flex lg:min-h-[500px]`}>
           {seleccionada ? (
             <>
               <header className="border-b p-5">
@@ -850,7 +854,7 @@ export default function ConversacionesPage() {
             </div>
           )}
         </main>
-        <aside className="border-t border-slate-200 bg-white lg:border-l lg:border-t-0">
+        <aside className={`${vistaMovil === "detalle" ? "block" : "hidden"} border-t border-slate-200 bg-white lg:block lg:border-l lg:border-t-0`}>
           {seleccionada ? (
             <div className="space-y-5 p-5">
               <div>

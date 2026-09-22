@@ -386,7 +386,7 @@ useEffect(()=>{
 const timer = window.setTimeout(() => void obtenerProductos(), 0);
 return () => window.clearTimeout(timer);
 // obtenerProductos no depende de estado y solo debe ejecutarse al cargar el módulo.
-},[]); // eslint-disable-line react-hooks/exhaustive-deps
+},[]);
 
 const categorias = Array.from(new Set(productos.map((producto) => producto.categoria?.trim()).filter(Boolean))) as string[];
 const canales = Array.from(new Set(productos.flatMap((producto) => producto.canales_venta || []))).sort();
@@ -418,9 +418,35 @@ const margenPromedio = productosConMargen.length ? productosConMargen.reduce((to
 const productosMargenBajo = productosConMargen.filter((producto) => (metricasGanancia.get(producto.id)?.porcentajeCompleto || 0) < 20).length;
 const productosActivos = productos.filter((producto) => producto.estado === "Activo").length;
 const productosPublicados = productos.filter((producto) => producto.publicar_catalogo).length;
-const productosConFoto = productos.filter((producto) => Boolean(producto.imagen_url)).length;
-const productosConAlerta = productos.filter((producto) => Number(producto.stock || 0) <= Number(producto.stock_minimo || 0)).length;
-const valorInventarioProductos = productos.reduce((total, producto) => total + Number(producto.stock || 0) * Number(producto.costo || 0), 0);
+function verFicha(producto: Producto) {
+  void cargarResumenProducto(producto);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function editarProducto(producto: Producto) {
+  setProductoEditando(producto.id);
+  setEditorAbierto(true);
+  setNombre(producto.nombre);
+  setTipoProducto(producto.tipo_producto || "preparado");
+  setCostoAdicionalCombo(String(producto.costo_adicional_combo ?? 0));
+  void cargarComponentesCombo(producto.id);
+  setCategoria(producto.categoria ?? "");
+  setPrecio(String(producto.precio_venta));
+  setCosto(String(producto.costo));
+  setStock(String(producto.stock ?? 0));
+  setStockMinimo(String(producto.stock_minimo ?? 0));
+  setDescripcion(producto.descripcion ?? "");
+  setSku(producto.sku ?? "");
+  setTiempoPreparacion(producto.tiempo_preparacion_min == null ? "" : String(producto.tiempo_preparacion_min));
+  setEtiquetas((producto.etiquetas || []).join(", "));
+  setPublicarCatalogo(Boolean(producto.publicar_catalogo));
+  setDisponibleOnline(producto.disponible_online !== false);
+  setCanalesVenta(producto.canales_venta?.length ? producto.canales_venta : ["WhatsApp", "Web"]);
+  setFotoActual(producto.imagen_url ?? "");
+  setFotoProducto(null);
+  setFotoPrevia("");
+  window.setTimeout(() => document.getElementById("editor-producto")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+}
 
 // ======================
 
@@ -569,7 +595,27 @@ subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
 </div>
 </div>
 
-<div className="h-[440px] overflow-auto px-3 sm:px-5">
+<div className="max-h-[65vh] divide-y divide-slate-100 overflow-y-auto lg:hidden">
+{productosFiltrados.map((producto) => (
+  <article key={producto.id} className="space-y-4 p-4 sm:p-5">
+    <div className="flex min-w-0 items-center gap-3">
+      {producto.imagen_url ? <Image src={producto.imagen_url} alt={producto.nombre} width={48} height={48} className="size-12 shrink-0 rounded-xl border border-slate-200 object-cover" /> : <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-orange-50 text-[10px] font-black text-orange-600">SIN FOTO</div>}
+      <div className="min-w-0"><h3 className="break-words font-bold text-slate-950">{producto.nombre}</h3><p className="text-xs text-slate-500">{producto.sku || "Sin código"} · {producto.categoria || "Sin categoría"}</p></div>
+    </div>
+    <div className="grid grid-cols-2 gap-3 text-sm">
+      <div><p className="text-xs text-slate-500">Precio final</p><p className="font-bold text-emerald-700">Q{Number(producto.precio_venta).toFixed(2)}</p></div>
+      <div><p className="text-xs text-slate-500">Costo producción</p><p className="font-bold text-rose-600">Q{Number(producto.costo || 0).toFixed(2)}</p></div>
+      <div><p className="text-xs text-slate-500">Existencia</p><p className="font-bold text-slate-900">{Number(producto.stock || 0)} u.</p></div>
+      <div><p className="text-xs text-slate-500">Catálogo</p><p className="font-bold text-slate-900">{producto.publicar_catalogo ? "Publicado" : "Interno"}</p></div>
+    </div>
+    <div className="grid gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-2"><div><p className="mb-1 text-xs font-bold text-slate-600">Margen completo</p><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="completo" /></div><div><p className="mb-1 text-xs font-bold text-slate-600">Margen ingredientes</p><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="ingredientes" /></div></div>
+    <div className="flex flex-wrap gap-2"><button type="button" onClick={() => verFicha(producto)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700">Ver ficha</button><button type="button" onClick={() => editarProducto(producto)} className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-bold text-white">Editar / foto</button><button type="button" onClick={() => void eliminarProducto(producto.id, producto.nombre)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white">Eliminar</button></div>
+  </article>
+))}
+{productosFiltrados.length === 0 && <p className="p-8 text-center text-sm text-slate-500">No encontramos productos con esos filtros.</p>}
+</div>
+
+<div className="hidden h-[440px] overflow-auto px-3 sm:px-5 lg:block">
 
 <table className="w-full min-w-[1240px] table-auto text-sm">
 
@@ -696,13 +742,7 @@ producto.estado
 
 className="border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition hover:border-orange-500 hover:text-orange-700"
 
-onClick={()=>{
-
-void cargarResumenProducto(producto);
-
-window.scrollTo({ top: 0, behavior: "smooth" });
-
-}}
+onClick={() => verFicha(producto)}
 
 >
 
@@ -714,38 +754,7 @@ Ver ficha
 
 className="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition hover:bg-amber-600"
 
-onClick={()=>{
-
-setProductoEditando(
-producto.id
-);
-setEditorAbierto(true);
-
-setNombre(
-producto.nombre
-);
-setTipoProducto(producto.tipo_producto || "preparado"); setCostoAdicionalCombo(String(producto.costo_adicional_combo ?? 0)); void cargarComponentesCombo(producto.id);
-
-setCategoria(
-producto.categoria ?? ""
-);
-
-setPrecio(
-String(
-producto.precio_venta
-)
-);
-
-setCosto(
-String(
-producto.costo
-)
-);
-setStock(String(producto.stock ?? 0)); setStockMinimo(String(producto.stock_minimo ?? 0)); setDescripcion(producto.descripcion ?? ""); setSku(producto.sku ?? ""); setTiempoPreparacion(producto.tiempo_preparacion_min == null ? "" : String(producto.tiempo_preparacion_min)); setEtiquetas((producto.etiquetas || []).join(", ")); setPublicarCatalogo(Boolean(producto.publicar_catalogo)); setDisponibleOnline(producto.disponible_online !== false); setCanalesVenta(producto.canales_venta?.length ? producto.canales_venta : ["WhatsApp", "Web"]); setFotoActual(producto.imagen_url ?? ""); setFotoProducto(null); setFotoPrevia("");
-
-window.setTimeout(() => document.getElementById("editor-producto")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
-
-}}
+onClick={() => editarProducto(producto)}
 
 >
 

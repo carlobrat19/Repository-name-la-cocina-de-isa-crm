@@ -238,7 +238,6 @@ export default function IngredientesPage() {
     paginaSegura * porPagina,
   );
 
-  useEffect(() => setPagina(1), [busqueda, filtroUnidad, filtroExistencia]);
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-8 sm:px-8 lg:px-10">
@@ -416,11 +415,11 @@ export default function IngredientesPage() {
                 </div>
               </div>
               <div className="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_170px_190px]">
-                <input value={busqueda} onChange={(event) => setBusqueda(event.target.value)} placeholder="Buscar ingrediente" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 outline-none focus:border-orange-500" />
-                <select value={filtroUnidad} onChange={(event) => setFiltroUnidad(event.target.value as "todos" | Unidad)} className="rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold">
+                <input value={busqueda} onChange={(event) => { setBusqueda(event.target.value); setPagina(1); }} placeholder="Buscar ingrediente" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 outline-none focus:border-orange-500" />
+                <select value={filtroUnidad} onChange={(event) => { setFiltroUnidad(event.target.value as "todos" | Unidad); setPagina(1); }} className="rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold">
                   <option value="todos">Todas las unidades</option><option value="g">Gramos (g)</option><option value="ml">Mililitros (ml)</option><option value="unidad">Unidades</option>
                 </select>
-                <select value={filtroExistencia} onChange={(event) => setFiltroExistencia(event.target.value as "todos" | "con_existencia" | "sin_existencia")} className="rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold">
+                <select value={filtroExistencia} onChange={(event) => { setFiltroExistencia(event.target.value as "todos" | "con_existencia" | "sin_existencia"); setPagina(1); }} className="rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold">
                   <option value="todos">Todo el inventario</option><option value="con_existencia">Con existencias</option><option value="sin_existencia">Sin existencia</option>
                 </select>
               </div>
