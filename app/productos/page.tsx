@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "../../lib/supabase";
@@ -11,6 +11,7 @@ type IngredienteReceta = {
 };
 
 type RecetaPiloto = {
+  producto_id?: string;
   rendimiento: number | string;
   unidad_rendimiento: string;
   merma_pct: number | string;
@@ -44,6 +45,14 @@ type Producto = {
 };
 
 type ComponenteCombo = { producto_id: string; cantidad: string };
+type MetricaGanancia = { costoIngredientes: number | null; margenCompleto: number; margenIngredientes: number | null; porcentajeCompleto: number; porcentajeIngredientes: number | null; tieneReceta: boolean };
+
+function MargenProducto({ metrica, tipo }: { metrica?: MetricaGanancia; tipo: "completo" | "ingredientes" }) {
+  const porcentaje = tipo === "completo" ? metrica?.porcentajeCompleto : metrica?.porcentajeIngredientes;
+  if (!metrica || porcentaje == null) return <span className="text-xs font-semibold text-slate-400">Sin receta</span>;
+  const bajo = porcentaje < 20;
+  return <div><p className={`font-black ${bajo ? "text-rose-700" : porcentaje < 35 ? "text-amber-700" : "text-emerald-700"}`}>{porcentaje.toFixed(1)}%</p><p className="mt-1 text-[10px] font-medium text-slate-500">{tipo === "completo" ? "después de IVA" : "solo insumos"}</p></div>;
+}
 
 export default function ProductosPage() {
 
@@ -73,6 +82,7 @@ const [productos,setProductos]=
 useState<Producto[]>([]);
 
 const [recetaPiloto, setRecetaPiloto] = useState<RecetaPiloto | null>(null);
+const [recetasCatalogo, setRecetasCatalogo] = useState<RecetaPiloto[]>([]);
 const [productoReceta, setProductoReceta] = useState<Producto | null>(null);
 const [precioFinalProducto, setPrecioFinalProducto] = useState("");
 const [guardandoPrecioFinal, setGuardandoPrecioFinal] = useState(false);
@@ -96,25 +106,11 @@ null
 
 async function obtenerProductos(){
 
-const {
-data,
-error
-}
-=
-await supabase
-
-.from(
-"productos"
-)
-
-.select("*")
-
-.order(
-"id",
-{
-ascending:false
-}
-);
+const [productosRespuesta, recetasRespuesta] = await Promise.all([
+supabase.from("productos").select("*").order("id", { ascending: false }),
+supabase.from("recetas_estandar").select("producto_id,rendimiento,unidad_rendimiento,merma_pct,margen_pct,iva_pct,recargo_carta_pct,comision_canal_pct,costos_adicionales,receta_ingredientes(cantidad,ingredientes(nombre,unidad_base,costo_referencia,stock_actual))").eq("activa", true)
+]);
+const { data, error } = productosRespuesta;
 
 if(error){
 
@@ -129,6 +125,7 @@ const productosCargados = (data || []) as Producto[];
 setProductos(
 productosCargados
 );
+setRecetasCatalogo((recetasRespuesta.data || []) as unknown as RecetaPiloto[]);
 
 }
 
@@ -399,6 +396,22 @@ const pasaInventario = inventarioFiltro === "Todos" || (inventarioFiltro === "Si
 const pasaCatalogo = catalogoFiltro === "Todos" || (catalogoFiltro === "Publicado" && producto.publicar_catalogo) || (catalogoFiltro === "No publicado" && !producto.publicar_catalogo) || (catalogoFiltro === "Disponible online" && producto.disponible_online);
 return texto.includes(busquedaProducto.trim().toLowerCase()) && (categoriaFiltro === "Todas" || producto.categoria === categoriaFiltro) && pasaInventario && pasaCatalogo && (canalFiltro === "Todos" || (producto.canales_venta || []).includes(canalFiltro));
 });
+const metricasGanancia = useMemo(() => {
+const recetasPorProducto = new Map(recetasCatalogo.filter((receta) => receta.producto_id).map((receta) => [receta.producto_id as string, receta]));
+return new Map(productos.map((producto) => {
+const receta = recetasPorProducto.get(producto.id);
+const costoIngredientes = receta ? receta.receta_ingredientes.reduce((total, linea) => total + Number(linea.cantidad || 0) * Number(linea.ingredientes?.costo_referencia || 0), 0) / Math.max(0.001, Number(receta.rendimiento || 1)) : null;
+const precioFinal = Number(producto.precio_venta || 0);
+const ventaSinIva = receta ? precioFinal / (1 + Number(receta.iva_pct || 0)) : precioFinal;
+const comisionPrevista = ventaSinIva * Number(receta?.comision_canal_pct || 0);
+const margenCompleto = ventaSinIva - comisionPrevista - Number(producto.costo || 0);
+const margenIngredientes = costoIngredientes == null ? null : ventaSinIva - comisionPrevista - costoIngredientes;
+return [producto.id, { costoIngredientes, margenCompleto, margenIngredientes, porcentajeCompleto: ventaSinIva > 0 ? margenCompleto / ventaSinIva * 100 : 0, porcentajeIngredientes: margenIngredientes != null && ventaSinIva > 0 ? margenIngredientes / ventaSinIva * 100 : null, tieneReceta: Boolean(receta) }];
+}));
+}, [productos, recetasCatalogo]);
+const productosConMargen = productos.filter((producto) => metricasGanancia.get(producto.id)?.tieneReceta);
+const margenPromedio = productosConMargen.length ? productosConMargen.reduce((total, producto) => total + (metricasGanancia.get(producto.id)?.porcentajeCompleto || 0), 0) / productosConMargen.length : 0;
+const productosMargenBajo = productosConMargen.filter((producto) => (metricasGanancia.get(producto.id)?.porcentajeCompleto || 0) < 20).length;
 const productosActivos = productos.filter((producto) => producto.estado === "Activo").length;
 const productosPublicados = productos.filter((producto) => producto.publicar_catalogo).length;
 const productosConFoto = productos.filter((producto) => Boolean(producto.imagen_url)).length;
@@ -415,7 +428,7 @@ return(
 
 <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-orange-600">Catálogo comercial</p><h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950">Productos</h1><p className="mt-2 max-w-2xl text-sm text-slate-600">Administra tu catálogo, fotos, disponibilidad e información para ventas y canales digitales.</p></div><button type="button" onClick={abrirNuevoProducto} className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-black text-white transition hover:bg-orange-600">+ Nuevo producto</button></header>
 
-<section className="mb-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-5"><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Productos activos</p><p className="mt-2 text-3xl font-black text-slate-950">{productosActivos}</p><p className="mt-1 text-sm text-slate-500">de {productos.length} registrados</p></div><div className="rounded-2xl border border-sky-100 bg-sky-50 p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-sky-700">Catálogo publicado</p><p className="mt-2 text-3xl font-black text-sky-800">{productosPublicados}</p><p className="mt-1 text-sm text-sky-700">listos para mostrar</p></div><div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Con fotografía</p><p className="mt-2 text-3xl font-black text-emerald-800">{productosConFoto}</p><p className="mt-1 text-sm text-emerald-700">para catálogo visual</p></div><div className={`rounded-2xl border p-5 shadow-sm ${productosConAlerta ? "border-rose-100 bg-rose-50" : "border-amber-100 bg-amber-50"}`}><p className={`text-xs font-bold uppercase tracking-wide ${productosConAlerta ? "text-rose-700" : "text-amber-700"}`}>Alerta de inventario</p><p className={`mt-2 text-3xl font-black ${productosConAlerta ? "text-rose-800" : "text-amber-800"}`}>{productosConAlerta}</p><p className={`mt-1 text-sm ${productosConAlerta ? "text-rose-700" : "text-amber-700"}`}>{productosConAlerta ? "requieren revisión" : "sin alertas"}</p></div><div className="rounded-2xl border border-violet-100 bg-violet-50 p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-violet-700">Valor de inventario</p><p className="mt-2 text-2xl font-black text-violet-800">Q{valorInventarioProductos.toFixed(2)}</p><p className="mt-1 text-sm text-violet-700">a costo registrado</p></div></section>
+<section className="mb-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Productos activos</p><p className="mt-2 text-3xl font-black text-slate-950">{productosActivos}</p><p className="mt-1 text-sm text-slate-500">de {productos.length} registrados</p></div><div className="rounded-2xl border border-sky-100 bg-sky-50 p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-sky-700">Catálogo publicado</p><p className="mt-2 text-3xl font-black text-sky-800">{productosPublicados}</p><p className="mt-1 text-sm text-sky-700">listos para mostrar</p></div><div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Margen completo promedio</p><p className="mt-2 text-3xl font-black text-emerald-800">{margenPromedio.toFixed(1)}%</p><p className="mt-1 text-sm text-emerald-700">sin IVA y comisión prevista</p></div><div className={`rounded-2xl border p-5 shadow-sm ${productosMargenBajo ? "border-rose-100 bg-rose-50" : "border-amber-100 bg-amber-50"}`}><p className={`text-xs font-bold uppercase tracking-wide ${productosMargenBajo ? "text-rose-700" : "text-amber-700"}`}>Margen bajo</p><p className={`mt-2 text-3xl font-black ${productosMargenBajo ? "text-rose-800" : "text-amber-800"}`}>{productosMargenBajo}</p><p className={`mt-1 text-sm ${productosMargenBajo ? "text-rose-700" : "text-amber-700"}`}>productos bajo 20%</p></div></section>
 
 {productoReceta && (() => {
 if (!recetaPiloto) return <section className="mb-10 rounded-[35px] bg-slate-950 p-8 text-white shadow-2xl"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Ficha del producto · {productoReceta.categoria || "Sin categoría"}</p><h1 className="mt-2 text-4xl font-black">{productoReceta.nombre}</h1></div><button type="button" onClick={() => setProductoReceta(null)} className="rounded-lg border border-white/30 px-3 py-2 text-xs font-bold hover:bg-white/10">Cerrar</button></div><p className="mt-3 max-w-2xl text-sm text-slate-300">Este producto todavía no tiene una receta estándar. Créala para calcular sus costos automáticamente desde ingredientes e inventario.</p><Link href="/recetas" className="mt-6 inline-block rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white hover:bg-orange-400">Crear receta para este producto</Link></section>;
@@ -554,7 +567,7 @@ subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
 
 <div className="h-[440px] overflow-auto px-3 sm:px-5">
 
-<table className="w-full min-w-[1180px] table-auto text-sm">
+<table className="w-full min-w-[1420px] table-auto text-sm">
 
 <thead className="sticky -top-5 z-20 bg-slate-50 shadow-sm">
 
@@ -588,6 +601,14 @@ Costo
 
 <th className="p-5 text-left">
 Ganancia
+</th>
+
+<th className="p-5 text-left">
+Margen completo
+</th>
+
+<th className="p-5 text-left">
+Margen ingredientes
 </th>
 
 <th className="p-5 text-left">
@@ -670,6 +691,10 @@ producto.costo
 }
 
 </td>
+
+<td className="p-5"><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="completo" /></td>
+
+<td className="p-5"><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="ingredientes" /></td>
 
 <td className="p-5">
 
@@ -782,7 +807,7 @@ Eliminar
 
 }
 
-{productosFiltrados.length === 0 && <tr><td colSpan={10} className="p-12 text-center text-slate-500">No encontramos productos con esos filtros.</td></tr>}
+{productosFiltrados.length === 0 && <tr><td colSpan={12} className="p-12 text-center text-slate-500">No encontramos productos con esos filtros.</td></tr>}
 </tbody>
 
 </table>
