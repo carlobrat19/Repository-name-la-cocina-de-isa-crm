@@ -381,7 +381,7 @@ export default function ClientesPage() {
       string,
       { nombre: string; cantidad: number; monto: number }
     >();
-    for (const pedido of pedidosFicha) {
+    for (const pedido of pedidosFicha.filter((item) => !["cancelado", "anulado"].includes((item.estado || "").trim().toLowerCase()))) {
       for (const item of pedido.pedido_detalle || []) {
         const nombre = item.productos?.nombre || "Producto sin nombre";
         const actual = acumulados.get(nombre) || {
@@ -398,11 +398,11 @@ export default function ClientesPage() {
       .sort((a, b) => b.cantidad - a.cantidad || b.monto - a.monto)
       .slice(0, 5);
   }, [pedidosFicha]);
-  const totalHistoricoFicha = pedidosFicha.reduce(
+  const totalHistoricoFicha = pedidosFicha.filter((pedido) => !["cancelado", "anulado"].includes((pedido.estado || "").trim().toLowerCase())).reduce(
     (total, pedido) => total + Number(pedido.total || 0),
     0,
   );
-  const saldoFicha = pedidosFicha.reduce(
+  const saldoFicha = pedidosFicha.filter((pedido) => !["cancelado", "anulado"].includes((pedido.estado || "").trim().toLowerCase())).reduce(
     (total, pedido) => total + Number(pedido.saldo_pendiente || 0),
     0,
   );

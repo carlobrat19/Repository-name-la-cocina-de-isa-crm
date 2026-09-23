@@ -38,6 +38,7 @@ type Pedido = {
   entrega_mensajero?: boolean | null;
   costo_envio?: number | string | null;
   total?: number | string | null;
+  saldo_pendiente?: number | string | null;
 };
 
 type Detalle = {
@@ -51,6 +52,7 @@ type Producto = { id: string; nombre?: string | null };
 
 const ESTADOS = ["Pendiente", "Producción", "Empaquetado", "En Ruta", "Entregado"];
 const PAGOS = ["Pendiente", "Pagado"];
+const esAnulado = (estado?: string | null) => ["cancelado", "anulado"].includes((estado || "").trim().toLowerCase());
 
 function formatDate(value?: string | null) {
   if (!value) return "Sin fecha";
@@ -140,14 +142,15 @@ export default function ListaPedidosPage() {
   }, [pedidos, busqueda, estado, pago, vendedor, envio, tipoEntrega, desde, hasta]);
 
   const resumen = useMemo(() => {
-    const total = pedidosFiltrados.reduce((acumulado, pedido) => acumulado + Number(pedido.total || 0), 0);
+    const pedidosValidos = pedidosFiltrados.filter((pedido) => !esAnulado(pedido.estado));
+    const total = pedidosValidos.reduce((acumulado, pedido) => acumulado + Number(pedido.total || 0), 0);
     return {
       total,
-      pendientes: pedidosFiltrados.filter((pedido) => pedido.estado !== "Entregado").length,
-      porCobrar: pedidosFiltrados.filter((pedido) => pedido.pago_estado !== "Pagado").reduce((acumulado, pedido) => acumulado + Number(pedido.total || 0), 0),
-      entregas: pedidosFiltrados.filter((pedido) => pedido.requiere_envio).length,
-      mensajeria: pedidosFiltrados.filter((pedido) => pedido.requiere_envio && pedido.entrega_mensajero).length,
-      envioMensajeria: pedidosFiltrados.filter((pedido) => pedido.requiere_envio && pedido.entrega_mensajero).reduce((acumulado, pedido) => acumulado + Number(pedido.costo_envio || 0), 0),
+      pendientes: pedidosValidos.filter((pedido) => (pedido.estado || "").trim().toLowerCase() !== "entregado").length,
+      porCobrar: pedidosValidos.reduce((acumulado, pedido) => acumulado + Math.max(0, Number(pedido.saldo_pendiente ?? (pedido.pago_estado === "Pagado" ? 0 : pedido.total || 0))), 0),
+      entregas: pedidosValidos.filter((pedido) => pedido.requiere_envio).length,
+      mensajeria: pedidosValidos.filter((pedido) => pedido.requiere_envio && pedido.entrega_mensajero).length,
+      envioMensajeria: pedidosValidos.filter((pedido) => pedido.requiere_envio && pedido.entrega_mensajero).reduce((acumulado, pedido) => acumulado + Number(pedido.costo_envio || 0), 0),
     };
   }, [pedidosFiltrados]);
 

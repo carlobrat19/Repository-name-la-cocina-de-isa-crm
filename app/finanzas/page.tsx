@@ -33,7 +33,7 @@ export default function FinanzasPage() {
   useEffect(() => { const timer = window.setTimeout(() => void cargar(), 0); return () => window.clearTimeout(timer); }, []);
 
   const pedidosPorId = useMemo(() => new Map(pedidos.map((pedido) => [pedido.id, pedido])), [pedidos]);
-  const pedidosOperativos = useMemo(() => pedidos.filter((pedido) => !["Cancelado", "Anulado"].includes(pedido.estado || "")), [pedidos]);
+  const pedidosOperativos = useMemo(() => pedidos.filter((pedido) => !["cancelado", "anulado"].includes((pedido.estado || "").trim().toLowerCase())), [pedidos]);
   const cuentasPendientes = useMemo(() => pedidosOperativos.filter((pedido) => Number(pedido.saldo_pendiente || 0) > 0).sort((a, b) => Number(b.saldo_pendiente || 0) - Number(a.saldo_pendiente || 0)), [pedidosOperativos]);
   const totalPendiente = cuentasPendientes.reduce((suma, pedido) => suma + Number(pedido.saldo_pendiente || 0), 0);
   const cobradoPeriodo = pagos.filter((pago) => (!fechaInicio || (pago.fecha || "") >= fechaInicio) && (!fechaFin || (pago.fecha || "") <= fechaFin)).reduce((suma, pago) => suma + Number(pago.monto || 0), 0);
