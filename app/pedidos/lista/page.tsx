@@ -89,6 +89,7 @@ export default function ListaPedidosPage() {
   const [vendedor, setVendedor] = useState("Todos");
   const [envio, setEnvio] = useState("Todos");
   const [tipoEntrega, setTipoEntrega] = useState("Todos");
+  const [productoFiltro, setProductoFiltro] = useState("Todos");
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
 
@@ -120,6 +121,10 @@ export default function ListaPedidosPage() {
     detalles.forEach((detalle) => agrupados.set(detalle.pedido_id, [...(agrupados.get(detalle.pedido_id) || []), detalle]));
     return agrupados;
   }, [detalles]);
+  const productosEnPedidos = useMemo(() => {
+    const ids = new Set(detalles.map((detalle) => detalle.producto_id).filter((id): id is string => Boolean(id)));
+    return productos.filter((producto) => ids.has(producto.id)).sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "", "es"));
+  }, [detalles, productos]);
 
   const vendedores = useMemo(
     () => [...new Set(pedidos.map((pedido) => pedido.vendedor).filter((nombre): nombre is string => Boolean(nombre)))].sort(),
@@ -129,17 +134,19 @@ export default function ListaPedidosPage() {
   const pedidosFiltrados = useMemo(() => {
     const texto = busqueda.trim().toLowerCase();
     return pedidos.filter((pedido) => {
+      const items = detallesPorPedido.get(pedido.id) || [];
       const coincideTexto = !texto || [pedido.codigo, pedido.cliente, pedido.telefono, pedido.direccion, pedido.departamento_entrega, pedido.municipio_entrega, pedido.zona_entrega]
-        .some((valor) => valor?.toLowerCase().includes(texto));
+        .some((valor) => valor?.toLowerCase().includes(texto)) || items.some((item) => productosPorId.get(item.producto_id || "")?.toLowerCase().includes(texto));
+      const coincideProducto = productoFiltro === "Todos" || items.some((item) => item.producto_id === productoFiltro);
       const coincideEstado = estado === "Todos" || pedido.estado === estado;
       const coincidePago = pago === "Todos" || pedido.pago_estado === pago;
       const coincideVendedor = vendedor === "Todos" || pedido.vendedor === vendedor;
       const coincideEnvio = envio === "Todos" || (envio === "Con envío" ? pedido.requiere_envio : !pedido.requiere_envio);
       const coincideTipoEntrega = tipoEntrega === "Todos" || (tipoEntrega === "Mensajería externa" ? pedido.requiere_envio && pedido.entrega_mensajero : tipoEntrega === "Nuestro equipo" ? pedido.requiere_envio && !pedido.entrega_mensajero : !pedido.requiere_envio);
       const fecha = pedido.fecha_entrega || pedido.fecha_pedido || "";
-      return coincideTexto && coincideEstado && coincidePago && coincideVendedor && coincideEnvio && coincideTipoEntrega && (!desde || fecha >= desde) && (!hasta || fecha <= hasta);
+      return coincideTexto && coincideProducto && coincideEstado && coincidePago && coincideVendedor && coincideEnvio && coincideTipoEntrega && (!desde || fecha >= desde) && (!hasta || fecha <= hasta);
     });
-  }, [pedidos, busqueda, estado, pago, vendedor, envio, tipoEntrega, desde, hasta]);
+  }, [pedidos, detallesPorPedido, productosPorId, busqueda, productoFiltro, estado, pago, vendedor, envio, tipoEntrega, desde, hasta]);
 
   const resumen = useMemo(() => {
     const pedidosValidos = pedidosFiltrados.filter((pedido) => !esAnulado(pedido.estado));
@@ -154,8 +161,8 @@ export default function ListaPedidosPage() {
     };
   }, [pedidosFiltrados]);
 
-  const hayFiltros = Boolean(busqueda || estado !== "Todos" || pago !== "Todos" || vendedor !== "Todos" || envio !== "Todos" || tipoEntrega !== "Todos" || desde || hasta);
-  const limpiarFiltros = () => { setBusqueda(""); setEstado("Todos"); setPago("Todos"); setVendedor("Todos"); setEnvio("Todos"); setTipoEntrega("Todos"); setDesde(""); setHasta(""); };
+  const hayFiltros = Boolean(busqueda || productoFiltro !== "Todos" || estado !== "Todos" || pago !== "Todos" || vendedor !== "Todos" || envio !== "Todos" || tipoEntrega !== "Todos" || desde || hasta);
+  const limpiarFiltros = () => { setBusqueda(""); setProductoFiltro("Todos"); setEstado("Todos"); setPago("Todos"); setVendedor("Todos"); setEnvio("Todos"); setTipoEntrega("Todos"); setDesde(""); setHasta(""); };
   const filtrarPeriodo = (dias: number) => {
     const hoy = new Date();
     const inicio = new Date(hoy);
@@ -202,12 +209,13 @@ export default function ListaPedidosPage() {
             </div>
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <label className="relative xl:col-span-2"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" /><input value={busqueda} onChange={(event) => setBusqueda(event.target.value)} placeholder="Buscar por cliente, código, teléfono o dirección" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100" /></label>
+            <label className="relative xl:col-span-2"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" /><input value={busqueda} onChange={(event) => setBusqueda(event.target.value)} placeholder="Buscar cliente, código, teléfono, dirección o producto" aria-label="Buscar pedidos, clientes o productos" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100" /></label>
             <select value={estado} onChange={(event) => setEstado(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-orange-400"><option>Todos</option>{ESTADOS.map((item) => <option key={item}>{item}</option>)}</select>
             <select value={pago} onChange={(event) => setPago(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-orange-400"><option>Todos</option>{PAGOS.map((item) => <option key={item}>{item}</option>)}</select>
             <select value={vendedor} onChange={(event) => setVendedor(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-orange-400"><option>Todos los vendedores</option>{vendedores.map((item) => <option key={item}>{item}</option>)}</select>
             <select value={envio} onChange={(event) => setEnvio(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-orange-400"><option>Todos los envíos</option><option>Con envío</option><option>Sin envío</option></select>
             <select value={tipoEntrega} onChange={(event) => setTipoEntrega(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-orange-400"><option value="Todos">Todas las entregas</option><option>Mensajería externa</option><option>Nuestro equipo</option><option>Recoger en tienda</option></select>
+            <select value={productoFiltro} onChange={(event) => setProductoFiltro(event.target.value)} aria-label="Filtrar por producto" className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-orange-400"><option value="Todos">Todos los productos</option>{productosEnPedidos.map((producto) => <option key={producto.id} value={producto.id}>{producto.nombre || "Producto sin nombre"}</option>)}</select>
             <label className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" /><input type="date" value={desde} onChange={(event) => setDesde(event.target.value)} aria-label="Entrega desde" className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-700 outline-none focus:border-orange-400" /></label>
             <label className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" /><input type="date" value={hasta} onChange={(event) => setHasta(event.target.value)} aria-label="Entrega hasta" className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-700 outline-none focus:border-orange-400" /></label>
           </div>
