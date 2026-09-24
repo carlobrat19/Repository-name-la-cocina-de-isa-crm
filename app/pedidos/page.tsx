@@ -60,7 +60,7 @@ type DireccionCliente = {
   veces_usada?: number | null;
 };
 
-const VENDEDORES = ["LUCIA", "CARLO", "ISA", "MONICA", "RENATA"];
+const VENDEDORES = ["LUCIA", "CARLO", "ISA", "MONICA", "RENATA", "REDES"];
 const CANALES_ORIGEN = [
   { valor: "Manual", etiqueta: "Manual / sin canal identificado" },
   { valor: "WhatsApp", etiqueta: "WhatsApp" },

@@ -111,7 +111,7 @@ const etiquetaEstado = (estado?: string | null) =>
       : "bg-amber-100 text-amber-800";
 const ESTADOS_PEDIDO = ["Pendiente", "Producción", "Empaquetado", "En Ruta", "Entregado", "Cancelado"];
 const ESTADOS_PAGO = ["Pendiente", "Pago parcial", "Pagado"];
-const VENDEDORES = ["LUCIA", "CARLO", "ISA", "MONICA", "RENATA"];
+const VENDEDORES = ["LUCIA", "CARLO", "ISA", "MONICA", "RENATA", "REDES"];
 const CANALES_ORIGEN = [
   { valor: "Manual", etiqueta: "Manual / sin canal identificado" },
   { valor: "WhatsApp", etiqueta: "WhatsApp" },
