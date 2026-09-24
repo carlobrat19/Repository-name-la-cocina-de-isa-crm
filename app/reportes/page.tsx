@@ -159,9 +159,18 @@ export default function ReportesPage() {
       </article>
     </section>
     <section className="mt-6 grid gap-6 xl:grid-cols-2"><article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-xl font-black text-slate-950">Ventas por canal</h2><p className="mt-1 text-sm text-slate-500">Origen de los pedidos dentro del rango seleccionado.</p><div className="mt-6 space-y-4">{porCanal.map((item) => <Barra key={item.nombre} etiqueta={`${item.nombre} · ${item.pedidos} ${item.pedidos === 1 ? "pedido" : "pedidos"}`} valor={item.ventas}/>)}{!porCanal.length && <p className="text-sm text-slate-500">Todavía no hay ventas con estos filtros.</p>}</div></article><article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-xl font-black text-slate-950">Pedidos por estado</h2><p className="mt-1 text-sm text-slate-500">Control comercial y operativo. Los cancelados y anulados no se incluyen en las cifras financieras.</p><div className="mt-6 space-y-4">{porEstado.map(([item, valor]) => <Barra key={item} etiqueta={item} valor={valor} maximo={Math.max(1, ...porEstado.map(([, cantidad]) => cantidad))} formato={(cantidad) => `${cantidad} pedidos`}/>) || null}{!porEstado.length && <p className="text-sm text-slate-500">No hay pedidos con estos filtros.</p>}</div></article>
-      <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2"><h2 className="text-xl font-black text-slate-950">Antigüedad de saldos por cobrar</h2><p className="mt-1 text-sm text-slate-500">Calculada desde la fecha del pedido. No depende de los filtros para no ocultar deudas antiguas.</p><div className="mt-6 max-w-3xl space-y-4">{Object.entries(antiguedad).map(([item, valor]) => <Barra key={item} etiqueta={item} valor={valor} maximo={Math.max(1, ...Object.values(antiguedad))}/>)}</div></article>
+      <article className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
+        <h2 className="text-xl font-black text-slate-950">Productos más vendidos</h2>
+        <p className="mt-1 text-sm text-slate-500">{productosResumen.length} productos vendidos con estos filtros, ordenados por ventas. Ganancia bruta con el costo guardado al crear cada pedido.</p>
+        <div role="region" aria-label="Lista desplazable de productos vendidos" tabIndex={0} className="mt-5 max-h-[34rem] overflow-auto overscroll-contain rounded-xl border border-slate-100 focus:outline-2 focus:outline-offset-2 focus:outline-orange-500">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead className="sticky top-0 z-10 bg-white text-left text-xs uppercase text-slate-500 shadow-[0_1px_0_#e2e8f0]"><tr><th className="px-3 py-3">Producto</th><th className="px-3 py-3 text-right">Cantidad</th><th className="px-3 py-3 text-right">Ventas</th><th className="px-3 py-3 text-right">Ganancia bruta</th></tr></thead>
+            <tbody>{productosResumen.map((producto) => <tr key={producto.clave} className="border-b border-slate-100 last:border-0"><td className="px-3 py-3"><p className="font-bold text-slate-900">{producto.producto}</p><p className="text-xs text-slate-500">{producto.categoria}</p></td><td className="px-3 py-3 text-right">{producto.cantidad}</td><td className="px-3 py-3 text-right font-bold">{moneda(producto.venta)}</td><td className="px-3 py-3 text-right font-bold text-emerald-700">{moneda(producto.venta - producto.costo)}</td></tr>)}{!productosResumen.length && <tr><td colSpan={4} className="px-3 py-8 text-center text-slate-500">No hay líneas de pedido con estos filtros.</td></tr>}</tbody>
+          </table>
+        </div>
+      </article>
     </section>
-    <section className="mt-6 grid gap-6 xl:grid-cols-2" aria-label="Tablas de responsables y productos">
+    <section className="mt-6 grid gap-6 xl:grid-cols-2" aria-label="Responsables y saldos por cobrar">
       <article className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-black text-slate-950">Pedidos por responsable</h2>
         <p className="mt-1 text-sm text-slate-500">Todos los responsables con pedidos en los filtros seleccionados, ordenados por cantidad.</p>
@@ -172,16 +181,7 @@ export default function ReportesPage() {
           </table>
         </div>
       </article>
-      <article className="min-w-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-black text-slate-950">Productos más vendidos</h2>
-        <p className="mt-1 text-sm text-slate-500">{productosResumen.length} productos vendidos con estos filtros, ordenados por ventas. Ganancia bruta con el costo guardado al crear cada pedido.</p>
-        <div role="region" aria-label="Lista desplazable de productos vendidos" tabIndex={0} className="mt-5 max-h-[34rem] overflow-auto overscroll-contain rounded-xl border border-slate-100 focus:outline-2 focus:outline-offset-2 focus:outline-orange-500">
-          <table className="w-full min-w-[560px] text-sm">
-            <thead className="sticky top-0 z-10 bg-white text-left text-xs uppercase text-slate-500 shadow-[0_1px_0_#e2e8f0]"><tr><th className="px-3 py-3">Producto</th><th className="px-3 py-3 text-right">Cantidad</th><th className="px-3 py-3 text-right">Ventas</th><th className="px-3 py-3 text-right">Ganancia bruta</th></tr></thead>
-            <tbody>{productosResumen.map((producto) => <tr key={producto.clave} className="border-b border-slate-100 last:border-0"><td className="px-3 py-3"><p className="font-bold text-slate-900">{producto.producto}</p><p className="text-xs text-slate-500">{producto.categoria}</p></td><td className="px-3 py-3 text-right">{producto.cantidad}</td><td className="px-3 py-3 text-right font-bold">{moneda(producto.venta)}</td><td className="px-3 py-3 text-right font-bold text-emerald-700">{moneda(producto.venta - producto.costo)}</td></tr>)}{!productosResumen.length && <tr><td colSpan={4} className="px-3 py-8 text-center text-slate-500">No hay líneas de pedido con estos filtros.</td></tr>}</tbody>
-          </table>
-        </div>
-      </article>
+      <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-xl font-black text-slate-950">Antigüedad de saldos por cobrar</h2><p className="mt-1 text-sm text-slate-500">Calculada desde la fecha del pedido. No depende de los filtros para no ocultar deudas antiguas.</p><div className="mt-6 space-y-4">{Object.entries(antiguedad).map(([item, valor]) => <Barra key={item} etiqueta={item} valor={valor} maximo={Math.max(1, ...Object.values(antiguedad))}/>)}</div></article>
     </section>
     <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-xl font-black text-slate-950">Notas para tomar decisiones</h2><div className="mt-4 grid gap-4 md:grid-cols-3"><p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700"><b>Margen bruto estimado:</b> {moneda(margenBruto)} = venta de productos menos costo de producción guardado al registrar cada pedido. No resta IVA, comisiones ni contempla envío.</p><p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700"><b>Ganancias comparables:</b> costo completo resta el costo de producción histórico, IVA y comisión estimados. La vista de ingredientes reemplaza ese costo por los insumos de la receta actual; no representa utilidad neta.</p><p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700"><b>Precisión histórica:</b> para calcular utilidad neta real por venta faltará guardar IVA, comisión y costo real de mensajería en cada pedido. FEL y el libro de IVA requieren control fiscal aparte.</p></div></section>
     </>}
