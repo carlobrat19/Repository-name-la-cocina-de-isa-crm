@@ -375,13 +375,13 @@ return;
 
 }
 
-if (productoId) {
+if (productoId && tipoProducto === "combo") {
   const { error: composicionError } = await supabase.rpc("guardar_composicion_combo", {
     p_combo_id: productoId,
-    p_productos: tipoProducto === "combo" ? componentesCombo.map((componente) => ({ producto_id: componente.producto_id, cantidad: Number(componente.cantidad) })) : [],
-    p_ingredientes: tipoProducto === "combo" ? ingredientesCombo.map((componente) => ({ ingrediente_id: componente.ingrediente_id, cantidad: Number(componente.cantidad) })) : [],
+    p_productos: componentesCombo.map((componente) => ({ producto_id: componente.producto_id, cantidad: Number(componente.cantidad) })),
+    p_ingredientes: ingredientesCombo.map((componente) => ({ ingrediente_id: componente.ingrediente_id, cantidad: Number(componente.cantidad) })),
   });
-  if (composicionError) { console.error(composicionError); alert("El producto se guardó, pero no se pudo actualizar su composición. Revisa los componentes y vuelve a guardar."); return; }
+  if (composicionError) { console.error(composicionError); alert(`El producto se guardó, pero no se pudo actualizar su composición: ${composicionError.message}. Revisa los componentes y vuelve a guardar.`); return; }
 }
 
 alert(
