@@ -283,6 +283,15 @@ return;
 
 }
 
+const skuNormalizado = sku.trim().toLowerCase();
+const productoConMismoSku = skuNormalizado
+  ? productos.find((producto) => producto.id !== productoEditando && producto.sku?.trim().toLowerCase() === skuNormalizado)
+  : null;
+if (productoConMismoSku) {
+  alert(`El código ${sku.trim()} ya pertenece a «${productoConMismoSku.nombre}». Usa un código diferente o deja el campo vacío.`);
+  return;
+}
+
  let error;
  let imagenUrl = fotoActual || null;
  if (fotoProducto) {
@@ -365,11 +374,11 @@ resultado.error;
 
 if(error){
 
-console.log(error);
+console.error(error);
 
-alert(
-"Error guardando"
-);
+alert(error.code === "23505" && error.message.includes("productos_sku_unico_idx")
+  ? `El código ${sku.trim()} ya está asignado a otro producto. Usa un código diferente o deja el campo vacío.`
+  : `No se pudo guardar el producto: ${error.message}`);
 
 return;
 
