@@ -109,6 +109,7 @@ const [categoriaFiltro, setCategoriaFiltro] = useState("Todas");
 const [inventarioFiltro, setInventarioFiltro] = useState("Todos");
 const [catalogoFiltro, setCatalogoFiltro] = useState("Todos");
 const [canalFiltro, setCanalFiltro] = useState("Todos");
+const [estadoFiltro, setEstadoFiltro] = useState("Activos");
 
 const [
 productoEditando,
@@ -418,24 +419,36 @@ confirm(
 `¿Eliminar ${nombre}?`
 );
 
-if(!ok)
-return;
+if(!ok) return;
 
-await supabase
+const { data, error } = await supabase.from("productos").delete().eq("id", id).select("id");
+if (error) {
+  console.error(error);
+  alert(error.code === "23503"
+    ? `No se puede eliminar ${nombre} porque está vinculado a una box, un pedido o al inventario. Puedes desactivarlo para retirarlo de la venta sin perder el historial; si es componente de una box, quítalo de esa box antes de intentar borrarlo.`
+    : `No se pudo eliminar ${nombre}: ${error.message}`);
+  return;
+}
+if (!data?.length) {
+  alert(`No se eliminó ${nombre}. Solo un administrador puede borrar productos sin referencias; también puedes desactivarlo.`);
+  return;
+}
+await obtenerProductos();
 
-.from(
-"productos"
-)
+}
 
-.delete()
-
-.eq(
-"id",
-id
-);
-
-obtenerProductos();
-
+async function cambiarEstadoProducto(producto: Producto) {
+  const activar = producto.estado !== "Activo";
+  if (!window.confirm(activar
+    ? `¿Reactivar ${producto.nombre} para volver a ofrecerlo?`
+    : `¿Desactivar ${producto.nombre}? Se ocultará del catálogo digital y dejará de estar disponible para nuevos pedidos; se conservarán los pedidos y costos anteriores.`)) return;
+  const { data, error } = await supabase.from("productos").update(activar
+    ? { estado: "Activo" }
+    : { estado: "Inactivo", publicar_catalogo: false, disponible_online: false }
+  ).eq("id", producto.id).select("id");
+  if (error) { console.error(error); alert(`No se pudo ${activar ? "reactivar" : "desactivar"} ${producto.nombre}: ${error.message}`); return; }
+  if (!data?.length) { alert(`No se pudo cambiar el estado de ${producto.nombre}. Revisa tus permisos.`); return; }
+  await obtenerProductos();
 }
 
 // ======================
@@ -454,7 +467,8 @@ const stockActual = Number(producto.stock || 0);
 const stockMinimoActual = Number(producto.stock_minimo || 0);
 const pasaInventario = inventarioFiltro === "Todos" || (inventarioFiltro === "Sin existencias" && stockActual <= 0) || (inventarioFiltro === "Stock bajo" && stockActual > 0 && stockActual <= stockMinimoActual) || (inventarioFiltro === "Disponible" && stockActual > stockMinimoActual);
 const pasaCatalogo = catalogoFiltro === "Todos" || (catalogoFiltro === "Publicado" && producto.publicar_catalogo) || (catalogoFiltro === "No publicado" && !producto.publicar_catalogo) || (catalogoFiltro === "Disponible online" && producto.disponible_online);
-return texto.includes(busquedaProducto.trim().toLowerCase()) && (categoriaFiltro === "Todas" || producto.categoria === categoriaFiltro) && pasaInventario && pasaCatalogo && (canalFiltro === "Todos" || (producto.canales_venta || []).includes(canalFiltro));
+const pasaEstado = estadoFiltro === "Todos" || (estadoFiltro === "Activos" && producto.estado === "Activo") || (estadoFiltro === "Inactivos" && producto.estado !== "Activo");
+return texto.includes(busquedaProducto.trim().toLowerCase()) && (categoriaFiltro === "Todas" || producto.categoria === categoriaFiltro) && pasaInventario && pasaCatalogo && pasaEstado && (canalFiltro === "Todos" || (producto.canales_venta || []).includes(canalFiltro));
 });
 const metricasGanancia = useMemo(() => {
 const recetasPorProducto = new Map(recetasCatalogo.filter((receta) => receta.producto_id).map((receta) => [receta.producto_id as string, receta]));
@@ -674,7 +688,7 @@ subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
 <div className="border-b border-slate-200 p-6 sm:p-8">
 <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
 <div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-500">Catálogo</p><h2 className="mt-2 text-3xl font-black text-slate-950">Productos guardados</h2><p className="mt-1 text-sm text-slate-500">{productosFiltrados.length} de {productos.length} productos visibles</p></div>
-<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"><Link href="/recetas" className="rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-orange-600">Recetas y costos</Link><input aria-label="Buscar productos" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-500" placeholder="Nombre, código, etiqueta o categoría" value={busquedaProducto} onChange={(event) => setBusquedaProducto(event.target.value)} /><select aria-label="Filtrar por categoría" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={categoriaFiltro} onChange={(event) => setCategoriaFiltro(event.target.value)}><option>Todas</option>{categorias.map((categoria) => <option key={categoria}>{categoria}</option>)}</select><select aria-label="Filtrar por inventario" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={inventarioFiltro} onChange={(event) => setInventarioFiltro(event.target.value)}><option>Todos</option><option>Disponible</option><option>Stock bajo</option><option>Sin existencias</option></select><select aria-label="Filtrar por catálogo" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={catalogoFiltro} onChange={(event) => setCatalogoFiltro(event.target.value)}><option>Todos</option><option>Publicado</option><option>No publicado</option><option>Disponible online</option></select><select aria-label="Filtrar por canal" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={canalFiltro} onChange={(event) => setCanalFiltro(event.target.value)}><option>Todos</option>{canales.map((canal) => <option key={canal}>{canal}</option>)}</select></div>
+<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"><Link href="/recetas" className="rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-orange-600">Recetas y costos</Link><input aria-label="Buscar productos" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-500" placeholder="Nombre, código, etiqueta o categoría" value={busquedaProducto} onChange={(event) => setBusquedaProducto(event.target.value)} /><select aria-label="Filtrar por categoría" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={categoriaFiltro} onChange={(event) => setCategoriaFiltro(event.target.value)}><option>Todas</option>{categorias.map((categoria) => <option key={categoria}>{categoria}</option>)}</select><select aria-label="Filtrar por inventario" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={inventarioFiltro} onChange={(event) => setInventarioFiltro(event.target.value)}><option>Todos</option><option>Disponible</option><option>Stock bajo</option><option>Sin existencias</option></select><select aria-label="Filtrar por catálogo" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={catalogoFiltro} onChange={(event) => setCatalogoFiltro(event.target.value)}><option>Todos</option><option>Publicado</option><option>No publicado</option><option>Disponible online</option></select><select aria-label="Filtrar por canal" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={canalFiltro} onChange={(event) => setCanalFiltro(event.target.value)}><option>Todos</option>{canales.map((canal) => <option key={canal}>{canal}</option>)}</select><select aria-label="Filtrar por estado" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={estadoFiltro} onChange={(event) => setEstadoFiltro(event.target.value)}><option>Activos</option><option>Inactivos</option><option>Todos</option></select></div>
 </div>
 </div>
 
@@ -692,7 +706,7 @@ subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
       <div><p className="text-xs text-slate-500">Catálogo</p><p className="font-bold text-slate-900">{producto.publicar_catalogo ? "Publicado" : "Interno"}</p><p className="text-[11px] text-slate-500">{producto.disponible_online && Number(producto.stock || 0) > 0 ? "Disponible online" : "No disponible"}</p></div>
     </div>
     <div className="grid min-w-0 gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-2 lg:col-span-2 2xl:col-span-1"><div><p className="mb-1 text-xs font-bold text-slate-600">Margen completo</p><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="completo" /></div><div><p className="mb-1 text-xs font-bold text-slate-600">Margen ingredientes</p><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="ingredientes" /></div></div>
-    <div className="flex flex-wrap gap-2 lg:col-span-2 2xl:col-span-1 2xl:w-28 2xl:flex-col"><button type="button" onClick={() => verFicha(producto)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700">Ver ficha</button><button type="button" onClick={() => editarProducto(producto)} className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-bold text-white">Editar / foto</button><button type="button" onClick={() => void eliminarProducto(producto.id, producto.nombre)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white">Eliminar</button></div>
+    <div className="flex flex-wrap gap-2 lg:col-span-2 2xl:col-span-1 2xl:w-28 2xl:flex-col"><button type="button" onClick={() => verFicha(producto)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700">Ver ficha</button><button type="button" onClick={() => editarProducto(producto)} className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-bold text-white">Editar / foto</button><button type="button" onClick={() => void cambiarEstadoProducto(producto)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700">{producto.estado === "Activo" ? "Desactivar" : "Reactivar"}</button><button type="button" onClick={() => void eliminarProducto(producto.id, producto.nombre)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white">Eliminar</button></div>
   </article>
 ))}
 {productosFiltrados.length === 0 && <p className="p-8 text-center text-sm text-slate-500">No encontramos productos con esos filtros.</p>}
