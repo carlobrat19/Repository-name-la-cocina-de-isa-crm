@@ -42,9 +42,16 @@ type Producto = {
   canales_venta?: string[] | null;
   tipo_producto?: "preparado" | "reventa" | "combo";
   costo_adicional_combo?: number | string | null;
+  combo_merma_pct?: number | string | null;
+  combo_indirectos_pct?: number | string | null;
+  combo_ganancia_pct?: number | string | null;
+  combo_comision_pct?: number | string | null;
+  combo_iva_pct?: number | string | null;
 };
 
 type ComponenteCombo = { producto_id: string; cantidad: string };
+type IngredienteCombo = { ingrediente_id: string; cantidad: string };
+type IngredienteDisponible = { id: string; nombre: string; unidad_base: string; costo_referencia: number | string; stock_actual: number | string; activo: boolean };
 type MetricaGanancia = { costoTotal: number; costoIngredientes: number | null; margenCompleto: number; margenIngredientes: number | null; porcentajeCompleto: number; porcentajeIngredientes: number | null; porcentajeComision: number; tieneReceta: boolean };
 
 function MargenProducto({ metrica, tipo }: { metrica?: MetricaGanancia; tipo: "completo" | "ingredientes" }) {
@@ -73,7 +80,14 @@ const [disponibleOnline,setDisponibleOnline]=useState(true);
 const [canalesVenta,setCanalesVenta]=useState<string[]>(["WhatsApp", "Web"]);
 const [tipoProducto,setTipoProducto]=useState<"preparado" | "reventa" | "combo">("preparado");
 const [componentesCombo,setComponentesCombo]=useState<ComponenteCombo[]>([]);
+const [ingredientesCombo,setIngredientesCombo]=useState<IngredienteCombo[]>([]);
+const [ingredientesDisponibles,setIngredientesDisponibles]=useState<IngredienteDisponible[]>([]);
 const [costoAdicionalCombo,setCostoAdicionalCombo]=useState("0");
+const [mermaCombo,setMermaCombo]=useState("0");
+const [indirectosCombo,setIndirectosCombo]=useState("0");
+const [gananciaCombo,setGananciaCombo]=useState("0");
+const [comisionCombo,setComisionCombo]=useState("0");
+const [ivaCombo,setIvaCombo]=useState("12");
 const [fotoProducto,setFotoProducto]=useState<File | null>(null);
 const [fotoActual,setFotoActual]=useState("");
 const [fotoPrevia,setFotoPrevia]=useState("");
@@ -82,6 +96,8 @@ const [editorAbierto,setEditorAbierto]=useState(false);
 
 const [productos,setProductos]=
 useState<Producto[]>([]);
+const [componentesCatalogo,setComponentesCatalogo]=useState<(ComponenteCombo & { combo_id: string })[]>([]);
+const [insumosCatalogo,setInsumosCatalogo]=useState<(IngredienteCombo & { combo_id: string })[]>([]);
 
 const [recetaPiloto, setRecetaPiloto] = useState<RecetaPiloto | null>(null);
 const [recetasCatalogo, setRecetasCatalogo] = useState<RecetaPiloto[]>([]);
@@ -124,9 +140,12 @@ useEffect(() => {
 
 async function obtenerProductos(){
 
-const [productosRespuesta, recetasRespuesta] = await Promise.all([
+const [productosRespuesta, recetasRespuesta, ingredientesRespuesta, componentesRespuesta, insumosRespuesta] = await Promise.all([
 supabase.from("productos").select("*").order("id", { ascending: false }),
-supabase.from("recetas_estandar").select("producto_id,rendimiento,unidad_rendimiento,merma_pct,margen_pct,iva_pct,recargo_carta_pct,comision_canal_pct,costos_adicionales,receta_ingredientes(cantidad,ingredientes(nombre,unidad_base,costo_referencia,stock_actual))").eq("activa", true)
+supabase.from("recetas_estandar").select("producto_id,rendimiento,unidad_rendimiento,merma_pct,margen_pct,iva_pct,recargo_carta_pct,comision_canal_pct,costos_adicionales,receta_ingredientes(cantidad,ingredientes(nombre,unidad_base,costo_referencia,stock_actual))").eq("activa", true),
+supabase.from("ingredientes").select("id,nombre,unidad_base,costo_referencia,stock_actual,activo").order("nombre"),
+supabase.from("combo_componentes").select("combo_id,producto_id,cantidad"),
+supabase.from("combo_ingredientes").select("combo_id,ingrediente_id,cantidad")
 ]);
 const { data, error } = productosRespuesta;
 
@@ -144,6 +163,9 @@ setProductos(
 productosCargados
 );
 setRecetasCatalogo((recetasRespuesta.data || []) as unknown as RecetaPiloto[]);
+if (!ingredientesRespuesta.error) setIngredientesDisponibles((ingredientesRespuesta.data || []) as IngredienteDisponible[]);
+if (!componentesRespuesta.error) setComponentesCatalogo((componentesRespuesta.data || []).map((item) => ({ ...item, cantidad: String(item.cantidad) })));
+if (!insumosRespuesta.error) setInsumosCatalogo((insumosRespuesta.data || []).map((item) => ({ ...item, cantidad: String(item.cantidad) })));
 
 }
 
@@ -160,13 +182,22 @@ setRecetaPiloto(recetaRespuesta.data as RecetaPiloto | null);
 }
 
 const costoComponentesCombo = componentesCombo.reduce((total, componente) => total + (Number(productos.find((producto) => producto.id === componente.producto_id)?.costo || 0) * Number(componente.cantidad || 0)), 0);
-const costoTotalCombo = costoComponentesCombo + Number(costoAdicionalCombo || 0);
+const costoIngredientesCombo = ingredientesCombo.reduce((total, componente) => total + Number(ingredientesDisponibles.find((ingrediente) => ingrediente.id === componente.ingrediente_id)?.costo_referencia || 0) * Number(componente.cantidad || 0), 0);
+const costoConMermaCombo = costoComponentesCombo + costoIngredientesCombo * (1 + Number(mermaCombo || 0) / 100) + Number(costoAdicionalCombo || 0);
+const costoTotalCombo = costoConMermaCombo * (1 + Number(indirectosCombo || 0) / 100);
+const precioSugeridoCombo = costoTotalCombo * (1 + Number(gananciaCombo || 0) / 100) / Math.max(0.01, 1 - Number(comisionCombo || 0) / 100) * (1 + Number(ivaCombo || 0) / 100);
 const etiquetaTipo = (tipo?: Producto["tipo_producto"]) => tipo === "combo" ? "Combo / box" : tipo === "reventa" ? "Reventa" : "Preparado";
 
 async function cargarComponentesCombo(productoId: string) {
  const { data, error } = await supabase.from("combo_componentes").select("producto_id,cantidad").eq("combo_id", productoId).order("created_at");
  if (error) { console.error(error); setComponentesCombo([]); return; }
  setComponentesCombo((data || []).map((item) => ({ producto_id: item.producto_id, cantidad: String(item.cantidad) })));
+}
+
+async function cargarIngredientesCombo(productoId: string) {
+ const { data, error } = await supabase.from("combo_ingredientes").select("ingrediente_id,cantidad").eq("combo_id", productoId).order("created_at");
+ if (error) { console.error(error); setIngredientesCombo([]); return; }
+ setIngredientesCombo((data || []).map((item) => ({ ingrediente_id: item.ingrediente_id, cantidad: String(item.cantidad) })));
 }
 
 function seleccionarFoto(archivo: File | null) {
@@ -185,7 +216,8 @@ setNombre(""); setCategoria(""); setPrecio(""); setCosto("");
 setStock("0"); setStockMinimo("0"); setDescripcion(""); setSku("");
 setTiempoPreparacion(""); setEtiquetas(""); setPublicarCatalogo(false);
 setDisponibleOnline(true); setCanalesVenta(["WhatsApp", "Web"]);
-setTipoProducto("preparado"); setComponentesCombo([]); setCostoAdicionalCombo("0");
+setTipoProducto("preparado"); setComponentesCombo([]); setIngredientesCombo([]); setCostoAdicionalCombo("0");
+setMermaCombo("0"); setIndirectosCombo("0"); setGananciaCombo("0"); setComisionCombo("0"); setIvaCombo("12");
 setFotoProducto(null); setFotoActual(""); setFotoPrevia("");
 }
 
@@ -232,9 +264,14 @@ if(
 ||
 (tipoProducto !== "combo" && !costo)
 ||
-(tipoProducto === "combo" && componentesCombo.length === 0)
+(tipoProducto === "combo" && componentesCombo.length + ingredientesCombo.length === 0)
 ||
 (tipoProducto === "combo" && componentesCombo.some((componente) => !componente.producto_id || !Number.isFinite(Number(componente.cantidad)) || Number(componente.cantidad) <= 0))
+|| (tipoProducto === "combo" && ingredientesCombo.some((componente) => !componente.ingrediente_id || !Number.isFinite(Number(componente.cantidad)) || Number(componente.cantidad) <= 0))
+|| (tipoProducto === "combo" && new Set(componentesCombo.map((componente) => componente.producto_id)).size !== componentesCombo.length)
+|| (tipoProducto === "combo" && new Set(ingredientesCombo.map((componente) => componente.ingrediente_id)).size !== ingredientesCombo.length)
+|| (tipoProducto === "combo" && [mermaCombo, indirectosCombo, gananciaCombo, comisionCombo, ivaCombo, costoAdicionalCombo].some((valor) => !Number.isFinite(Number(valor)) || Number(valor) < 0))
+|| (tipoProducto === "combo" && Number(comisionCombo) >= 100)
 ){
 
 alert(
@@ -275,6 +312,11 @@ return;
  canales_venta: canalesVenta,
  tipo_producto: tipoProducto,
  costo_adicional_combo: tipoProducto === "combo" ? Number(costoAdicionalCombo || 0) : 0,
+ combo_merma_pct: tipoProducto === "combo" ? Number(mermaCombo) / 100 : 0,
+ combo_indirectos_pct: tipoProducto === "combo" ? Number(indirectosCombo) / 100 : 0,
+ combo_ganancia_pct: tipoProducto === "combo" ? Number(gananciaCombo) / 100 : 0,
+ combo_comision_pct: tipoProducto === "combo" ? Number(comisionCombo) / 100 : 0,
+ combo_iva_pct: tipoProducto === "combo" ? Number(ivaCombo) / 100 : 0.12,
  };
 
  let productoId = productoEditando;
@@ -333,12 +375,12 @@ return;
 }
 
 if (productoId) {
-  const { error: eliminarComponentesError } = await supabase.from("combo_componentes").delete().eq("combo_id", productoId);
-  if (eliminarComponentesError) { console.error(eliminarComponentesError); alert("El producto se guardó, pero no se pudo actualizar su composición."); return; }
-}
-if (tipoProducto === "combo" && productoId) {
-  const { error: componentesError } = await supabase.from("combo_componentes").insert(componentesCombo.map((componente) => ({ combo_id: productoId, producto_id: componente.producto_id, cantidad: Number(componente.cantidad) })));
-  if (componentesError) { console.error(componentesError); alert("El producto se guardó, pero no se pudo guardar su composición."); return; }
+  const { error: composicionError } = await supabase.rpc("guardar_composicion_combo", {
+    p_combo_id: productoId,
+    p_productos: tipoProducto === "combo" ? componentesCombo.map((componente) => ({ producto_id: componente.producto_id, cantidad: Number(componente.cantidad) })) : [],
+    p_ingredientes: tipoProducto === "combo" ? ingredientesCombo.map((componente) => ({ ingrediente_id: componente.ingrediente_id, cantidad: Number(componente.cantidad) })) : [],
+  });
+  if (composicionError) { console.error(composicionError); alert("El producto se guardó, pero no se pudo actualizar su composición. Revisa los componentes y vuelve a guardar."); return; }
 }
 
 alert(
@@ -418,17 +460,24 @@ const metricasGanancia = useMemo(() => {
 const recetasPorProducto = new Map(recetasCatalogo.filter((receta) => receta.producto_id).map((receta) => [receta.producto_id as string, receta]));
 return new Map(productos.map((producto) => {
 const receta = recetasPorProducto.get(producto.id);
-const costoIngredientes = receta ? receta.receta_ingredientes.reduce((total, linea) => total + Number(linea.cantidad || 0) * Number(linea.ingredientes?.costo_referencia || 0), 0) / Math.max(0.001, Number(receta.rendimiento || 1)) : null;
+const ingredientesReceta = receta ? receta.receta_ingredientes.reduce((total, linea) => total + Number(linea.cantidad || 0) * Number(linea.ingredientes?.costo_referencia || 0), 0) / Math.max(0.001, Number(receta.rendimiento || 1)) : null;
+const insumosDirectos = insumosCatalogo.filter((item) => item.combo_id === producto.id);
+const componentes = componentesCatalogo.filter((item) => item.combo_id === producto.id);
+const costoIngredientesCombo = insumosDirectos.reduce((total, item) => total + Number(item.cantidad) * Number(ingredientesDisponibles.find((ingrediente) => ingrediente.id === item.ingrediente_id)?.costo_referencia || 0), 0)
+  + componentes.reduce((total, item) => { const recetaComponente = recetasPorProducto.get(item.producto_id); return total + Number(item.cantidad) * (recetaComponente ? recetaComponente.receta_ingredientes.reduce((subtotal, linea) => subtotal + Number(linea.cantidad || 0) * Number(linea.ingredientes?.costo_referencia || 0), 0) / Math.max(0.001, Number(recetaComponente.rendimiento || 1)) : 0); }, 0);
+const costoIngredientes = producto.tipo_producto === "combo" ? (insumosDirectos.length || componentes.some((item) => recetasPorProducto.has(item.producto_id)) ? costoIngredientesCombo : null) : ingredientesReceta;
 const precioFinal = Number(producto.precio_venta || 0);
-const ventaSinIva = receta ? precioFinal / (1 + Number(receta.iva_pct || 0)) : precioFinal;
-const comisionPrevista = ventaSinIva * Number(receta?.comision_canal_pct || 0);
+const iva = producto.tipo_producto === "combo" ? Number(producto.combo_iva_pct ?? 0.12) : Number(receta?.iva_pct || 0);
+const comision = producto.tipo_producto === "combo" ? Number(producto.combo_comision_pct || 0) : Number(receta?.comision_canal_pct || 0);
+const ventaSinIva = precioFinal / (1 + iva);
+const comisionPrevista = ventaSinIva * comision;
 const costoProduccion = Number(producto.costo || 0);
 const costoTotal = costoProduccion + (precioFinal - ventaSinIva) + comisionPrevista;
 const margenCompleto = precioFinal - costoTotal;
 const margenIngredientes = costoIngredientes == null ? null : ventaSinIva - comisionPrevista - costoIngredientes;
-return [producto.id, { costoTotal, costoIngredientes, margenCompleto, margenIngredientes, porcentajeCompleto: ventaSinIva > 0 ? margenCompleto / ventaSinIva * 100 : 0, porcentajeIngredientes: margenIngredientes != null && ventaSinIva > 0 ? margenIngredientes / ventaSinIva * 100 : null, porcentajeComision: Number(receta?.comision_canal_pct || 0) * 100, tieneReceta: Boolean(receta) }];
+return [producto.id, { costoTotal, costoIngredientes, margenCompleto, margenIngredientes, porcentajeCompleto: ventaSinIva > 0 ? margenCompleto / ventaSinIva * 100 : 0, porcentajeIngredientes: margenIngredientes != null && ventaSinIva > 0 ? margenIngredientes / ventaSinIva * 100 : null, porcentajeComision: comision * 100, tieneReceta: Boolean(receta) || (producto.tipo_producto === "combo" && (componentes.length + insumosDirectos.length > 0)) }];
 }));
-}, [productos, recetasCatalogo]);
+}, [productos, recetasCatalogo, componentesCatalogo, insumosCatalogo, ingredientesDisponibles]);
 const productosConMargen = productos.filter((producto) => metricasGanancia.get(producto.id)?.tieneReceta);
 const margenPromedio = productosConMargen.length ? productosConMargen.reduce((total, producto) => total + (metricasGanancia.get(producto.id)?.porcentajeCompleto || 0), 0) / productosConMargen.length : 0;
 const productosConMargenIngredientes = productosConMargen.filter((producto) => metricasGanancia.get(producto.id)?.porcentajeIngredientes != null);
@@ -450,6 +499,12 @@ function editarProducto(producto: Producto) {
   setTipoProducto(producto.tipo_producto || "preparado");
   setCostoAdicionalCombo(String(producto.costo_adicional_combo ?? 0));
   void cargarComponentesCombo(producto.id);
+  void cargarIngredientesCombo(producto.id);
+  setMermaCombo(String(Number(producto.combo_merma_pct || 0) * 100));
+  setIndirectosCombo(String(Number(producto.combo_indirectos_pct || 0) * 100));
+  setGananciaCombo(String(Number(producto.combo_ganancia_pct || 0) * 100));
+  setComisionCombo(String(Number(producto.combo_comision_pct || 0) * 100));
+  setIvaCombo(String(Number(producto.combo_iva_pct ?? 0.12) * 100));
   setCategoria(producto.categoria ?? "");
   setPrecio(String(producto.precio_venta));
   setCosto(String(producto.costo));
@@ -559,7 +614,14 @@ e.target.value
 
 <label className="text-sm font-bold text-slate-700">Tipo de producto<select value={tipoProducto} onChange={(e) => setTipoProducto(e.target.value as "preparado" | "reventa" | "combo")} className="mt-2 w-full border border-slate-200 bg-white p-4 rounded-2xl outline-none transition focus:border-orange-500"><option value="preparado">Preparado con receta</option><option value="reventa">Artículo de reventa</option><option value="combo">Combo / box</option></select><span className="mt-1 block text-xs font-normal text-slate-500">{tipoProducto === "combo" ? "Se vende como una sola box y descuenta sus componentes." : tipoProducto === "reventa" ? "Se compra listo para vender, como Lays o bebidas." : "Se produce a partir de su receta estándar."}</span></label>
 
-{tipoProducto === "combo" && <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4 sm:col-span-2"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="font-black text-slate-950">Composición de la box</p><p className="mt-1 text-xs text-slate-600">Al venderla, el POS descuenta cada componente. No asignes existencias al combo.</p></div><button type="button" onClick={() => setComponentesCombo((actual) => [...actual, { producto_id: "", cantidad: "1" }])} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white">+ Agregar componente</button></div><div className="mt-4 space-y-2">{componentesCombo.map((componente, indice) => <div key={indice} className="grid gap-2 sm:grid-cols-[1fr_130px_auto]"><select value={componente.producto_id} onChange={(e) => setComponentesCombo((actual) => actual.map((item, posicion) => posicion === indice ? { ...item, producto_id: e.target.value } : item))} className="rounded-xl border border-orange-200 bg-white p-3 text-sm"><option value="">Seleccionar producto</option>{productos.filter((producto) => producto.id !== productoEditando && producto.tipo_producto !== "combo").map((producto) => <option key={producto.id} value={producto.id}>{producto.nombre} · Q{Number(producto.costo || 0).toFixed(2)}</option>)}</select><input type="number" min="0.001" step="0.001" value={componente.cantidad} onChange={(e) => setComponentesCombo((actual) => actual.map((item, posicion) => posicion === indice ? { ...item, cantidad: e.target.value } : item))} className="rounded-xl border border-orange-200 bg-white p-3 text-sm" placeholder="Cantidad"/><button type="button" onClick={() => setComponentesCombo((actual) => actual.filter((_, posicion) => posicion !== indice))} className="rounded-xl px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100">Quitar</button></div>)}{!componentesCombo.length && <p className="rounded-xl bg-white p-3 text-sm text-slate-500">Agrega los productos que van dentro de la box, por ejemplo: Trío tres leches, Lays y Jamaica.</p>}</div><div className="mt-4 grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-white p-3"><p className="text-xs font-bold text-slate-500">Costo componentes</p><p className="mt-1 text-lg font-black text-slate-950">Q{costoComponentesCombo.toFixed(2)}</p></div><label className="rounded-xl bg-white p-3 text-xs font-bold text-slate-600">Empaque / directo adicional (Q)<input type="number" min="0" step="0.01" value={costoAdicionalCombo} onChange={(e) => setCostoAdicionalCombo(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-2 text-sm text-slate-900"/></label><div className="rounded-xl bg-orange-500 p-3 text-white"><p className="text-xs font-bold text-orange-100">Costo de la box</p><p className="mt-1 text-lg font-black">Q{costoTotalCombo.toFixed(2)}</p></div></div></div>}
+{tipoProducto === "combo" && <div className="space-y-5 rounded-2xl border border-orange-200 bg-orange-50 p-4 sm:col-span-2">
+  <div><p className="font-black text-slate-950">Composición de la box</p><p className="mt-1 text-xs text-slate-600">Combina productos preparados o de reventa con insumos directos. Estos últimos se descuentan del inventario de ingredientes al iniciar Producción.</p></div>
+  <div className="rounded-xl bg-white p-4"><div className="flex items-center justify-between gap-2"><h3 className="text-sm font-black">Productos incluidos</h3><button type="button" onClick={() => setComponentesCombo((actual) => [...actual, { producto_id: "", cantidad: "1" }])} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white">+ Producto</button></div><div className="mt-3 space-y-2">{componentesCombo.map((componente, indice) => <div key={indice} className="grid gap-2 sm:grid-cols-[1fr_130px_auto]"><select aria-label={`Producto ${indice + 1}`} value={componente.producto_id} onChange={(e) => setComponentesCombo((actual) => actual.map((item, posicion) => posicion === indice ? { ...item, producto_id: e.target.value } : item))} className="rounded-xl border border-orange-200 bg-white p-3 text-sm"><option value="">Seleccionar producto</option>{productos.filter((producto) => producto.id !== productoEditando && producto.tipo_producto !== "combo").map((producto) => <option key={producto.id} value={producto.id}>{producto.nombre} · Q{Number(producto.costo || 0).toFixed(2)}</option>)}</select><input aria-label={`Cantidad del producto ${indice + 1}`} type="number" min="0.001" step="0.001" value={componente.cantidad} onChange={(e) => setComponentesCombo((actual) => actual.map((item, posicion) => posicion === indice ? { ...item, cantidad: e.target.value } : item))} className="rounded-xl border border-orange-200 bg-white p-3 text-sm"/><button type="button" onClick={() => setComponentesCombo((actual) => actual.filter((_, posicion) => posicion !== indice))} className="rounded-xl px-3 py-2 text-xs font-bold text-rose-700">Quitar</button></div>)}</div></div>
+  <div className="rounded-xl bg-white p-4"><div className="flex items-center justify-between gap-2"><h3 className="text-sm font-black">Insumos directos</h3><button type="button" onClick={() => setIngredientesCombo((actual) => [...actual, { ingrediente_id: "", cantidad: "1" }])} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white">+ Insumo</button></div><p className="mt-1 text-xs text-slate-500">Registra Play-Doh, crayones, toppings o empaques como ingredientes en unidades, gramos o mililitros.</p><div className="mt-3 space-y-2">{ingredientesCombo.map((componente, indice) => { const ingrediente = ingredientesDisponibles.find((item) => item.id === componente.ingrediente_id); return <div key={indice} className="grid gap-2 sm:grid-cols-[1fr_130px_auto]"><select aria-label={`Insumo ${indice + 1}`} value={componente.ingrediente_id} onChange={(e) => setIngredientesCombo((actual) => actual.map((item, posicion) => posicion === indice ? { ...item, ingrediente_id: e.target.value } : item))} className="rounded-xl border border-orange-200 bg-white p-3 text-sm"><option value="">Seleccionar insumo</option>{ingredientesDisponibles.filter((item) => item.activo || item.id === componente.ingrediente_id).map((item) => <option key={item.id} value={item.id}>{item.nombre} · {item.unidad_base} · Q{Number(item.costo_referencia).toFixed(4)}</option>)}</select><label className="text-xs text-slate-500"><input aria-label={`Cantidad del insumo ${indice + 1}`} type="number" min="0.001" step="0.001" value={componente.cantidad} onChange={(e) => setIngredientesCombo((actual) => actual.map((item, posicion) => posicion === indice ? { ...item, cantidad: e.target.value } : item))} className="w-full rounded-xl border border-orange-200 bg-white p-3 text-sm text-slate-900"/>{ingrediente?.unidad_base || "unidad"}</label><button type="button" onClick={() => setIngredientesCombo((actual) => actual.filter((_, posicion) => posicion !== indice))} className="rounded-xl px-3 py-2 text-xs font-bold text-rose-700">Quitar</button></div>; })}</div></div>
+  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><div className="rounded-xl bg-white p-3 text-sm">Productos: <b>Q{costoComponentesCombo.toFixed(2)}</b></div><div className="rounded-xl bg-white p-3 text-sm">Insumos: <b>Q{costoIngredientesCombo.toFixed(2)}</b></div><label className="rounded-xl bg-white p-3 text-xs font-bold">Otro costo directo (Q)<input type="number" min="0" step="0.01" value={costoAdicionalCombo} onChange={(e) => setCostoAdicionalCombo(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-2 text-sm"/></label></div>
+  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{[["Merma %",mermaCombo,setMermaCombo],["Costos indirectos %",indirectosCombo,setIndirectosCombo],["Ganancia deseada %",gananciaCombo,setGananciaCombo],["Comisión prevista %",comisionCombo,setComisionCombo],["IVA %",ivaCombo,setIvaCombo]].map(([etiqueta,valor,actualizar]) => <label key={etiqueta as string} className="rounded-xl bg-white p-3 text-xs font-bold">{etiqueta as string}<input type="number" min="0" max={etiqueta === "Comisión prevista %" ? 99.99 : undefined} step="0.1" value={valor as string} onChange={(e) => (actualizar as (value: string) => void)(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-2 text-sm"/></label>)}</div>
+  <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-xl bg-slate-950 p-4 text-white"><p className="text-xs">Costo completo estimado</p><p className="text-xl font-black">Q{costoTotalCombo.toFixed(2)}</p></div><div className="rounded-xl bg-orange-500 p-4 text-white"><p className="text-xs">Precio sugerido con IVA</p><p className="text-xl font-black">Q{precioSugeridoCombo.toFixed(2)}</p><button type="button" onClick={() => setPrecio(precioSugeridoCombo.toFixed(2))} className="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-orange-700">Usar como precio final</button></div></div><p className="text-xs text-slate-600">El precio sugerido es orientativo; el precio final de venta se ingresa arriba. La merma y los porcentajes ajustan el costo y precio, pero no aumentan las cantidades descontadas del inventario.</p>
+</div>}
 
 <textarea className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 sm:col-span-2" placeholder="Descripción comercial: qué incluye, sabor, tamaño y condiciones" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
 <input className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" placeholder="SKU o código interno" value={sku} onChange={(e) => setSku(e.target.value)} />

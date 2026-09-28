@@ -32,6 +32,8 @@ type Producto = {
   tipo_producto?: "preparado" | "reventa" | "combo";
 };
 type ComponenteCombo = { combo_id: string; producto_id: string; cantidad: number };
+type InsumoCombo = { combo_id: string; ingrediente_id: string; cantidad: number };
+type InventarioIngrediente = { id: string; stock_actual: number };
 type Inventario = { producto_id: string; existencia: number };
 type Turno = { id: string; fondo_inicial: number };
 type Cliente = {
@@ -64,6 +66,8 @@ export default function PuntoVentaPage() {
     [productos, setProductos] = useState<Producto[]>([]),
     [inventario, setInventario] = useState<Inventario[]>([]),
     [componentesCombo, setComponentesCombo] = useState<ComponenteCombo[]>([]),
+    [insumosCombo, setInsumosCombo] = useState<InsumoCombo[]>([]),
+    [inventarioIngredientes, setInventarioIngredientes] = useState<InventarioIngrediente[]>([]),
     [catalogo, setCatalogo] = useState<string[]>([]),
     [turno, setTurno] = useState<Turno | null>(null),
     [fondo, setFondo] = useState(""),
@@ -108,7 +112,7 @@ export default function PuntoVentaPage() {
   }
   async function cargarLocal() {
     if (!sucursalId || !usuarioId) return;
-    const [a, b, c, d, e] = await Promise.all([
+    const [a, b, c, d, e, f, g] = await Promise.all([
       supabase
         .from("inventario_sucursal_productos")
         .select("producto_id,existencia")
@@ -132,13 +136,17 @@ export default function PuntoVentaPage() {
         .order("nombre")
         .limit(250),
       supabase.from("combo_componentes").select("combo_id,producto_id,cantidad"),
+      supabase.from("combo_ingredientes").select("combo_id,ingrediente_id,cantidad"),
+      supabase.from("ingredientes").select("id,stock_actual"),
     ]);
-    if (a.error || b.error || c.error || d.error || e.error)
+    if (a.error || b.error || c.error || d.error || e.error || f.error || g.error)
       setMensaje(
-        `No se pudo cargar la sucursal: ${(a.error || b.error || c.error || d.error || e.error)?.message}`,
+        `No se pudo cargar la sucursal: ${(a.error || b.error || c.error || d.error || e.error || f.error || g.error)?.message}`,
       );
     setInventario((a.data ?? []) as Inventario[]);
     setComponentesCombo((e.data ?? []) as ComponenteCombo[]);
+    setInsumosCombo((f.data ?? []) as InsumoCombo[]);
+    setInventarioIngredientes((g.data ?? []) as InventarioIngrediente[]);
     setCatalogo((b.data ?? []).map((x) => x.producto_id));
     setTurno((c.data ?? null) as Turno | null);
     setClientes((d.data ?? []) as Cliente[]);
@@ -159,8 +167,13 @@ export default function PuntoVentaPage() {
   const existenciaDisponible = (producto: Producto) => {
     if (producto.tipo_producto !== "combo") return stock.get(producto.id) ?? 0;
     const componentes = componentesCombo.filter((componente) => componente.combo_id === producto.id);
-    if (!componentes.length) return 0;
-    return Math.floor(Math.min(...componentes.map((componente) => (stock.get(componente.producto_id) ?? 0) / Number(componente.cantidad))));
+    const insumos = insumosCombo.filter((insumo) => insumo.combo_id === producto.id);
+    if (!componentes.length && !insumos.length) return 0;
+    const stockInsumos = new Map(inventarioIngredientes.map((insumo) => [insumo.id, Number(insumo.stock_actual)]));
+    return Math.floor(Math.min(
+      ...componentes.map((componente) => (stock.get(componente.producto_id) ?? 0) / Number(componente.cantidad)),
+      ...insumos.map((insumo) => (stockInsumos.get(insumo.ingrediente_id) ?? 0) / Number(insumo.cantidad)),
+    ));
   };
   const disponibles = useMemo(
     () =>
