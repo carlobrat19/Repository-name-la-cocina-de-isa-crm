@@ -110,6 +110,7 @@ const [inventarioFiltro, setInventarioFiltro] = useState("Todos");
 const [catalogoFiltro, setCatalogoFiltro] = useState("Todos");
 const [canalFiltro, setCanalFiltro] = useState("Todos");
 const [estadoFiltro, setEstadoFiltro] = useState("Activos");
+const [vistaProductos, setVistaProductos] = useState<"administracion" | "catalogo">("administracion");
 
 const [
 productoEditando,
@@ -695,13 +696,36 @@ subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
 <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-xl">
 
 <div className="border-b border-slate-200 p-6 sm:p-8">
+<div className="mb-6 flex flex-wrap gap-2" role="group" aria-label="Vista de productos">
+<button type="button" aria-pressed={vistaProductos === "administracion"} onClick={() => setVistaProductos("administracion")} className={`rounded-xl px-4 py-2.5 text-sm font-bold transition ${vistaProductos === "administracion" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700 hover:border-orange-300"}`}>Administración</button>
+<button type="button" aria-pressed={vistaProductos === "catalogo"} onClick={() => setVistaProductos("catalogo")} className={`rounded-xl px-4 py-2.5 text-sm font-bold transition ${vistaProductos === "catalogo" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700 hover:border-orange-300"}`}>Catálogo visual</button>
+</div>
 <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-<div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-500">Catálogo</p><h2 className="mt-2 text-3xl font-black text-slate-950">Productos guardados</h2><p className="mt-1 text-sm text-slate-500">{productosFiltrados.length} de {productos.length} productos visibles</p></div>
+<div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-500">Catálogo</p><h2 className="mt-2 text-3xl font-black text-slate-950">{vistaProductos === "catalogo" ? "Catálogo visual" : "Productos guardados"}</h2><p className="mt-1 text-sm text-slate-500">{productosFiltrados.length} de {productos.length} productos visibles</p></div>
 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"><Link href="/recetas" className="rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-orange-600">Recetas y costos</Link><input aria-label="Buscar productos" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-500" placeholder="Nombre, código, etiqueta o categoría" value={busquedaProducto} onChange={(event) => setBusquedaProducto(event.target.value)} /><select aria-label="Filtrar por categoría" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={categoriaFiltro} onChange={(event) => setCategoriaFiltro(event.target.value)}><option>Todas</option>{categorias.map((categoria) => <option key={categoria}>{categoria}</option>)}</select><select aria-label="Filtrar por inventario" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={inventarioFiltro} onChange={(event) => setInventarioFiltro(event.target.value)}><option>Todos</option><option>Disponible</option><option>Stock bajo</option><option>Sin existencias</option></select><select aria-label="Filtrar por catálogo" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={catalogoFiltro} onChange={(event) => setCatalogoFiltro(event.target.value)}><option>Todos</option><option>Publicado</option><option>No publicado</option><option>Disponible online</option></select><select aria-label="Filtrar por canal" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={canalFiltro} onChange={(event) => setCanalFiltro(event.target.value)}><option>Todos</option>{canales.map((canal) => <option key={canal}>{canal}</option>)}</select><select aria-label="Filtrar por estado" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={estadoFiltro} onChange={(event) => setEstadoFiltro(event.target.value)}><option>Activos</option><option>Inactivos</option><option>Todos</option></select></div>
 </div>
 </div>
 
-<div className="max-h-[68vh] divide-y divide-slate-100 overflow-y-auto">
+{vistaProductos === "catalogo" ? (
+<div className="grid gap-5 p-5 sm:grid-cols-2 sm:p-7 lg:grid-cols-3 2xl:grid-cols-4">
+{productosFiltrados.map((producto) => (
+  <article key={producto.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg">
+    <div className="relative aspect-[4/3] overflow-hidden bg-orange-50">
+      {producto.imagen_url ? <Image src={producto.imagen_url} alt={producto.nombre} fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1536px) 33vw, 25vw" className="object-cover" /> : <div className="grid h-full place-items-center text-sm font-bold text-orange-600">Sin fotografía</div>}
+    </div>
+    <div className="p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-orange-600">{producto.categoria || "Sin categoría"}</p>
+      <h3 className="mt-1 min-h-12 text-lg font-black leading-snug text-slate-950">{producto.nombre}</h3>
+      <div className="mt-3 flex items-end justify-between gap-2 border-t border-slate-100 pt-3">
+        <span className="text-xs text-slate-500">Código: {producto.sku || "Sin código"}</span>
+        <span className="whitespace-nowrap text-xl font-black text-emerald-700">Q{Number(producto.precio_venta || 0).toFixed(2)}</span>
+      </div>
+    </div>
+  </article>
+))}
+{productosFiltrados.length === 0 && <p className="col-span-full py-8 text-center text-sm text-slate-500">No encontramos productos con esos filtros.</p>}
+</div>
+) : <div className="max-h-[68vh] divide-y divide-slate-100 overflow-y-auto">
 {productosFiltrados.map((producto) => (
   <article key={producto.id} className="grid min-w-0 gap-4 p-4 sm:p-5 lg:grid-cols-2 2xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,1.5fr)_auto] 2xl:items-center">
     <div className="flex min-w-0 items-start gap-3">
@@ -719,7 +743,7 @@ subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
   </article>
 ))}
 {productosFiltrados.length === 0 && <p className="p-8 text-center text-sm text-slate-500">No encontramos productos con esos filtros.</p>}
-</div>
+</div>}
 
 
 </div>
