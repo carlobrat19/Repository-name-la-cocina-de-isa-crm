@@ -36,8 +36,8 @@ export default function MensajeriaPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
-  const [desde, setDesde] = useState(hoyGuatemala);
-  const [hasta, setHasta] = useState(hoyGuatemala);
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
   const [tipo, setTipo] = useState("Mensajería externa");
   const [estado, setEstado] = useState("Por entregar");
   const [departamento, setDepartamento] = useState("Todos");
@@ -45,6 +45,7 @@ export default function MensajeriaPage() {
   const [zona, setZona] = useState("Todas");
   const [busqueda, setBusqueda] = useState("");
   const [orden, setOrden] = useState("Municipio, zona y cliente");
+  const [paginaSeleccionada, setPaginaSeleccionada] = useState({ filtro: "", numero: 1 });
 
   async function cargar() {
     setCargando(true); setError("");
@@ -82,6 +83,12 @@ export default function MensajeriaPage() {
     return comparar(a.municipio_entrega, b.municipio_entrega) || comparar(a.zona_entrega, b.zona_entrega) || comparar(a.cliente, b.cliente);
   }), [base, busqueda, departamento, municipio, zona, orden]);
   const resumen = useMemo(() => ({ pedidos: visibles.length, unidades: visibles.reduce((total, pedido) => total + (pedido.pedido_detalle || []).reduce((suma, item) => suma + Number(item.cantidad || 0), 0), 0), porCobrar: visibles.reduce((total, pedido) => total + Math.max(0, Number(pedido.saldo_pendiente ?? (pedido.pago_estado === "Pagado" ? 0 : pedido.total || 0))), 0), envios: visibles.reduce((total, pedido) => total + Number(pedido.costo_envio || 0), 0) }), [visibles]);
+  const claveFiltro = JSON.stringify([desde, hasta, tipo, estado, departamento, municipio, zona, busqueda, orden]);
+  const totalPaginas = Math.max(1, Math.ceil(visibles.length / 10));
+  const pagina = paginaSeleccionada.filtro === claveFiltro ? Math.min(paginaSeleccionada.numero, totalPaginas) : 1;
+  const pedidosPagina = visibles.slice((pagina - 1) * 10, pagina * 10);
+  const totalPagina = pedidosPagina.reduce((total, pedido) => total + Number(pedido.total || 0), 0);
+  const envioPagina = pedidosPagina.reduce((total, pedido) => total + Number(pedido.costo_envio || 0), 0);
   const periodo = desde && hasta && desde === hasta ? fechaHumana(desde) : desde && hasta ? `${fechaHumana(desde)} — ${fechaHumana(hasta)}` : desde ? `desde ${fechaHumana(desde)}` : hasta ? `hasta ${fechaHumana(hasta)}` : "todas las fechas";
 
   if (!listo) return <p className="p-8 text-sm text-slate-500">Cargando…</p>;
@@ -105,13 +112,13 @@ export default function MensajeriaPage() {
         </div>
       </section>
       <section className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4 print:hidden">{[["Pedidos", resumen.pedidos, "border-l-orange-500 text-orange-700"], ["Unidades", resumen.unidades, "border-l-slate-950 text-slate-950"], ["Por cobrar", dinero(resumen.porCobrar), "border-l-rose-500 text-rose-700"], ["Envío cobrado", dinero(resumen.envios), "border-l-emerald-500 text-emerald-700"]].map(([etiqueta, valor, estilo]) => <div key={etiqueta} className={`rounded-2xl border border-l-4 border-slate-200 bg-white p-4 shadow-sm ${estilo}`}><p className="text-xs font-bold uppercase text-slate-500">{etiqueta}</p><p className="mt-1 text-2xl font-black">{valor}</p></div>)}</section>
-      <section className="mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm print:mt-0 print:rounded-none print:border-0 print:shadow-none"><div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 px-5 py-5 print:px-0"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-600">Hoja para reparto</p><h2 className="mt-1 text-xl font-black text-slate-950">Entregas · {periodo}</h2><p className="text-xs text-slate-500">{tipo} · {estado} · {resumen.pedidos} pedidos · {resumen.unidades} unidades</p></div><span className="grid size-11 place-items-center rounded-xl bg-orange-50 text-orange-600 print:hidden"><Truck size={22}/></span></div>
+      <section className="mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm print:mt-0 print:rounded-none print:border-0 print:shadow-none"><div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 px-5 py-5 print:px-0"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-600">Hoja para reparto</p><h2 className="mt-1 text-xl font-black text-slate-950">Entregas · {periodo}</h2><p className="text-xs text-slate-500">{tipo} · {estado} · {resumen.pedidos} pedidos · página {pagina} de {totalPaginas} · {pedidosPagina.length} en esta hoja</p></div><span className="grid size-11 place-items-center rounded-xl bg-orange-50 text-orange-600 print:hidden"><Truck size={22}/></span></div>
         {error && <p role="alert" className="p-6 text-sm font-semibold text-rose-700">{error}</p>}
         {cargando ? <p className="p-8 text-sm text-slate-500">Cargando entregas…</p> : !visibles.length ? <p className="p-8 text-sm text-slate-500">No hay envíos con estos filtros. Prueba otro rango de fechas, estado o tipo de entrega.</p> : <>
           <div className="overflow-x-auto"><table className="w-full min-w-[1450px] border-collapse text-left text-xs print:min-w-0">
             <thead className="bg-slate-100 text-[11px] font-bold uppercase text-slate-600"><tr>{["# / pedido", "Fecha", "Cliente / teléfono", "Dirección", "Departamento", "Municipio", "Zona", "Observaciones", "Productos", "Pago / por cobrar", "Total pedido", "Envío"].map((titulo) => <th key={titulo} scope="col" className="border-b border-slate-200 px-3 py-3 align-top">{titulo}</th>)}</tr></thead>
-            <tbody>{visibles.map((pedido, indice) => <tr key={pedido.id} className="border-b border-slate-100 align-top even:bg-slate-50/60 hover:bg-orange-50/40">
-              <td className="px-3 py-3 font-bold text-slate-700">{indice + 1}<br/><Link href={`/pedidos/${pedido.id}`} className="font-mono text-[11px] text-orange-700 underline print:no-underline">{texto(pedido.codigo)}</Link></td>
+            <tbody>{pedidosPagina.map((pedido, indice) => <tr key={pedido.id} className="border-b border-slate-100 align-top even:bg-slate-50/60 hover:bg-orange-50/40">
+              <td className="px-3 py-3 font-bold text-slate-700">{(pagina - 1) * 10 + indice + 1}<br/><Link href={`/pedidos/${pedido.id}`} className="font-mono text-[11px] text-orange-700 underline print:no-underline">{texto(pedido.codigo)}</Link></td>
               <td className="whitespace-nowrap px-3 py-3 text-slate-600">{pedido.fecha_entrega ? new Intl.DateTimeFormat("es-GT", { day: "2-digit", month: "short" }).format(new Date(`${pedido.fecha_entrega.slice(0, 10)}T12:00:00`)) : "Sin fecha"}</td>
               <td className="px-3 py-3"><b className="text-slate-950">{texto(pedido.cliente)}</b><br/><span className="text-slate-600">{texto(pedido.telefono)}</span></td>
               <td className="max-w-48 px-3 py-3">{texto(pedido.direccion)}</td><td className="px-3 py-3">{texto(pedido.departamento_entrega)}</td><td className="px-3 py-3 font-semibold">{texto(pedido.municipio_entrega)}</td><td className="px-3 py-3">{texto(pedido.zona_entrega)}</td>
@@ -120,8 +127,10 @@ export default function MensajeriaPage() {
               <td className="px-3 py-3"><span className={pedido.pago_estado === "Pagado" ? "font-bold text-emerald-700" : "font-bold text-rose-700"}>{texto(pedido.pago_estado)}</span><br/><span className="text-slate-500">Saldo: {dinero(pedido.saldo_pendiente ?? (pedido.pago_estado === "Pagado" ? 0 : pedido.total))}</span></td>
               <td className="whitespace-nowrap px-3 py-3 font-bold">{dinero(pedido.total)}</td><td className="whitespace-nowrap px-3 py-3">{dinero(pedido.costo_envio)}</td>
             </tr>)}</tbody>
-            <tfoot className="bg-orange-50 font-black"><tr><td colSpan={10} className="px-3 py-3">Total · {resumen.pedidos} pedidos</td><td className="px-3 py-3">{dinero(visibles.reduce((suma, pedido) => suma + Number(pedido.total || 0), 0))}</td><td className="px-3 py-3">{dinero(resumen.envios)}</td></tr></tfoot>
-          </table></div><p className="px-5 py-3 text-xs text-slate-500 print:px-0">El total del pedido incluye el envío; «por cobrar» muestra el saldo pendiente registrado. Las observaciones se muestran tal como fueron guardadas en el pedido.</p>
+            <tfoot className="bg-orange-50 font-black"><tr><td colSpan={10} className="px-3 py-3">Total de esta página · {pedidosPagina.length} pedidos</td><td className="px-3 py-3">{dinero(totalPagina)}</td><td className="px-3 py-3">{dinero(envioPagina)}</td></tr></tfoot>
+          </table></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-4 print:hidden"><p className="text-sm text-slate-600">Mostrando <b>{(pagina - 1) * 10 + 1}–{(pagina - 1) * 10 + pedidosPagina.length}</b> de <b>{resumen.pedidos}</b> pedidos</p><nav aria-label="Páginas de entregas" className="flex items-center gap-2"><button type="button" disabled={pagina === 1} onClick={() => setPaginaSeleccionada({ filtro: claveFiltro, numero: pagina - 1 })} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40">Anterior</button><label className="text-xs font-semibold text-slate-600">Página <select aria-label="Seleccionar página" value={pagina} onChange={(e) => setPaginaSeleccionada({ filtro: claveFiltro, numero: Number(e.target.value) })} className="ml-1 rounded-lg border border-slate-200 bg-white px-2 py-2 font-bold text-slate-800">{Array.from({ length: totalPaginas }, (_, indice) => <option key={indice + 1} value={indice + 1}>{indice + 1}</option>)}</select> de {totalPaginas}</label><button type="button" disabled={pagina === totalPaginas} onClick={() => setPaginaSeleccionada({ filtro: claveFiltro, numero: pagina + 1 })} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40">Siguiente</button></nav></div>
+          <p className="px-5 py-3 text-xs text-slate-500 print:px-0">Se imprime únicamente la página visible (máximo 10 pedidos). El total incluye envío; «por cobrar» es el saldo pendiente registrado.</p>
         </>}
       </section>
     </div>
