@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, Boxes, ClipboardList, Factory, House, LayoutDashboard, LogOut, Menu, MessageCircle, Package, PanelLeftClose, PanelLeftOpen, ReceiptText, ShoppingBag, Store, UsersRound, WalletCards, X } from "lucide-react";
+import { BarChart3, Boxes, ClipboardList, Factory, House, LayoutDashboard, LogOut, Menu, MessageCircle, Package, PanelLeftClose, PanelLeftOpen, ReceiptText, ShoppingBag, Store, Truck, UsersRound, WalletCards, X } from "lucide-react";
 import { useState } from "react";
 import { ModuloCrm, useCrmAuth } from "@/components/auth/AuthGate";
 
@@ -24,6 +24,7 @@ const menu = [
   { grupo: "Cocina y entregas", items: [
     { label: "Pendientes", href: "/productos-pendientes", icon: ClipboardList, modulo: "pendientes" as ModuloCrm },
     { label: "Producción", href: "/produccion", icon: Factory, modulo: "produccion" as ModuloCrm },
+    { label: "Mensajería y envíos", href: "/mensajeria", icon: Truck, modulo: "pedidos" as ModuloCrm },
     { label: "Sucursales", href: "/sucursales", icon: Boxes, modulo: "sucursales" as ModuloCrm },
   ] },
   { grupo: "Finanzas y control", items: [

@@ -29,3 +29,14 @@ button, a { -webkit-tap-highlight-color: transparent; }
 ::selection { background: #fed7aa; color: #7c2d12; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+@media print {
+  @page { size: A3 landscape; margin: 10mm; }
+  body:has(.mensajeria-print) { background: #fff; }
+  body:has(.mensajeria-print) aside,
+  body:has(.mensajeria-print) main > button { display: none !important; }
+  body:has(.mensajeria-print) main { margin: 0 !important; padding: 0 !important; }
+  .mensajeria-print { min-height: 0; padding: 0 !important; background: #fff; }
+  .mensajeria-print table { width: 100%; font-size: 9px; }
+  .mensajeria-print th, .mensajeria-print td { padding: 5px !important; overflow-wrap: anywhere; }
+  .mensajeria-print tr { break-inside: avoid; }
+}
