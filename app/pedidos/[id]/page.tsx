@@ -111,6 +111,7 @@ const etiquetaEstado = (estado?: string | null) =>
       : "bg-amber-100 text-amber-800";
 const ESTADOS_PEDIDO = ["Pendiente", "Producción", "Empaquetado", "En Ruta", "Entregado", "Cancelado"];
 const ESTADOS_PAGO = ["Pendiente", "Pago parcial", "Pagado"];
+const METODOS_PAGO = ["Efectivo", "Transferencia", "Tarjeta", "Link de pago", "POS"];
 const VENDEDORES = ["LUCIA", "CARLO", "ISA", "MONICA", "RENATA", "REDES"];
 const CANALES_ORIGEN = [
   { valor: "Manual", etiqueta: "Manual / sin canal identificado" },
@@ -142,6 +143,9 @@ export default function DetallePedidoPage() {
   const [guardando, setGuardando] = useState(false);
   const [facturando, setFacturando] = useState(false);
   const [actualizandoEstado, setActualizandoEstado] = useState(false);
+  const [cobroPendiente, setCobroPendiente] = useState<"Pagado" | "Pago parcial" | null>(null);
+  const [montoCobro, setMontoCobro] = useState("");
+  const [metodoCobro, setMetodoCobro] = useState("");
   const [cargando, setCargando] = useState(true);
 
   const cargarPedido = useCallback(async () => {
@@ -369,21 +373,32 @@ export default function DetallePedidoPage() {
         setActualizandoEstado(false);
         return;
       }
-      const monto = valor === "Pagado" ? saldo : Number(window.prompt(`Abono recibido (saldo actual ${dinero(saldo)}):`, "") || 0);
-      if (!Number.isFinite(monto) || monto <= 0 || monto > saldo) {
-        alert("Ingresa un monto válido que no supere el saldo pendiente.");
-        setActualizandoEstado(false);
-        return;
-      }
-      const { error } = await supabase.rpc("registrar_abono_pedido", { p_pedido_id: pedido.id, p_monto: monto, p_metodo: pedido.forma_pago || "Efectivo", p_referencia: null });
+      if (saldo <= 0) { setActualizandoEstado(false); return; }
+      setCobroPendiente(valor === "Pagado" ? "Pagado" : "Pago parcial");
+      setMontoCobro(valor === "Pagado" ? saldo.toFixed(2) : "");
+      setMetodoCobro("");
       setActualizandoEstado(false);
-      if (error) { alert(`No se pudo registrar el pago: ${error.message}`); return; }
-      await cargarPedido();
       return;
     }
     const { error } = await supabase.rpc("cambiar_estado_pedido_seguro", { p_pedido_id: pedido.id, p_estado: valor });
     setActualizandoEstado(false);
     if (error) { alert(`No se pudo actualizar: ${error.message}`); return; }
+    await cargarPedido();
+  }
+
+  async function registrarCobroRapido() {
+    if (!pedido || !cobroPendiente) return;
+    const monto = cobroPendiente === "Pagado" ? saldo : Number(montoCobro);
+    if (!Number.isFinite(monto) || monto <= 0 || monto > saldo) {
+      alert("Ingresa un monto válido que no supere el saldo pendiente.");
+      return;
+    }
+    if (!metodoCobro) { alert("Selecciona el medio de pago utilizado."); return; }
+    setActualizandoEstado(true);
+    const { error } = await supabase.rpc("registrar_abono_pedido", { p_pedido_id: pedido.id, p_monto: monto, p_metodo: metodoCobro, p_referencia: null });
+    setActualizandoEstado(false);
+    if (error) { alert(`No se pudo registrar el pago: ${error.message}`); return; }
+    setCobroPendiente(null);
     await cargarPedido();
   }
 
@@ -827,6 +842,13 @@ export default function DetallePedidoPage() {
               <div className="mt-4 space-y-3">
                 <label className="block text-xs font-bold text-slate-600">Pedido<select value={pedido.estado || "Pendiente"} disabled={actualizandoEstado} onChange={(event) => void actualizarEstadoRapido("estado", event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800">{ESTADOS_PEDIDO.map((estado) => <option key={estado}>{estado}</option>)}</select></label>
                 <label className="block text-xs font-bold text-slate-600">Pago<select value={pedido.pago_estado || "Pendiente"} disabled={actualizandoEstado || pedido.estado === "Cancelado"} onChange={(event) => void actualizarEstadoRapido("pago_estado", event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 disabled:bg-slate-100">{ESTADOS_PAGO.map((estado) => <option key={estado}>{estado}</option>)}</select></label>
+                {cobroPendiente && <div className="space-y-3 rounded-xl border border-orange-200 bg-orange-50 p-4">
+                  <p className="text-sm font-bold text-slate-900">Registrar {cobroPendiente === "Pagado" ? "pago completo" : "abono"}</p>
+                  <p className="text-xs text-slate-600">Saldo pendiente: {dinero(saldo)}</p>
+                  {cobroPendiente === "Pago parcial" && <label className="block text-xs font-bold text-slate-700">Monto recibido<input type="number" min="0.01" max={saldo} step="0.01" value={montoCobro} onChange={(event) => setMontoCobro(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /></label>}
+                  <label className="block text-xs font-bold text-slate-700">Medio de pago<select required value={metodoCobro} onChange={(event) => setMetodoCobro(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">Selecciona un medio</option>{METODOS_PAGO.map((metodo) => <option key={metodo} value={metodo}>{metodo}</option>)}</select></label>
+                  <div className="flex gap-2"><button type="button" disabled={actualizandoEstado} onClick={() => void registrarCobroRapido()} className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">{actualizandoEstado ? "Guardando…" : "Guardar pago"}</button><button type="button" disabled={actualizandoEstado} onClick={() => setCobroPendiente(null)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700">Cancelar</button></div>
+                </div>}
               </div>
               {pedido.estado === "Cancelado" && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">Pedido cancelado: la emisión FEL está bloqueada.</p>}
             </section>
