@@ -26,7 +26,7 @@ export default function FlujoCajaPage() {
   async function cargar() { setCargando(true); setError(""); const [movimientosRespuesta, cuentasRespuesta] = await Promise.all([supabase.from("movimientos_caja").select("id,tipo,categoria,descripcion,monto,fecha,cuenta,cuenta_id,cuenta_destino_id,metodo_pago,origen,origen_id,pedido_id,created_at").order("fecha", { ascending: false }).order("created_at", { ascending: false }).limit(500), supabase.from("cuentas_financieras").select("id,nombre,tipo,saldo_inicial,fecha_saldo_inicial,activa,notas,sucursal_id").order("created_at")]); const consultaError = movimientosRespuesta.error || cuentasRespuesta.error; if (consultaError) { console.error(consultaError); setError("No se pudo cargar el flujo de caja."); } else { setMovimientos((movimientosRespuesta.data || []) as Movimiento[]); setCuentasData((cuentasRespuesta.data || []) as Cuenta[]); } setCargando(false); }
   useEffect(() => { const timer = window.setTimeout(() => void cargar(), 0); return () => window.clearTimeout(timer); }, []);
 
-  const rango = useMemo(() => { const hoy = new Date(); const final = hasta || hoy.toISOString().slice(0, 10); if (desde) return { inicio: desde, final }; if (periodo === "Todo") return { inicio: "", final: "" }; const inicio = new Date(hoy); if (periodo === "Hoy") return { inicio: final, final }; if (periodo === "Semana") inicio.setDate(hoy.getDate() - 6); if (periodo === "Mes") inicio.setDate(1); return { inicio: inicio.toISOString().slice(0, 10), final }; }, [periodo, desde, hasta]);
+  const rango = useMemo(() => { const hoy = new Date(); const final = hoy.toISOString().slice(0, 10); if (periodo === "Personalizado") return { inicio: desde, final: hasta }; if (periodo === "Todo") return { inicio: "", final: "" }; const inicio = new Date(hoy); if (periodo === "Hoy") return { inicio: final, final }; if (periodo === "Semana") inicio.setDate(hoy.getDate() - 6); if (periodo === "Mes") inicio.setDate(1); return { inicio: inicio.toISOString().slice(0, 10), final }; }, [periodo, desde, hasta]);
   const filtrados = useMemo(() => movimientos.filter((movimiento) => { const valorFecha = normalizarFecha(movimiento.fecha); const texto = `${movimiento.tipo} ${movimiento.categoria || ""} ${movimiento.descripcion || ""} ${movimiento.cuenta || ""} ${movimiento.metodo_pago || ""} ${movimiento.origen || ""}`.toLowerCase(); return (!rango.inicio || valorFecha >= rango.inicio) && (!rango.final || valorFecha <= rango.final) && (tipoFiltro === "Todos" || movimiento.tipo === tipoFiltro) && (cuentaFiltro === "Todas" || movimiento.cuenta_id === cuentaFiltro) && (origenFiltro === "Todos" || movimiento.origen === origenFiltro) && texto.includes(busqueda.toLowerCase()); }), [movimientos, rango, tipoFiltro, cuentaFiltro, origenFiltro, busqueda]);
   const totales = useMemo(() => filtrados.reduce((actual, movimiento) => { const valor = Number(movimiento.monto || 0); if (movimiento.tipo === "Ingreso") actual.ingresos += valor; if (movimiento.tipo === "Gasto") actual.gastos += valor; if ((movimiento.cuenta || "").toLowerCase().includes("crédito")) actual.credito += movimiento.tipo === "Gasto" ? valor : -valor; return actual; }, { ingresos: 0, gastos: 0, credito: 0 }), [filtrados]);
   const saldo = totales.ingresos - totales.gastos; const automaticos = filtrados.filter((movimiento) => movimiento.origen && movimiento.origen !== "manual").length;
@@ -73,14 +73,15 @@ export default function FlujoCajaPage() {
     {(error || aviso) && <p className={`mb-5 rounded-xl p-4 text-sm font-semibold ${error ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>{error || aviso}</p>}
     <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
 <div className="grid gap-3 xl:grid-cols-[150px_170px_170px_170px_180px_1fr_auto]">
-<select value={periodo} onChange={(event) => setPeriodo(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-3 text-sm">
+<select value={periodo} onChange={(event) => { setPeriodo(event.target.value); if (event.target.value !== "Personalizado") { setDesde(""); setHasta(""); } }} className="rounded-xl border border-slate-200 px-3 py-3 text-sm">
 <option>Hoy</option>
 <option>Semana</option>
 <option>Mes</option>
 <option>Todo</option>
+<option>Personalizado</option>
 </select>
-<input type="date" value={desde} onChange={(event) => setDesde(event.target.value)} aria-label="Fecha desde" className="rounded-xl border border-slate-200 px-3 py-3 text-sm"/>
-<input type="date" value={hasta} onChange={(event) => setHasta(event.target.value)} aria-label="Fecha hasta" className="rounded-xl border border-slate-200 px-3 py-3 text-sm"/>
+<input type="date" value={desde} onChange={(event) => { setDesde(event.target.value); setPeriodo("Personalizado"); }} aria-label="Fecha desde" className="rounded-xl border border-slate-200 px-3 py-3 text-sm"/>
+<input type="date" value={hasta} onChange={(event) => { setHasta(event.target.value); setPeriodo("Personalizado"); }} aria-label="Fecha hasta" className="rounded-xl border border-slate-200 px-3 py-3 text-sm"/>
 <select value={tipoFiltro} onChange={(event) => setTipoFiltro(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-3 text-sm">
 <option>Todos</option>
 <option>Ingreso</option>
@@ -178,14 +179,16 @@ export default function FlujoCajaPage() {
 <h2 className="mt-2 text-2xl font-black">Detalle del flujo</h2>
 <p className="mt-1 text-sm text-slate-500">{filtrados.length} movimientos · {automaticos} automáticos desde cobros o compras.</p>
 </div>
-<div className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700">{rango.inicio ? `${fecha(rango.inicio)} — ${fecha(rango.final)}` : "Todo el historial"}</div>
+<div className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700">{rango.inicio || rango.final ? `${rango.inicio ? fecha(rango.inicio) : "Sin fecha inicial"} — ${rango.final ? fecha(rango.final) : "Sin fecha final"}` : "Todo el historial"}</div>
 </div>
-<div className="grid gap-3 border-b border-slate-100 bg-slate-50 p-4 lg:grid-cols-[minmax(220px,1fr)_150px_180px_160px_auto]">
-<input value={busqueda} onChange={(event) => setBusqueda(event.target.value)} placeholder="Buscar nombre, categoría, cuenta o referencia" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"/>
-<select value={tipoFiltro} onChange={(event) => setTipoFiltro(event.target.value)} aria-label="Filtrar por tipo" className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"><option value="Todos">Todos los tipos</option><option>Ingreso</option><option>Gasto</option><option>Transferencia</option></select>
-<select value={cuentaFiltro} onChange={(event) => setCuentaFiltro(event.target.value)} aria-label="Filtrar por cuenta" className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"><option value="Todas">Todas las cuentas</option>{cuentas.map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.nombre}</option>)}</select>
-<select value={origenFiltro} onChange={(event) => setOrigenFiltro(event.target.value)} aria-label="Filtrar por origen" className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"><option value="Todos">Todos los orígenes</option><option value="manual">Manual</option><option value="pago">Cobro</option><option value="compra_ingrediente">Compra ingrediente</option></select>
-<button onClick={limpiar} className="px-3 text-sm font-bold text-slate-500 underline">Limpiar</button>
+<div className="grid gap-3 border-b border-slate-100 bg-slate-50 p-4 md:grid-cols-2 lg:grid-cols-12">
+<input value={busqueda} onChange={(event) => setBusqueda(event.target.value)} placeholder="Buscar nombre, categoría, cuenta o referencia" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm lg:col-span-6"/>
+<label className="text-xs font-bold text-slate-600 lg:col-span-3">Desde<input type="date" value={desde} onChange={(event) => { setDesde(event.target.value); setPeriodo("Personalizado"); }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
+<label className="text-xs font-bold text-slate-600 lg:col-span-3">Hasta<input type="date" value={hasta} onChange={(event) => { setHasta(event.target.value); setPeriodo("Personalizado"); }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
+<select value={tipoFiltro} onChange={(event) => setTipoFiltro(event.target.value)} aria-label="Filtrar por tipo" className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm lg:col-span-3"><option value="Todos">Todos los tipos</option><option>Ingreso</option><option>Gasto</option><option>Transferencia</option></select>
+<select value={cuentaFiltro} onChange={(event) => setCuentaFiltro(event.target.value)} aria-label="Filtrar por cuenta" className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm lg:col-span-3"><option value="Todas">Todas las cuentas</option>{cuentas.map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.nombre}</option>)}</select>
+<select value={origenFiltro} onChange={(event) => setOrigenFiltro(event.target.value)} aria-label="Filtrar por origen" className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm lg:col-span-3"><option value="Todos">Todos los orígenes</option><option value="manual">Manual</option><option value="pago">Cobro</option><option value="compra_ingrediente">Compra ingrediente</option></select>
+<button onClick={limpiar} className="px-3 text-sm font-bold text-slate-500 underline lg:col-span-3">Limpiar filtros</button>
 </div>
 <div className="max-h-[620px] overflow-auto">
 <table className="w-full min-w-[950px] text-sm">
