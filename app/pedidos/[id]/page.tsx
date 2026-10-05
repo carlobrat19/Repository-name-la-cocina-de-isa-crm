@@ -386,6 +386,19 @@ export default function DetallePedidoPage() {
     await cargarPedido();
   }
 
+  async function reactivarPedido() {
+    if (!pedido || pedido.estado !== "Cancelado") return;
+    if (!window.confirm("¿Reactivar este pedido como Pendiente con fecha de entrega de hoy? Los pagos registrados se conservarán. Después podrás avanzar a Producción y las demás etapas.")) return;
+    setActualizandoEstado(true);
+    const { data, error } = await supabase.rpc("reactivar_pedido_cancelado", { p_pedido_id: pedido.id });
+    setActualizandoEstado(false);
+    if (error) { alert(`No se pudo reactivar: ${error.message}`); return; }
+    await cargarPedido();
+    if (Number(data?.pagado || 0) === 0) {
+      alert("Pedido reactivado como Pendiente para hoy. No hay abonos registrados en el CRM; revisa el cobro antes de marcarlo como Pagado.");
+    }
+  }
+
   async function registrarCobroRapido() {
     if (!pedido || !cobroPendiente) return;
     const monto = cobroPendiente === "Pagado" ? saldo : Number(montoCobro);
@@ -840,7 +853,13 @@ export default function DetallePedidoPage() {
               <h2 className="font-bold text-slate-950">Estado del pedido</h2>
               <p className="mt-1 text-xs text-slate-500">Actualiza la operación y el pago sin editar todo el pedido.</p>
               <div className="mt-4 space-y-3">
-                <label className="block text-xs font-bold text-slate-600">Pedido<select value={pedido.estado || "Pendiente"} disabled={actualizandoEstado} onChange={(event) => void actualizarEstadoRapido("estado", event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800">{ESTADOS_PEDIDO.map((estado) => <option key={estado}>{estado}</option>)}</select></label>
+                {pedido.estado === "Cancelado" ? (
+                  <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+                    <p className="text-xs font-bold text-orange-900">Pedido cancelado</p>
+                    <p className="mt-1 text-xs leading-5 text-orange-800">Puedes devolverlo a Pendiente con entrega para hoy. El saldo se recalculará con los pagos registrados; luego podrás avanzar por las etapas normales.</p>
+                    <button type="button" disabled={actualizandoEstado} onClick={() => void reactivarPedido()} className="mt-3 w-full rounded-lg bg-orange-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-60">{actualizandoEstado ? "Reactivando…" : "Reactivar como Pendiente"}</button>
+                  </div>
+                ) : <label className="block text-xs font-bold text-slate-600">Pedido<select value={pedido.estado || "Pendiente"} disabled={actualizandoEstado} onChange={(event) => void actualizarEstadoRapido("estado", event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800">{ESTADOS_PEDIDO.map((estado) => <option key={estado}>{estado}</option>)}</select></label>}
                 <label className="block text-xs font-bold text-slate-600">Pago<select value={pedido.pago_estado || "Pendiente"} disabled={actualizandoEstado || pedido.estado === "Cancelado"} onChange={(event) => void actualizarEstadoRapido("pago_estado", event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 disabled:bg-slate-100">{ESTADOS_PAGO.map((estado) => <option key={estado}>{estado}</option>)}</select></label>
                 {cobroPendiente && <div className="space-y-3 rounded-xl border border-orange-200 bg-orange-50 p-4">
                   <p className="text-sm font-bold text-slate-900">Registrar {cobroPendiente === "Pagado" ? "pago completo" : "abono"}</p>
@@ -850,7 +869,7 @@ export default function DetallePedidoPage() {
                   <div className="flex gap-2"><button type="button" disabled={actualizandoEstado} onClick={() => void registrarCobroRapido()} className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">{actualizandoEstado ? "Guardando…" : "Guardar pago"}</button><button type="button" disabled={actualizandoEstado} onClick={() => setCobroPendiente(null)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700">Cancelar</button></div>
                 </div>}
               </div>
-              {pedido.estado === "Cancelado" && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">Pedido cancelado: la emisión FEL está bloqueada.</p>}
+              {pedido.estado === "Cancelado" && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">La emisión FEL sigue bloqueada hasta reactivar el pedido y confirmar su pago.</p>}
             </section>
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="bg-slate-950 p-5 text-white">
