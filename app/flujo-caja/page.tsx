@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase";
 
 type Movimiento = { id: string; tipo: "Ingreso" | "Gasto" | "Transferencia"; categoria: string | null; descripcion: string | null; monto: number | string; fecha: string | null; cuenta: string | null; cuenta_id: string | null; cuenta_destino_id: string | null; metodo_pago: string | null; origen: string | null; origen_id: string | null; pedido_id: string | null; created_at: string | null };
 type Cuenta = { id: string; nombre: string; tipo: "Caja" | "Banco" | "POS" | "Tarjeta de crédito" | "Billetera digital"; saldo_inicial: number | string; fecha_saldo_inicial: string; activa: boolean; notas: string | null; sucursal_id: string | null };
-const categorias = { Ingreso: ["Venta manual", "Capital aportado", "Reembolso", "Otros ingresos"], Gasto: ["Materia prima", "Mensajería y envíos", "Utensilios de cocina", "Equipo de cocina", "Mobiliario", "Servicios", "Publicidad", "Nómina", "Alquiler", "Transporte", "Comisiones POS", "Impuestos", "Mantenimiento", "Otros gastos"], Transferencia: ["Movimiento entre cuentas", "Pago de tarjeta de crédito"] };
+const categorias = { Ingreso: ["Venta manual", "Capital aportado", "Reembolso", "Otros ingresos"], Gasto: ["Materia prima", "Mensajería y envíos", "Utensilios de cocina", "Equipo de cocina", "Mobiliario", "Servicios", "Publicidad", "Nómina", "Sueldo de propietarios", "Retiro de utilidades", "Alquiler", "Transporte", "Comisiones POS", "Impuestos", "Mantenimiento", "Otros gastos"], Transferencia: ["Movimiento entre cuentas", "Pago de tarjeta de crédito"] };
 const metodos = ["Efectivo", "Transferencia", "Tarjeta débito", "Tarjeta de crédito", "POS", "Link de pago", "Cheque", "Otro"];
 const dinero = (valor: number | string | null | undefined) => moneda(Number(valor || 0));
 const fecha = (valor: string | null) => valor ? new Intl.DateTimeFormat("es-GT", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${valor.slice(0, 10)}T12:00:00`)) : "—";
@@ -159,7 +159,7 @@ export default function FlujoCajaPage() {
 </div>
 <label className="block text-sm font-bold">Categoría<select value={categoria} onChange={(event) => setCategoria(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-3">{categorias[tipo].map((opcion) => <option key={opcion}>{opcion}</option>)}</select>
 </label>
-{tipo === "Gasto" && <p className="text-xs leading-5 text-slate-500">Sartenes y utensilios: Utensilios de cocina · Refrigeradora: Equipo de cocina · Mesas: Mobiliario. Materia prima es para ingredientes que se consumen al preparar productos.</p>}
+{tipo === "Gasto" && <p className="text-xs leading-5 text-slate-500">Sartenes y utensilios: Utensilios de cocina · Refrigeradora: Equipo de cocina · Mesas: Mobiliario. Materia prima es para ingredientes que se consumen al preparar productos. Sueldo de propietarios es un pago por trabajo; Retiro de utilidades es dinero que se saca de las ganancias.</p>}
 <label className="block text-sm font-bold">Descripción<input value={descripcion} onChange={(event) => setDescripcion(event.target.value)} placeholder={tipo === "Transferencia" ? "Ej. Pago de tarjeta de Carlo" : "Ej. Pago de energía eléctrica"} className="mt-2 w-full rounded-xl border border-slate-200 p-3"/>
 </label>
 <label className="block text-sm font-bold">Monto (Q)<input type="number" min="0.01" step="0.01" value={monto} onChange={(event) => setMonto(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 p-3"/>
