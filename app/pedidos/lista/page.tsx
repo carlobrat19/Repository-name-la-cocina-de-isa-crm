@@ -197,8 +197,8 @@ export default function ListaPedidosPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f7f8] px-4 py-6 sm:px-6 lg:px-10 lg:py-9">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="min-h-screen min-w-0 bg-[#f7f7f8] px-4 py-6 sm:px-5 lg:px-6 lg:py-9">
+      <div className="w-full min-w-0 space-y-6">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-600">Operación comercial</p>
