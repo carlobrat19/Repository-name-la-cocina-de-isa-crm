@@ -60,8 +60,8 @@ export default function FlujoCajaPage() {
   async function alternarCuenta(cuentaActual: Cuenta) { const { error: cambioError } = await supabase.from("cuentas_financieras").update({ activa: !cuentaActual.activa }).eq("id", cuentaActual.id); if (cambioError) { setError(cambioError.message); return; } setAviso(cuentaActual.activa ? "Cuenta desactivada. El historial financiero se conserva." : "Cuenta activada."); await cargar(); }
   const limpiar = () => { setPeriodo("Mes"); setDesde(""); setHasta(""); setTipoFiltro("Todos"); setCuentaFiltro("Todas"); setOrigenFiltro("Todos"); setBusqueda(""); };
 
-  return <main className="min-h-screen min-w-0 bg-slate-100 px-4 py-6 sm:px-5 lg:px-6 lg:py-9">
-<div className="w-full min-w-0">
+  return <main className="min-h-screen bg-slate-100 px-4 py-7 sm:px-7 lg:px-10">
+<div className="mx-auto max-w-[1600px]">
     <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 <div>
 <p className="text-xs font-bold uppercase tracking-[.22em] text-orange-600">Tesorería operativa</p>

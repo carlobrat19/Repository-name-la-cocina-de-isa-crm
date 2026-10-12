@@ -460,8 +460,8 @@ export default function DetallePedidoPage() {
   const input =
     "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100";
   return (
-    <main className="min-h-screen min-w-0 bg-[#f7f7f8] px-4 py-6 sm:px-5 lg:px-6 lg:py-9">
-      <div className="w-full min-w-0">
+    <main className="min-h-screen bg-[#f7f7f8] px-4 py-6 sm:px-6 lg:px-10 lg:py-9">
+      <div className="mx-auto max-w-7xl">
         <header className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <Link

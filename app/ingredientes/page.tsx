@@ -254,8 +254,8 @@ export default function IngredientesPage() {
 
 
   return (
-    <main className="min-h-screen min-w-0 bg-slate-100 px-4 py-6 sm:px-5 lg:px-6 lg:py-9">
-      <div className="w-full min-w-0">
+    <main className="min-h-screen bg-slate-100 px-4 py-8 sm:px-8 lg:px-10">
+      <div className="mx-auto max-w-7xl">
         <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[.22em] text-orange-600">

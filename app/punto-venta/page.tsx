@@ -361,8 +361,8 @@ export default function PuntoVentaPage() {
     await cargarLocal();
   }
   return (
-    <main className="min-h-screen min-w-0 bg-slate-100 px-4 py-6 sm:px-5 lg:px-6 lg:py-9">
-      <div className="w-full min-w-0">
+    <main className="min-h-screen bg-slate-100 px-4 py-7 sm:px-7 lg:px-10">
+      <div className="mx-auto max-w-[1700px]">
         <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[.22em] text-orange-600">

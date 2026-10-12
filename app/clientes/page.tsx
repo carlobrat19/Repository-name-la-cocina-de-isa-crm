@@ -414,7 +414,7 @@ export default function ClientesPage() {
       : "Sin fecha";
 
   return (
-    <section className="min-w-0 space-y-7 px-4 py-6 sm:px-5 lg:px-6 lg:py-9">
+    <section className="space-y-7 p-6 md:p-10">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[.2em] text-orange-600">
