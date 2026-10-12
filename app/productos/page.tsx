@@ -550,9 +550,9 @@ function editarProducto(producto: Producto) {
 
 return(
 
-<main className="min-h-screen bg-slate-100 px-4 py-8 sm:px-8 lg:px-10">
+<main className="min-h-screen min-w-0 bg-slate-100 px-4 py-6 sm:px-5 lg:px-6 lg:py-9">
 
-<div className="max-w-7xl mx-auto">
+<div className="w-full min-w-0">
 
 <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-orange-600">Catálogo comercial</p><h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950">Productos</h1><p className="mt-2 max-w-2xl text-sm text-slate-600">Administra tu catálogo, fotos, disponibilidad e información para ventas y canales digitales.</p></div><button type="button" onClick={abrirNuevoProducto} className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-black text-white transition hover:bg-orange-600">+ Nuevo producto</button></header>
 
