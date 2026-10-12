@@ -426,8 +426,8 @@ export default function PedidosPage() {
     "w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100";
 
   return (
-    <main className="min-h-screen bg-[#f7f7f8] px-4 py-6 sm:px-6 lg:px-10 lg:py-9">
-      <div className="mx-auto max-w-7xl">
+    <main className="min-h-screen min-w-0 bg-[#f7f7f8] px-4 py-6 sm:px-5 lg:px-6 lg:py-9">
+      <div className="w-full min-w-0">
         <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <Link

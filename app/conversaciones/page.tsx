@@ -622,7 +622,7 @@ export default function ConversacionesPage() {
   }
 
   return (
-    <section className="p-6 md:p-10">
+    <section className="min-w-0 px-4 py-6 sm:px-5 lg:px-6 lg:py-9">
       <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm font-bold uppercase tracking-[.2em] text-green-600">

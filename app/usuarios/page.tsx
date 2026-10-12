@@ -483,8 +483,8 @@ export default function UsuariosPage() {
       </main>
     );
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 lg:px-10 lg:py-9">
-      <div className="mx-auto max-w-7xl">
+    <main className="min-h-screen min-w-0 bg-slate-50 px-4 py-6 sm:px-5 lg:px-6 lg:py-9">
+      <div className="w-full min-w-0">
         <header className="mb-6">
           <p className="text-xs font-bold uppercase tracking-[.18em] text-orange-600">
             Administración privada
