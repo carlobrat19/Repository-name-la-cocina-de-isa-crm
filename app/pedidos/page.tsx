@@ -162,6 +162,7 @@ export default function PedidosPage() {
     const { data, error } = await supabase
       .from("productos")
       .select("id, nombre, precio_venta, costo")
+      .eq("estado", "Activo")
       .order("nombre");
     if (error) console.error(error);
     setProductos((data || []) as Producto[]);
