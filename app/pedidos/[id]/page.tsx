@@ -23,6 +23,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { imprimirEtiquetaEnvio } from "@/lib/imprimir-etiqueta-envio";
 
 type Pedido = {
   id: string;
@@ -309,6 +310,34 @@ export default function DetallePedidoPage() {
     );
     ventana.document.close();
   }
+  function imprimirEtiqueta() {
+    if (!pedido) return;
+    const abierta = imprimirEtiquetaEnvio({
+      codigo: pedido.codigo || "Pedido",
+      cliente: pedido.cliente || "Sin nombre",
+      telefono: pedido.telefono,
+      direccion: pedido.direccion,
+      departamento: pedido.departamento_entrega,
+      municipio: pedido.municipio_entrega,
+      zona: pedido.zona_entrega,
+      fechaEntrega: fecha(pedido.fecha_entrega),
+      horaEntrega: pedido.hora_entrega,
+      tipoEntrega: pedido.requiere_envio
+        ? pedido.entrega_mensajero ? "Mensajería externa" : "Entrega por nuestro equipo"
+        : "Recoger en tienda",
+      estadoPago: pedido.pago_estado || "Pendiente",
+      metodoPago: pagos[0]?.metodo || pedido.forma_pago,
+      total,
+      abonado,
+      saldo,
+      observaciones: pedido.observaciones,
+      productos: detalles.map((detalle) => ({
+        nombre: detalle.productos?.nombre || "Producto",
+        cantidad: Number(detalle.cantidad || 0),
+      })),
+    });
+    if (!abierta) alert("El navegador bloqueó la ventana de impresión. Permite ventanas emergentes para imprimir la etiqueta.");
+  }
   function enviarWhatsApp() {
     if (!pedido?.telefono) {
       alert("Este pedido no tiene teléfono.");
@@ -518,7 +547,13 @@ export default function DetallePedidoPage() {
               onClick={imprimir}
               className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800"
             >
-              <Printer className="h-4 w-4" /> Imprimir
+              <Printer className="h-4 w-4" /> Imprimir pedido
+            </button>
+            <button
+              onClick={imprimirEtiqueta}
+              className="inline-flex items-center gap-2 rounded-xl border border-orange-300 bg-orange-50 px-4 py-2.5 text-sm font-bold text-orange-800 hover:bg-orange-100"
+            >
+              <Printer className="h-4 w-4" /> Etiqueta de envío
             </button>
           </div>
         </header>

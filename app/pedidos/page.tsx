@@ -133,6 +133,7 @@ export default function PedidosPage() {
     new Date().toISOString().slice(0, 10),
   );
   const [fechaEntrega, setFechaEntrega] = useState("");
+  const [horaEntrega, setHoraEntrega] = useState("");
   const [estado, setEstado] = useState("Pendiente");
   const [pagoEstado, setPagoEstado] = useState("Pendiente");
   const [abonoInicial, setAbonoInicial] = useState(0);
@@ -357,6 +358,7 @@ export default function PedidosPage() {
     setDireccion("");
     setFechaCreacion(new Date().toISOString().slice(0, 10));
     setFechaEntrega("");
+    setHoraEntrega("");
     setEstado("Pendiente");
     setPagoEstado("Pendiente");
     setFormaPago("Efectivo");
@@ -412,9 +414,23 @@ export default function PedidosPage() {
         },
       });
       if (error) throw error;
-      const resultado = data as { codigo?: string } | null;
-      alert(`Pedido ${resultado?.codigo || ""} guardado correctamente.`);
-      limpiarFormulario();
+      const resultado = data as { pedido_id?: string; codigo?: string } | null;
+      if (!resultado?.pedido_id) {
+        alert(`Pedido ${resultado?.codigo || ""} guardado, pero no se recibió su identificador. Búscalo en la lista de pedidos para imprimirlo.`);
+        return;
+      }
+      if (horaEntrega) {
+        const { error: errorHora } = await supabase.rpc("editar_pedido_y_detalle_seguro", {
+          p_datos: { pedido_id: resultado.pedido_id, hora_entrega: horaEntrega },
+        });
+        if (errorHora) {
+          alert(`Pedido ${resultado.codigo || ""} guardado, pero no se pudo registrar la hora de entrega: ${errorHora.message}. Puedes agregarla desde el pedido antes de imprimir.`);
+          window.location.assign(`/pedidos/${resultado.pedido_id}`);
+          return;
+        }
+      }
+      alert(`Pedido ${resultado.codigo || ""} guardado correctamente. Ahora puedes imprimir el comprobante o la etiqueta de envío.`);
+      window.location.assign(`/pedidos/${resultado.pedido_id}`);
     } catch (error) {
       console.error(error);
       alert(`No se pudo guardar: ${errorMessage(error)}`);
@@ -800,6 +816,15 @@ export default function PedidosPage() {
                   />
                 </div>
                 <div>
+                  <InputLabel>Hora de entrega (opcional)</InputLabel>
+                  <input
+                    type="time"
+                    value={horaEntrega}
+                    onChange={(event) => setHoraEntrega(event.target.value)}
+                    className={fieldClass}
+                  />
+                </div>
+                <div>
                   <InputLabel>Vendedor responsable</InputLabel>
                   <select
                     value={vendedor}
@@ -1048,7 +1073,7 @@ export default function PedidosPage() {
                   <div className="flex items-center gap-2">
                     <CalendarDays className="h-4 w-4 text-orange-500" />{" "}
                     {fechaEntrega
-                      ? `Entrega: ${fechaEntrega}`
+                      ? `Entrega: ${fechaEntrega}${horaEntrega ? ` · ${horaEntrega}` : " · Hora por confirmar"}`
                       : "Fecha de entrega por definir"}
                   </div>
                   <div className="mt-2 flex items-center gap-2">
