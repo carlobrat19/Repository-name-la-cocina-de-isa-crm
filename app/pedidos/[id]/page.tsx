@@ -71,6 +71,7 @@ type Producto = {
 type ClienteFiscal = {
   id: string;
   nombre?: string | null;
+  telefono?: string | null;
   email?: string | null;
   nit?: string | null;
   razon_social?: string | null;
@@ -189,7 +190,7 @@ export default function DetallePedidoPage() {
       pedidoActual.cliente_id
         ? supabase
             .from("clientes")
-            .select("id, nombre, email, nit, razon_social, direccion")
+            .select("id, nombre, telefono, email, nit, razon_social, direccion")
             .eq("id", pedidoActual.cliente_id)
             .maybeSingle()
         : Promise.resolve({ data: null }),
@@ -250,11 +251,23 @@ export default function DetallePedidoPage() {
 
   async function guardarCambios() {
     if (!pedido) return;
+    if (!pedido.cliente?.trim()) {
+      alert("Escribe el nombre del cliente antes de guardar.");
+      return;
+    }
     setGuardando(true);
-    const { error } = await supabase.rpc("editar_pedido_y_detalle_seguro", {
+    const { error } = await supabase.rpc("editar_pedido_con_cliente_seguro", {
       p_datos: {
         pedido_id: pedido.id,
+        cliente: pedido.cliente.trim(),
+        telefono: pedido.telefono?.trim() || null,
         forma_pago: pedido.forma_pago || "Efectivo",
+        ...(clienteFiscal ? {
+          correo_fiscal: clienteFiscal.email || null,
+          nit: clienteFiscal.nit || null,
+          razon_social: clienteFiscal.razon_social || null,
+          direccion_fiscal: clienteFiscal.direccion || null,
+        } : {}),
         fecha_entrega: pedido.fecha_entrega || null,
         hora_entrega: pedido.hora_entrega || null,
         direccion: pedido.direccion || null,
@@ -276,16 +289,6 @@ export default function DetallePedidoPage() {
           : {}),
       },
     });
-    if (!error && clienteFiscal)
-      await supabase
-        .from("clientes")
-        .update({
-          email: clienteFiscal.email || null,
-          nit: clienteFiscal.nit || null,
-          razon_social: clienteFiscal.razon_social || null,
-          direccion: clienteFiscal.direccion || null,
-        })
-        .eq("id", clienteFiscal.id);
     setGuardando(false);
     if (error) {
       alert(`No se pudo guardar: ${error.message}`);
@@ -588,11 +591,26 @@ export default function DetallePedidoPage() {
                 text="Información que necesitarás para emitir FEL."
               />
               <div className="mt-5 grid gap-4 md:grid-cols-2">
-                <Field label="Cliente" value={pedido.cliente || "Sin nombre"} />
-                <Field
-                  label="Teléfono"
-                  value={pedido.telefono || "Sin teléfono"}
-                />
+                {editando ? (
+                  <>
+                    <Editable label="Cliente" value={pedido.cliente || ""} onChange={(value) => actualizar("cliente", value)} placeholder="Nombre del cliente" />
+                    <Editable label="Teléfono" type="tel" value={pedido.telefono || ""} onChange={(value) => actualizar("telefono", value)} placeholder="Número de celular" />
+                    <label className="block text-xs font-bold text-slate-600">
+                      Método de pago del pedido
+                      <select value={pedido.forma_pago || "Efectivo"} onChange={(event) => actualizar("forma_pago", event.target.value)} className={`${input} mt-1.5`}>
+                        {pedido.forma_pago && !METODOS_PAGO.includes(pedido.forma_pago) && <option value={pedido.forma_pago}>{pedido.forma_pago} (histórico)</option>}
+                        {METODOS_PAGO.map((metodo) => <option key={metodo} value={metodo}>{metodo}</option>)}
+                      </select>
+                      <span className="mt-1 block font-normal text-slate-500">No cambia el medio de pagos ya registrados.</span>
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <Field label="Cliente" value={pedido.cliente || "Sin nombre"} />
+                    <Field label="Teléfono" value={pedido.telefono || "Sin teléfono"} />
+                    <Field label="Método de pago del pedido" value={pedido.forma_pago || "Sin definir"} />
+                  </>
+                )}
                 {editando ? (
                   <>
                     <Editable
