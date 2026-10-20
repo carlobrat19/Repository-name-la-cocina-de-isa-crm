@@ -329,7 +329,7 @@ export default function DetallePedidoPage() {
         ? pedido.entrega_mensajero ? "Mensajería externa" : "Entrega por nuestro equipo"
         : "Recoger en tienda",
       estadoPago: pedido.pago_estado || "Pendiente",
-      metodoPago: pagos[0]?.metodo || pedido.forma_pago,
+      metodoPago: pedido.forma_pago || pagos[0]?.metodo,
       total,
       abonado,
       saldo,

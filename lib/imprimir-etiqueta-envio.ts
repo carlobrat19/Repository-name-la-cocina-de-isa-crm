@@ -44,9 +44,12 @@ export function imprimirEtiquetaEnvio(datos: DatosEtiquetaEnvio): boolean {
     `<li><b>${escapar(producto.cantidad)}×</b> ${escapar(producto.nombre)}</li>`,
   ).join("");
   const saldo = Math.max(0, datos.saldo);
+  const pagoEnEfectivo = datos.metodoPago?.trim().toLowerCase() === "efectivo";
   const cobro = saldo < 0.01
     ? `<div class="cobro pagado">PAGADO · NO COBRAR</div>`
-    : `<div class="cobro">COBRAR AL ENTREGAR: ${escapar(dinero(saldo))}</div>`;
+    : pagoEnEfectivo
+      ? `<div class="cobro">COBRAR AL ENTREGAR: ${escapar(dinero(saldo))}</div>`
+      : "";
 
   ventana.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"/><title>Etiqueta ${escapar(datos.codigo)}</title><style>
     @page { size: 100mm 150mm; margin: 3mm; }
