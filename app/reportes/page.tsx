@@ -1,17 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BarChart3, Boxes, CircleDollarSign, Download, FileCheck2, ReceiptText, RefreshCw, TrendingUp, UsersRound } from "lucide-react";
+import { BarChart3, Boxes, CircleDollarSign, Download, FileCheck2, ReceiptText, RefreshCw, TrendingUp, Truck, UsersRound } from "lucide-react";
 import * as XLSX from "xlsx";
 
 import { moneda } from "@/lib/crm";
 import { supabase } from "@/lib/supabase";
 import TendenciasReportes from "./tendencias";
 
-type Pedido = { id: string; codigo: string | null; total: number | string | null; saldo_pendiente: number | string | null; estado: string | null; vendedor: string | null; canal_origen: string | null; cliente_id: string | null; fecha_creacion: string; fecha_pedido: string | null; requiere_envio: boolean | null; entrega_mensajero: boolean | null; costo_envio: number | string | null };
+type Pedido = { id: string; codigo: string | null; total: number | string | null; saldo_pendiente: number | string | null; estado: string | null; vendedor: string | null; canal_origen: string | null; cliente_id: string | null; fecha_creacion: string; fecha_pedido: string | null; requiere_envio: boolean | null; entrega_mensajero: boolean | null; costo_envio: number | string | null; envio_gratis: boolean | null; costo_envio_real: number | string | null; descuento: number | string | null };
 type Pago = { pedido_id: string | null; monto: number | string | null; fecha: string | null; metodo: string | null };
 type Cliente = { id: string; nombre: string; created_at: string };
-type ProductoDetalle = { pedido_id: string; producto_id: string | null; cantidad: number | string | null; precio: number | string | null; costo: number | string | null; productos: { nombre: string | null; categoria: string | null } | null };
+type ProductoDetalle = { pedido_id: string; producto_id: string | null; cantidad: number | string | null; precio: number | string | null; costo: number | string | null; es_cortesia: boolean | null; productos: { nombre: string | null; categoria: string | null } | null };
 type Receta = { producto_id: string | null; rendimiento: number | string | null; iva_pct: number | string | null; comision_canal_pct: number | string | null; receta_ingredientes: { cantidad: number | string | null; ingredientes: { costo_referencia: number | string | null } | null }[] };
 type Ingrediente = { nombre: string; stock_actual: number | string | null; costo_referencia: number | string | null; unidad_base: string };
 type Factura = { estado: string | null; total: number | string | null; emitida_at: string | null; created_at: string };
@@ -55,10 +55,10 @@ export default function ReportesPage() {
   const cargar = useCallback(async () => {
     setCargando(true); setError("");
     const [pedidosRes, pagosRes, clientesRes, detallesRes, ingredientesRes, facturasRes, recetasRes] = await Promise.all([
-      supabase.from("pedidos").select("id,codigo,total,saldo_pendiente,estado,vendedor,canal_origen,cliente_id,fecha_creacion,fecha_pedido,requiere_envio,entrega_mensajero,costo_envio").order("fecha_creacion", { ascending: false }).limit(2000),
+      supabase.from("pedidos").select("id,codigo,total,saldo_pendiente,estado,vendedor,canal_origen,cliente_id,fecha_creacion,fecha_pedido,requiere_envio,entrega_mensajero,costo_envio,envio_gratis,costo_envio_real,descuento").order("fecha_creacion", { ascending: false }).limit(2000),
       supabase.from("pagos").select("pedido_id,monto,fecha,metodo").order("fecha", { ascending: false }).limit(2000),
       supabase.from("clientes").select("id,nombre,created_at").order("created_at", { ascending: false }).limit(2000),
-      supabase.from("pedido_detalle").select("pedido_id,producto_id,cantidad,precio,costo,productos(nombre,categoria)").limit(5000),
+      supabase.from("pedido_detalle").select("pedido_id,producto_id,cantidad,precio,costo,es_cortesia,productos(nombre,categoria)").limit(5000),
       supabase.from("ingredientes").select("nombre,stock_actual,costo_referencia,unidad_base").eq("activo", true).order("nombre"),
       supabase.from("facturas").select("estado,total,emitida_at,created_at").order("created_at", { ascending: false }).limit(2000),
       supabase.from("recetas_estandar").select("producto_id,rendimiento,iva_pct,comision_canal_pct,receta_ingredientes(cantidad,ingredientes(costo_referencia))").eq("activa", true),
@@ -83,6 +83,14 @@ export default function ReportesPage() {
   const clientesConCompra = new Set(pedidosFiltrados.map((pedido) => pedido.cliente_id).filter(Boolean)).size;
   const ventasProductos = detallesFiltrados.reduce((suma, detalle) => suma + numero(detalle.cantidad) * numero(detalle.precio), 0);
   const costoHistorico = detallesFiltrados.reduce((suma, detalle) => suma + numero(detalle.cantidad) * numero(detalle.costo), 0);
+  const cortesias = detallesFiltrados.filter((detalle) => detalle.es_cortesia);
+  const costoCortesias = cortesias.reduce((suma, detalle) => suma + numero(detalle.cantidad) * numero(detalle.costo), 0);
+  const unidadesCortesia = cortesias.reduce((suma, detalle) => suma + numero(detalle.cantidad), 0);
+  const pedidosConCortesia = new Set(cortesias.map((detalle) => detalle.pedido_id)).size;
+  const totalDescuentos = pedidosFiltrados.reduce((suma, pedido) => suma + numero(pedido.descuento), 0);
+  const enviosGratis = pedidosFiltrados.filter((pedido) => pedido.requiere_envio && pedido.envio_gratis);
+  const costoEnviosGratis = enviosGratis.reduce((suma, pedido) => suma + numero(pedido.costo_envio_real), 0);
+  const enviosGratisSinCosto = enviosGratis.filter((pedido) => pedido.costo_envio_real === null).length;
   const margenBruto = ventasProductos - costoHistorico;
   const margenesConReceta = useMemo(() => {
     const recetasPorProducto = new Map(recetas.filter((receta) => receta.producto_id).map((receta) => [receta.producto_id, receta]));
@@ -133,13 +141,13 @@ export default function ReportesPage() {
 
   function exportarExcel() {
     const resumen = [
-      { indicador: "Ventas registradas", valor: totalVendido }, { indicador: "Pedidos", valor: pedidosFiltrados.length }, { indicador: "Pedidos por mensajería", valor: pedidosMensajeria.length }, { indicador: "Envío cobrado por mensajería", valor: envioCobradoMensajeria }, { indicador: "Ticket promedio", valor: ticketPromedio }, { indicador: "Cobrado", valor: cobrado }, { indicador: "Saldo por cobrar", valor: saldoPendiente }, { indicador: "Margen bruto estimado (costo histórico)", valor: margenBruto }, { indicador: "Ganancia estimada tras costo completo, IVA y comisión", valor: gananciaCostoCompleto }, { indicador: "Margen sobre costo completo (%)", valor: margenesConReceta.ventaSinIva ? gananciaCostoCompleto / margenesConReceta.ventaSinIva * 100 : null }, { indicador: "Ganancia estimada tras ingredientes, IVA y comisión", valor: gananciaIngredientes }, { indicador: "Margen sobre ingredientes (%)", valor: margenesConReceta.ventaSinIva ? gananciaIngredientes / margenesConReceta.ventaSinIva * 100 : null }, { indicador: "Líneas con receta para márgenes", valor: margenesConReceta.lineas }, { indicador: "Clientes con compra", valor: clientesConCompra }, { indicador: "Facturas FEL emitidas", valor: felEmitido.length },
+      { indicador: "Ventas registradas", valor: totalVendido }, { indicador: "Pedidos", valor: pedidosFiltrados.length }, { indicador: "Costo de cortesías", valor: costoCortesias }, { indicador: "Unidades de cortesía", valor: unidadesCortesia }, { indicador: "Descuentos aplicados", valor: totalDescuentos }, { indicador: "Costo registrado de envíos gratis", valor: costoEnviosGratis }, { indicador: "Envíos gratis sin costo real", valor: enviosGratisSinCosto }, { indicador: "Pedidos por mensajería", valor: pedidosMensajeria.length }, { indicador: "Envío cobrado por mensajería", valor: envioCobradoMensajeria }, { indicador: "Ticket promedio", valor: ticketPromedio }, { indicador: "Cobrado", valor: cobrado }, { indicador: "Saldo por cobrar", valor: saldoPendiente }, { indicador: "Margen bruto estimado (costo histórico)", valor: margenBruto }, { indicador: "Ganancia estimada tras costo completo, IVA y comisión", valor: gananciaCostoCompleto }, { indicador: "Margen sobre costo completo (%)", valor: margenesConReceta.ventaSinIva ? gananciaCostoCompleto / margenesConReceta.ventaSinIva * 100 : null }, { indicador: "Ganancia estimada tras ingredientes, IVA y comisión", valor: gananciaIngredientes }, { indicador: "Margen sobre ingredientes (%)", valor: margenesConReceta.ventaSinIva ? gananciaIngredientes / margenesConReceta.ventaSinIva * 100 : null }, { indicador: "Líneas con receta para márgenes", valor: margenesConReceta.lineas }, { indicador: "Clientes con compra", valor: clientesConCompra }, { indicador: "Facturas FEL emitidas", valor: felEmitido.length },
     ];
     const libro = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(resumen), "Resumen");
     XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(productosResumen), "Productos");
     XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(responsablesResumen.map((responsable) => ({ responsable: responsable.nombre, pedidos: responsable.pedidos, ventas: responsable.ventas, ticket_promedio: responsable.ventas / responsable.pedidos }))), "Responsables");
     XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(porCanal), "Canales");
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(pedidosFiltrados.map((pedido) => ({ codigo: pedido.codigo, fecha: fechaLocal(pedido.fecha_pedido || pedido.fecha_creacion), cliente_id: pedido.cliente_id, estado: pedido.estado, canal: pedido.canal_origen, tipo_entrega: pedido.requiere_envio ? (pedido.entrega_mensajero ? "Mensajería externa" : "Nuestro equipo") : "Recoger en tienda", costo_envio: numero(pedido.costo_envio), total: numero(pedido.total), saldo_pendiente: numero(pedido.saldo_pendiente) }))), "Pedidos");
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.json_to_sheet(pedidosFiltrados.map((pedido) => ({ codigo: pedido.codigo, fecha: fechaLocal(pedido.fecha_pedido || pedido.fecha_creacion), cliente_id: pedido.cliente_id, estado: pedido.estado, canal: pedido.canal_origen, tipo_entrega: pedido.requiere_envio ? (pedido.entrega_mensajero ? "Mensajería externa" : "Nuestro equipo") : "Recoger en tienda", envio_cobrado: numero(pedido.costo_envio), envio_gratis: Boolean(pedido.envio_gratis), costo_envio_real: pedido.costo_envio_real === null ? null : numero(pedido.costo_envio_real), descuento: numero(pedido.descuento), costo_cortesias: detallesFiltrados.filter((detalle) => detalle.pedido_id === pedido.id && detalle.es_cortesia).reduce((suma, detalle) => suma + numero(detalle.cantidad) * numero(detalle.costo), 0), total: numero(pedido.total), saldo_pendiente: numero(pedido.saldo_pendiente) }))), "Pedidos");
     XLSX.writeFile(libro, `reporte-la-cocina-de-isa-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
@@ -156,8 +164,21 @@ export default function ReportesPage() {
       ["Ganancia sobre costo completo", margenesConReceta.lineas ? moneda(gananciaCostoCompleto) : "Sin datos", `${porcentajeMargen(gananciaCostoCompleto)} · tras IVA, comisión y costo de producción`, TrendingUp, "bg-emerald-50 text-emerald-800"], ["Ganancia sobre ingredientes", margenesConReceta.lineas ? moneda(gananciaIngredientes) : "Sin datos", `${porcentajeMargen(gananciaIngredientes)} · tras IVA, comisión e ingredientes`, TrendingUp, "bg-teal-50 text-teal-800"],
       ["Ticket promedio", moneda(ticketPromedio), "Valor promedio por pedido", BarChart3, "bg-cyan-50 text-cyan-800"], ["Clientes con compra", clientesConCompra, `${clientesRecurrentes} recurrentes · ${clientesNuevos} nuevos`, UsersRound, "bg-fuchsia-50 text-fuchsia-800"], ["Inventario actual", moneda(valorInventario), `${ingredientesSinStock.length} ingredientes sin stock`, Boxes, "bg-orange-50 text-orange-800"], ["FEL emitido", moneda(felEmitido.reduce((suma, factura) => suma + numero(factura.total), 0)), `${felEmitido.length} documentos emitidos`, FileCheck2, "bg-teal-50 text-teal-800"],
       ["Pedidos por mensajería", pedidosMensajeria.length, "Entrega externa dentro del rango", ReceiptText, "bg-violet-50 text-violet-800"], ["Envío cobrado", moneda(envioCobradoMensajeria), "Solo pedidos por mensajería", CircleDollarSign, "bg-indigo-50 text-indigo-800"],
+      ["Invertido en cortesías", moneda(costoCortesias), `${unidadesCortesia} unidades · ${pedidosConCortesia} pedidos`, Boxes, "bg-orange-50 text-orange-800"],
+      ["Descuentos aplicados", moneda(totalDescuentos), "Reducción del precio cobrado", ReceiptText, "bg-rose-50 text-rose-800"],
+      ["Envíos gratis", enviosGratis.length, `${moneda(costoEnviosGratis)} de costo registrado${enviosGratisSinCosto ? ` · ${enviosGratisSinCosto} sin costo` : ""}`, Truck, "bg-sky-50 text-sky-800"],
     ].map(([titulo, valor, detalle, Icono, colores]) => { const Icon = Icono as typeof BarChart3; return <article key={titulo as string} className={`rounded-2xl border border-white p-5 shadow-sm ${colores as string}`}><Icon size={20}/><p className="mt-4 text-xs font-bold uppercase tracking-wide opacity-70">{titulo as string}</p><p className="mt-2 text-2xl font-black">{valor as string | number}</p><p className="mt-1 text-sm opacity-80">{detalle as string}</p></article>; })}</section>
     <p className="mt-3 text-xs text-slate-600">Las dos ganancias nuevas cubren {margenesConReceta.lineas} de {detallesFiltrados.length} líneas de pedido con receta activa. Usan el precio y costo de producción guardados en la venta, pero IVA, comisión e ingredientes de la receta actual; son estimaciones, no utilidad neta contable.</p>
+    <section className="mt-6 rounded-3xl border border-orange-200 bg-white p-5 shadow-sm" aria-label="Inversión en beneficios para clientes">
+      <h2 className="text-lg font-black text-slate-950">Cortesías, descuentos y envío gratis</h2>
+      <p className="mt-1 text-sm text-slate-600">Resumen de los pedidos no cancelados que cumplen los filtros de fecha, canal, estado y entrega.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <p className="rounded-xl bg-orange-50 p-4 text-sm text-slate-700"><b className="block text-orange-800">{moneda(costoCortesias)} en cortesías</b>{unidadesCortesia} unidades en {pedidosConCortesia} pedidos. Es costo de producción, no precio de venta.</p>
+        <p className="rounded-xl bg-rose-50 p-4 text-sm text-slate-700"><b className="block text-rose-800">{moneda(totalDescuentos)} en descuentos</b>Importe que se dejó de cobrar al cliente.</p>
+        <p className="rounded-xl bg-sky-50 p-4 text-sm text-slate-700"><b className="block text-sky-800">{enviosGratis.length} envíos gratis</b>{moneda(costoEnviosGratis)} de costo real registrado{enviosGratisSinCosto ? `; faltan costos en ${enviosGratisSinCosto} pedidos` : ""}.</p>
+      </div>
+      <p className="mt-3 text-xs text-slate-500">El costo de las cortesías ya forma parte del costo de productos en el margen; no debe restarse una segunda vez. El costo de envíos gratis solo es completo cuando se registra el costo real de cada entrega.</p>
+    </section>
     <section className="mt-6 grid gap-4 md:grid-cols-2" aria-label="Líderes del período filtrado">
       <article className="rounded-2xl border border-orange-100 bg-orange-50 p-5">
         <p className="text-xs font-bold uppercase tracking-wide text-orange-700">Responsable con más pedidos</p>

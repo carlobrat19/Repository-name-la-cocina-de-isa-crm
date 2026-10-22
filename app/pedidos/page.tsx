@@ -34,6 +34,7 @@ type ItemCarrito = {
   cantidad: number;
   precio: number;
   costo: number;
+  esCortesia: boolean;
 };
 
 type Cliente = {
@@ -150,6 +151,11 @@ export default function PedidosPage() {
   const [municipioEntrega, setMunicipioEntrega] = useState("");
   const [zonaEntrega, setZonaEntrega] = useState("");
   const [costoEnvio, setCostoEnvio] = useState(0);
+  const [costoEnvioReal, setCostoEnvioReal] = useState("");
+  const [envioGratis, setEnvioGratis] = useState(false);
+  const [descuentoTipo, setDescuentoTipo] = useState<"Monto" | "Porcentaje">("Monto");
+  const [descuentoValor, setDescuentoValor] = useState(0);
+  const [agregarComoCortesia, setAgregarComoCortesia] = useState(false);
   const [guardarDireccion, setGuardarDireccion] = useState(true);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [productoSeleccionado, setProductoSeleccionado] = useState("");
@@ -192,7 +198,7 @@ export default function PedidosPage() {
         supabase.from("cotizacion_detalle").select("producto_id,descripcion,cantidad,precio,productos(costo)").eq("cotizacion_id", idCotizacion),
         supabase.from("cotizaciones").select("costo_envio").eq("id", idCotizacion).maybeSingle(),
         ]).then(([{ data: lineas }, { data: cotizacion }]) => {
-        setCarrito((lineas || []).filter((item) => item.producto_id).map((item) => ({ id: item.producto_id as string, nombre: item.descripcion, cantidad: Number(item.cantidad || 1), precio: Number(item.precio || 0), costo: Number((item.productos as { costo?: number } | null)?.costo || 0) })));
+        setCarrito((lineas || []).filter((item) => item.producto_id).map((item) => ({ id: item.producto_id as string, nombre: item.descripcion, cantidad: Number(item.cantidad || 1), precio: Number(item.precio || 0), costo: Number((item.productos as { costo?: number } | null)?.costo || 0), esCortesia: false })));
         const envioCotizado = Number(cotizacion?.costo_envio || 0);
         setCostoEnvio(envioCotizado);
         if (envioCotizado > 0) setRequiereEnvio(true);
@@ -294,7 +300,14 @@ export default function PedidosPage() {
       carrito.reduce((total, item) => total + item.precio * item.cantidad, 0),
     [carrito],
   );
-  const totalPedido = subtotalProductos + (requiereEnvio ? costoEnvio : 0);
+  const descuentoCalculado = Math.min(subtotalProductos, Math.round((descuentoTipo === "Porcentaje" ? subtotalProductos * descuentoValor / 100 : descuentoValor) * 100) / 100);
+  const envioCobrado = requiereEnvio && !envioGratis ? costoEnvio : 0;
+  const totalPedido = Math.round((subtotalProductos - descuentoCalculado + envioCobrado) * 100) / 100;
+  const costoProductos = carrito.reduce((total, item) => total + item.costo * item.cantidad, 0);
+  const costoCortesias = carrito.filter((item) => item.esCortesia).reduce((total, item) => total + item.costo * item.cantidad, 0);
+  const valorCortesias = carrito.filter((item) => item.esCortesia).reduce((total, item) => total + Number(productos.find((producto) => producto.id === item.id)?.precio_venta || 0) * item.cantidad, 0);
+  const envioRealRegistrado = !requiereEnvio || costoEnvioReal.trim() !== "";
+  const gananciaEstimada = totalPedido - costoProductos - (requiereEnvio ? Number(costoEnvioReal || 0) : 0);
   const totalUnidades = useMemo(
     () => carrito.reduce((total, item) => total + item.cantidad, 0),
     [carrito],
@@ -309,10 +322,10 @@ export default function PedidosPage() {
     const precio = Number(productoActual.precio_venta || 0);
     const costo = Number(productoActual.costo || 0);
     setCarrito((anterior) => {
-      const existente = anterior.find((item) => item.id === productoActual.id);
+      const existente = anterior.find((item) => item.id === productoActual.id && item.esCortesia === agregarComoCortesia);
       if (existente)
         return anterior.map((item) =>
-          item.id === productoActual.id
+          item.id === productoActual.id && item.esCortesia === agregarComoCortesia
             ? { ...item, cantidad: item.cantidad + unidades }
             : item,
         );
@@ -322,27 +335,29 @@ export default function PedidosPage() {
           id: productoActual.id,
           nombre: productoActual.nombre,
           cantidad: unidades,
-          precio,
+          precio: agregarComoCortesia ? 0 : precio,
           costo,
+          esCortesia: agregarComoCortesia,
         },
       ];
     });
     setProductoSeleccionado("");
     setCantidad(1);
+    setAgregarComoCortesia(false);
   }
 
-  function cambiarCantidad(id: string, cambio: number) {
+  function cambiarCantidad(id: string, esCortesia: boolean, cambio: number) {
     setCarrito((anterior) =>
       anterior.map((item) =>
-        item.id === id
+        item.id === id && item.esCortesia === esCortesia
           ? { ...item, cantidad: Math.max(1, item.cantidad + cambio) }
           : item,
       ),
     );
   }
 
-  function eliminarProducto(id: string) {
-    setCarrito((anterior) => anterior.filter((item) => item.id !== id));
+  function eliminarProducto(id: string, esCortesia: boolean) {
+    setCarrito((anterior) => anterior.filter((item) => item.id !== id || item.esCortesia !== esCortesia));
   }
 
   function limpiarFormulario() {
@@ -370,6 +385,11 @@ export default function PedidosPage() {
     setMunicipioEntrega("");
     setZonaEntrega("");
     setCostoEnvio(0);
+    setCostoEnvioReal("");
+    setEnvioGratis(false);
+    setDescuentoTipo("Monto");
+    setDescuentoValor(0);
+    setAgregarComoCortesia(false);
     setGuardarDireccion(true);
     setProductoSeleccionado("");
     setCantidad(1);
@@ -383,6 +403,10 @@ export default function PedidosPage() {
     }
     if (carrito.length === 0) {
       alert("Agrega al menos un producto al pedido.");
+      return;
+    }
+    if (descuentoValor < 0 || (descuentoTipo === "Porcentaje" && descuentoValor > 100) || (descuentoTipo === "Monto" && descuentoValor > subtotalProductos)) {
+      alert("Revisa el descuento: no puede superar el subtotal de productos ni el 100%.");
       return;
     }
     if (requiereEnvio && !direccion.trim()) {
@@ -407,10 +431,13 @@ export default function PedidosPage() {
           cliente_id: clienteId,
           cliente: cliente.trim(), telefono: telefono.trim(), nit: nit.trim(), razon_social: razonSocial.trim(), correo_fiscal: correoFiscal.trim(), direccion_fiscal: direccionFiscal.trim(),
           direccion: direccion.trim(), fecha_pedido: fechaCreacion || null, fecha_entrega: fechaEntrega || null, estado, forma_pago: formaPago,
-          costo_envio: requiereEnvio ? costoEnvio : 0, departamento_entrega: departamentoEntrega.trim(), municipio_entrega: municipioEntrega.trim(), zona_entrega: zonaEntrega.trim(),
+          costo_envio: envioCobrado, envio_tarifa: requiereEnvio ? costoEnvio : 0, envio_gratis: requiereEnvio && envioGratis,
+          costo_envio_real: requiereEnvio && costoEnvioReal.trim() ? Number(costoEnvioReal) : null,
+          descuento_tipo: descuentoTipo, descuento_valor: descuentoValor,
+          departamento_entrega: departamentoEntrega.trim(), municipio_entrega: municipioEntrega.trim(), zona_entrega: zonaEntrega.trim(),
           requiere_envio: requiereEnvio, entrega_mensajero: requiereEnvio && entregaMensajero, guardar_direccion: guardarDireccion, abono_inicial: abono, canal_origen: canalOrigen,
           conversacion_id: conversacionId, responsable_id: responsableId, cotizacion_id: cotizacionId, observaciones: observaciones.trim(), vendedor,
-          items: carrito.map((item) => ({ id: item.id, cantidad: item.cantidad, precio: item.precio, costo: item.costo })),
+          items: carrito.map((item) => ({ id: item.id, cantidad: item.cantidad, precio: item.precio, costo: item.costo, es_cortesia: item.esCortesia })),
         },
       });
       if (error) throw error;
@@ -632,6 +659,10 @@ export default function PedidosPage() {
                   {formatMoney(Number(productoActual.precio_venta || 0))}
                 </p>
               )}
+              <label className="mt-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <input type="checkbox" checked={agregarComoCortesia} onChange={(event) => setAgregarComoCortesia(event.target.checked)} />
+                Agregar como cortesía · cliente paga Q0, pero se conserva su costo y consumo de ingredientes
+              </label>
             </section>
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -952,8 +983,24 @@ export default function PedidosPage() {
                     />
                   </div>
                 </div>
+                <label className="mt-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input type="checkbox" checked={envioGratis} onChange={(event) => setEnvioGratis(event.target.checked)} />
+                  Envío gratis para el cliente
+                </label>
+                <div className="mt-4 max-w-sm">
+                  <InputLabel>Costo real de entregar (Q) · para medir rentabilidad</InputLabel>
+                  <input type="number" min="0" step="0.01" value={costoEnvioReal} onChange={(event) => setCostoEnvioReal(event.target.value)} placeholder="Si aún no se sabe, dejar vacío" className={fieldClass} />
+                </div>
               </section>
             )}
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <h2 className="font-bold text-slate-950">Descuento del pedido</h2>
+              <p className="mt-1 text-xs text-slate-600">Solo el equipo interno puede aplicarlo. No modifica el costo de producción.</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div><InputLabel>Tipo</InputLabel><select value={descuentoTipo} onChange={(event) => setDescuentoTipo(event.target.value as "Monto" | "Porcentaje")} className={fieldClass}><option value="Monto">Monto fijo (Q)</option><option value="Porcentaje">Porcentaje (%)</option></select></div>
+                <div><InputLabel>Valor</InputLabel><input type="number" min="0" max={descuentoTipo === "Porcentaje" ? 100 : undefined} step="0.01" value={descuentoValor || ""} onChange={(event) => setDescuentoValor(Math.max(0, Number(event.target.value) || 0))} className={fieldClass} placeholder="0" /></div>
+              </div>
+            </section>
           </div>
 
           <aside className="xl:sticky xl:top-6 xl:self-start">
@@ -985,11 +1032,11 @@ export default function PedidosPage() {
                   </div>
                 ) : (
                   carrito.map((item) => (
-                    <div key={item.id} className="px-5 py-4">
+                    <div key={`${item.id}:${item.esCortesia}`} className="px-5 py-4">
                       <div className="flex gap-3">
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-bold text-slate-900">
-                            {item.nombre}
+                            {item.nombre} {item.esCortesia && <span className="text-emerald-700">· Cortesía</span>}
                           </p>
                           <p className="mt-1 text-xs text-slate-500">
                             {formatMoney(item.precio)} c/u
@@ -1003,7 +1050,7 @@ export default function PedidosPage() {
                         <div className="flex items-center overflow-hidden rounded-lg border border-slate-200">
                           <button
                             type="button"
-                            onClick={() => cambiarCantidad(item.id, -1)}
+                            onClick={() => cambiarCantidad(item.id, item.esCortesia, -1)}
                             className="p-1.5 text-slate-500 hover:bg-slate-100"
                           >
                             <Minus className="h-3.5 w-3.5" />
@@ -1013,7 +1060,7 @@ export default function PedidosPage() {
                           </span>
                           <button
                             type="button"
-                            onClick={() => cambiarCantidad(item.id, 1)}
+                            onClick={() => cambiarCantidad(item.id, item.esCortesia, 1)}
                             className="p-1.5 text-slate-500 hover:bg-slate-100"
                           >
                             <Plus className="h-3.5 w-3.5" />
@@ -1021,7 +1068,7 @@ export default function PedidosPage() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => eliminarProducto(item.id)}
+                          onClick={() => eliminarProducto(item.id, item.esCortesia)}
                           aria-label={`Eliminar ${item.nombre}`}
                           className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
                         >
@@ -1040,6 +1087,7 @@ export default function PedidosPage() {
                       {formatMoney(subtotalProductos)}
                     </span>
                   </div>
+                  {descuentoCalculado > 0 && <div className="flex justify-between text-rose-700"><span>Descuento</span><span>−{formatMoney(descuentoCalculado)}</span></div>}
                   {requiereEnvio && (
                     <div className="flex justify-between text-slate-600">
                       <span>
@@ -1049,10 +1097,19 @@ export default function PedidosPage() {
                         {zonaEntrega ? `, ${zonaEntrega}` : ""}
                       </span>
                       <span className="font-bold text-slate-900">
-                        {formatMoney(costoEnvio)}
+                        {envioGratis ? "Gratis" : formatMoney(costoEnvio)}
                       </span>
                     </div>
                   )}
+                </div>
+                <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-3 text-xs text-slate-700">
+                  <p className="font-bold text-slate-950">Impacto estimado de cortesías y descuentos</p>
+                  <div className="mt-2 flex justify-between"><span>Cortesías: valor normal / costo de producir</span><span>{formatMoney(valorCortesias)} / {formatMoney(costoCortesias)}</span></div>
+                  <div className="mt-1 flex justify-between"><span>Costo de todos los productos</span><span>{formatMoney(costoProductos)}</span></div>
+                  {requiereEnvio && <div className="mt-1 flex justify-between"><span>Costo real del envío</span><span>{envioRealRegistrado ? formatMoney(Number(costoEnvioReal)) : "Sin registrar"}</span></div>}
+                  <div className="mt-2 flex justify-between border-t border-orange-200 pt-2 font-bold"><span>Ganancia bruta estimada</span><span>{envioRealRegistrado ? formatMoney(gananciaEstimada) : "Pendiente de costo de envío"}</span></div>
+                  {envioRealRegistrado && gananciaEstimada < 0 && <p className="mt-2 font-bold text-rose-700">Atención: este pedido quedaría con pérdida estimada.</p>}
+                  <p className="mt-2 text-slate-500">Estimación antes de IVA, comisiones y gastos generales. El mínimo de compra no se aplica automáticamente.</p>
                 </div>
                 <div className="mt-4 flex items-end justify-between">
                   <div>

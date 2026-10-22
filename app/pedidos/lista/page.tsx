@@ -40,6 +40,9 @@ type Pedido = {
   requiere_envio?: boolean | null;
   entrega_mensajero?: boolean | null;
   costo_envio?: number | string | null;
+  descuento?: number | string | null;
+  envio_gratis?: boolean | null;
+  costo_envio_real?: number | string | null;
   total?: number | string | null;
   saldo_pendiente?: number | string | null;
 };
@@ -49,6 +52,8 @@ type Detalle = {
   producto_id?: string | null;
   cantidad?: number | null;
   precio?: number | string | null;
+  costo?: number | string | null;
+  es_cortesia?: boolean | null;
 };
 
 type Producto = { id: string; nombre?: string | null };
@@ -168,8 +173,9 @@ export default function ListaPedidosPage() {
       entregas: pedidosValidos.filter((pedido) => pedido.requiere_envio).length,
       mensajeria: pedidosValidos.filter((pedido) => pedido.requiere_envio && pedido.entrega_mensajero).length,
       envioMensajeria: pedidosValidos.filter((pedido) => pedido.requiere_envio && pedido.entrega_mensajero).reduce((acumulado, pedido) => acumulado + Number(pedido.costo_envio || 0), 0),
+      costoCortesias: pedidosValidos.reduce((acumulado, pedido) => acumulado + (detallesPorPedido.get(pedido.id) || []).filter((detalle) => detalle.es_cortesia).reduce((costo, detalle) => costo + Number(detalle.costo || 0) * Number(detalle.cantidad || 0), 0), 0),
     };
-  }, [pedidosFiltrados]);
+  }, [pedidosFiltrados, detallesPorPedido]);
 
   const hayFiltros = Boolean(busqueda || productoFiltro !== "Todos" || estado !== "Todos" || pago !== "Todos" || vendedor !== "Todos" || envio !== "Todos" || tipoEntrega !== "Todos" || desde || hasta);
   const limpiarFiltros = () => { setBusqueda(""); setProductoFiltro("Todos"); setEstado("Todos"); setPago("Todos"); setVendedor("Todos"); setEnvio("Todos"); setTipoEntrega("Todos"); setDesde(""); setHasta(""); };
@@ -212,13 +218,14 @@ export default function ListaPedidosPage() {
 
         {(error || mensaje) && <p role={error ? "alert" : "status"} className={`rounded-xl border p-4 text-sm font-semibold ${error ? "border-rose-200 bg-rose-50 text-rose-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>{error || mensaje}</p>}
 
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           {[
             ["Pedidos visibles", `${pedidosFiltrados.length}`, PackageCheck, "text-slate-900 bg-white"],
             ["Total de ventas", formatMoney(resumen.total), CircleDollarSign, "text-emerald-700 bg-emerald-50"],
             ["Pendientes de gestión", `${resumen.pendientes}`, ChefHat, "text-amber-700 bg-amber-50"],
             ["Pendiente de cobro", formatMoney(resumen.porCobrar), Truck, "text-sky-700 bg-sky-50"],
             ["Por mensajería", `${resumen.mensajeria}`, Truck, "text-violet-700 bg-violet-50"],
+            ["Invertido en cortesías", formatMoney(resumen.costoCortesias), PackageCheck, "text-orange-700 bg-orange-50"],
           ].map(([label, value, Icon, tone]) => {
             const CardIcon = Icon as typeof PackageCheck;
             return <div key={label as string} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold text-slate-500">{label as string}</p><p className="mt-2 text-2xl font-black tracking-tight text-slate-950">{value as string}</p></div><div className={`rounded-xl p-2.5 ${tone as string}`}><CardIcon className="h-5 w-5" /></div></div></div>;

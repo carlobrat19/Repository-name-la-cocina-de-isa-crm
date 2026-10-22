@@ -47,6 +47,12 @@ type Pedido = {
   total?: number | string | null;
   subtotal_productos?: number | string | null;
   costo_envio?: number | string | null;
+  envio_tarifa?: number | string | null;
+  envio_gratis?: boolean | null;
+  costo_envio_real?: number | string | null;
+  descuento?: number | string | null;
+  descuento_tipo?: string | null;
+  descuento_valor?: number | string | null;
   saldo_pendiente?: number | string | null;
   observaciones?: string | null;
   canal_origen?: string | null;
@@ -60,6 +66,8 @@ type Detalle = {
   producto_id?: string | null;
   cantidad?: number | null;
   precio?: number | string | null;
+  costo?: number | string | null;
+  es_cortesia?: boolean | null;
   productos?: { nombre?: string | null } | null;
 };
 type Producto = {
@@ -135,6 +143,7 @@ export default function DetallePedidoPage() {
   const [detalles, setDetalles] = useState<Detalle[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [productoAAgregar, setProductoAAgregar] = useState("");
+  const [agregarCortesia, setAgregarCortesia] = useState(false);
   const [clienteFiscal, setClienteFiscal] = useState<ClienteFiscal | null>(
     null,
   );
@@ -173,7 +182,7 @@ export default function DetallePedidoPage() {
     ] = await Promise.all([
       supabase
         .from("pedido_detalle")
-        .select("id, producto_id, cantidad, precio, productos(nombre)")
+        .select("id, producto_id, cantidad, precio, costo, es_cortesia, productos(nombre)")
         .eq("pedido_id", id),
       supabase
         .from("pagos")
@@ -227,8 +236,15 @@ export default function DetallePedidoPage() {
       ? subtotalEditado
       : Number(pedido.subtotal_productos ?? subtotalEditado)
     : 0;
-  const envio = Number(pedido?.costo_envio || 0);
-  const total = editando ? subtotal + envio : Number(pedido?.total ?? subtotal + envio);
+  const tarifaEnvio = Number(pedido?.envio_tarifa ?? pedido?.costo_envio ?? 0);
+  const envio = pedido?.requiere_envio && !pedido?.envio_gratis ? tarifaEnvio : 0;
+  const descuentoValor = Number(pedido?.descuento_valor || 0);
+  const descuento = editando ? Math.round((pedido?.descuento_tipo === "Porcentaje" ? subtotal * descuentoValor / 100 : descuentoValor) * 100) / 100 : Number(pedido?.descuento || 0);
+  const total = editando ? subtotal - descuento + envio : Number(pedido?.total ?? subtotal - descuento + envio);
+  const costoProductos = detalles.reduce((suma, detalle) => suma + Number(detalle.costo || 0) * Number(detalle.cantidad || 0), 0);
+  const costoCortesias = detalles.filter((detalle) => detalle.es_cortesia).reduce((suma, detalle) => suma + Number(detalle.costo || 0) * Number(detalle.cantidad || 0), 0);
+  const costoEnvioConocido = !pedido?.requiere_envio || pedido.costo_envio_real !== null && pedido.costo_envio_real !== undefined;
+  const gananciaEstimada = total - costoProductos - (pedido?.requiere_envio ? Number(pedido.costo_envio_real || 0) : 0);
   const abonadoRegistrado = pagos.reduce(
     (suma, pago) => suma + Number(pago.monto || 0),
     0,
@@ -255,8 +271,12 @@ export default function DetallePedidoPage() {
       alert("Escribe el nombre del cliente antes de guardar.");
       return;
     }
-    if (!Number.isFinite(envio) || envio < 0) {
+    if (!Number.isFinite(tarifaEnvio) || tarifaEnvio < 0) {
       alert("El costo de envío debe ser un monto válido igual o mayor a cero.");
+      return;
+    }
+    if (descuento < 0 || descuento > subtotal || (pedido.descuento_tipo === "Porcentaje" && descuentoValor > 100)) {
+      alert("El descuento no puede superar el subtotal ni el 100%.");
       return;
     }
     setGuardando(true);
@@ -283,11 +303,17 @@ export default function DetallePedidoPage() {
         canal_origen: pedido.canal_origen || "Manual",
         entrega_mensajero: Boolean(pedido.requiere_envio) && Boolean(pedido.entrega_mensajero),
         costo_envio: envio,
+        envio_tarifa: tarifaEnvio,
+        envio_gratis: Boolean(pedido.envio_gratis),
+        costo_envio_real: pedido.costo_envio_real ?? null,
+        descuento_tipo: pedido.descuento_tipo || "Monto",
+        descuento_valor: descuentoValor,
         ...(puedeEditarProductos
           ? {
               lineas: detalles.map((detalle) => ({
                 producto_id: detalle.producto_id,
                 cantidad: Number(detalle.cantidad || 0),
+                es_cortesia: Boolean(detalle.es_cortesia),
               })),
             }
           : {}),
@@ -307,9 +333,9 @@ export default function DetallePedidoPage() {
     const filas = detalles
       .map(
         (detalle) =>
-          `<tr><td>${detalle.productos?.nombre || "Producto"}</td><td class="c">${detalle.cantidad || 0}</td><td class="m">${dinero(detalle.precio)}</td><td class="m">${dinero(Number(detalle.precio || 0) * Number(detalle.cantidad || 0))}</td></tr>`,
+          `<tr><td>${detalle.productos?.nombre || "Producto"}${detalle.es_cortesia ? " · Cortesía" : ""}</td><td class="c">${detalle.cantidad || 0}</td><td class="m">${dinero(detalle.precio)}</td><td class="m">${dinero(Number(detalle.precio || 0) * Number(detalle.cantidad || 0))}</td></tr>`,
       )
-      .join("") + `<tr><td colspan="3" class="m"><b>Productos</b></td><td class="m">${dinero(subtotal)}</td></tr>${envio > 0 ? `<tr><td colspan="3" class="m"><b>Envío</b></td><td class="m">${dinero(envio)}</td></tr>` : ""}<tr><td colspan="3" class="m"><b>Total pedido</b></td><td class="m"><b>${dinero(total)}</b></td></tr><tr><td colspan="3" class="m">Estado de pago: ${pedido.pago_estado || "Pendiente"}</td><td class="m">Pagado: ${dinero(abonado)}</td></tr><tr><td colspan="3" class="m"><b>Saldo por cobrar</b></td><td class="m"><b>${dinero(saldo)}</b></td></tr>`;
+      .join("") + `<tr><td colspan="3" class="m"><b>Productos</b></td><td class="m">${dinero(subtotal)}</td></tr>${descuento > 0 ? `<tr><td colspan="3" class="m"><b>Descuento</b></td><td class="m">-${dinero(descuento)}</td></tr>` : ""}${pedido.requiere_envio ? `<tr><td colspan="3" class="m"><b>Envío</b></td><td class="m">${pedido.envio_gratis ? "Gratis" : dinero(envio)}</td></tr>` : ""}<tr><td colspan="3" class="m"><b>Total pedido</b></td><td class="m"><b>${dinero(total)}</b></td></tr><tr><td colspan="3" class="m">Estado de pago: ${pedido.pago_estado || "Pendiente"}</td><td class="m">Pagado: ${dinero(abonado)}</td></tr><tr><td colspan="3" class="m"><b>Saldo por cobrar</b></td><td class="m"><b>${dinero(saldo)}</b></td></tr>`;
     const ventana = window.open("", "_blank", "width=900,height=700");
     if (!ventana) return;
     ventana.document.write(
@@ -364,10 +390,10 @@ export default function DetallePedidoPage() {
     const producto = productos.find((item) => item.id === productoAAgregar);
     if (!producto) return;
     setDetalles((actuales) => {
-      const existente = actuales.find((item) => item.producto_id === producto.id);
+      const existente = actuales.find((item) => item.producto_id === producto.id && Boolean(item.es_cortesia) === agregarCortesia);
       if (existente) {
         return actuales.map((item) =>
-          item.producto_id === producto.id
+          item.producto_id === producto.id && Boolean(item.es_cortesia) === agregarCortesia
             ? { ...item, cantidad: Number(item.cantidad || 0) + 1 }
             : item,
         );
@@ -377,12 +403,15 @@ export default function DetallePedidoPage() {
         {
           producto_id: producto.id,
           cantidad: 1,
-          precio: producto.precio_venta || 0,
+          precio: agregarCortesia ? 0 : producto.precio_venta || 0,
+          costo: producto.costo || 0,
+          es_cortesia: agregarCortesia,
           productos: { nombre: producto.nombre },
         },
       ];
     });
     setProductoAAgregar("");
+    setAgregarCortesia(false);
   }
 
   function cambiarCantidadDetalle(indice: number, cambio: number) {
@@ -737,17 +766,21 @@ export default function DetallePedidoPage() {
                     </label>}
                     {pedido.requiere_envio && (
                       <label className="block text-xs font-bold text-slate-600">
-                        Costo de envío (Q)
+                        Tarifa de envío al cliente (Q)
                         <input
                           type="number"
                           min="0"
                           step="0.01"
-                          value={pedido.costo_envio ?? ""}
-                          onChange={(event) => actualizar("costo_envio", event.target.value)}
+                          value={pedido.envio_tarifa ?? pedido.costo_envio ?? ""}
+                          onChange={(event) => actualizar("envio_tarifa", event.target.value)}
                           className={`${input} mt-1.5`}
                         />
                       </label>
                     )}
+                    {pedido.requiere_envio && <label className="flex items-center gap-2 text-xs font-bold text-slate-700"><input type="checkbox" checked={Boolean(pedido.envio_gratis)} onChange={(event) => actualizar("envio_gratis", event.target.checked)} /> Envío gratis para el cliente</label>}
+                    {pedido.requiere_envio && <label className="block text-xs font-bold text-slate-600">Costo real de entregar (Q)<input type="number" min="0" step="0.01" value={pedido.costo_envio_real ?? ""} onChange={(event) => actualizar("costo_envio_real", event.target.value === "" ? null : event.target.value)} className={`${input} mt-1.5`} placeholder="Sin registrar" /></label>}
+                    <label className="block text-xs font-bold text-slate-600">Tipo de descuento<select value={pedido.descuento_tipo || "Monto"} onChange={(event) => actualizar("descuento_tipo", event.target.value)} className={`${input} mt-1.5`}><option value="Monto">Monto fijo (Q)</option><option value="Porcentaje">Porcentaje (%)</option></select></label>
+                    <label className="block text-xs font-bold text-slate-600">Descuento<input type="number" min="0" max={pedido.descuento_tipo === "Porcentaje" ? 100 : undefined} step="0.01" value={pedido.descuento_valor ?? 0} onChange={(event) => actualizar("descuento_valor", event.target.value)} className={`${input} mt-1.5`} /></label>
                     <label className="block text-xs font-bold text-slate-600">
                       Vendedor responsable
                       <select
@@ -793,8 +826,10 @@ export default function DetallePedidoPage() {
                       value={pedido.requiere_envio ? (pedido.entrega_mensajero ? "Mensajería externa" : "Nuestro equipo") : "Recoger en tienda"}
                     />
                     {pedido.requiere_envio && (
-                      <Field label="Costo de envío" value={dinero(envio)} />
+                      <Field label="Envío al cliente" value={pedido.envio_gratis ? "Gratis" : dinero(envio)} />
                     )}
+                    {pedido.requiere_envio && <Field label="Costo real de entregar" value={costoEnvioConocido ? dinero(pedido.costo_envio_real) : "Sin registrar"} />}
+                    <Field label="Descuento" value={dinero(descuento)} />
                     <Field
                       label="Responsable"
                       value={pedido.vendedor || "Sin asignar"}
@@ -841,6 +876,7 @@ export default function DetallePedidoPage() {
                         ))}
                       </select>
                     </label>
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-700"><input type="checkbox" checked={agregarCortesia} onChange={(event) => setAgregarCortesia(event.target.checked)} /> Cortesía (Q0)</label>
                     <button
                       type="button"
                       onClick={agregarProductoAlPedido}
@@ -858,7 +894,7 @@ export default function DetallePedidoPage() {
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-slate-900">
-                        {detalle.productos?.nombre || "Producto"}
+                        {detalle.productos?.nombre || "Producto"} {detalle.es_cortesia && <span className="text-emerald-700">· Cortesía</span>}
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
                         {detalle.cantidad || 0} × {dinero(detalle.precio)}
@@ -890,11 +926,20 @@ export default function DetallePedidoPage() {
               <div className="bg-slate-50 px-5 py-4 sm:px-6">
                 <div className="ml-auto max-w-xs space-y-2 text-sm">
                   <Line label="Productos" value={dinero(subtotal)} />
-                  {envio > 0 && <Line label="Envío" value={dinero(envio)} />}
+                  {descuento > 0 && <Line label="Descuento" value={`−${dinero(descuento)}`} />}
+                  {pedido.requiere_envio && <Line label="Envío" value={pedido.envio_gratis ? "Gratis" : dinero(envio)} />}
                   <div className="mt-3 flex justify-between border-t border-slate-200 pt-3 text-lg font-black text-slate-950">
                     <span>Total</span>
                     <span>{dinero(total)}</span>
                   </div>
+                </div>
+                <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-3 text-xs text-slate-700 sm:mx-6 sm:mb-5">
+                  <p className="font-bold text-slate-950">Rentabilidad estimada</p>
+                  <p className="mt-1">Costo de productos: {dinero(costoProductos)} · incluye cortesías: {dinero(costoCortesias)}</p>
+                  {pedido.requiere_envio && <p className="mt-1">Costo real de entrega: {costoEnvioConocido ? dinero(pedido.costo_envio_real) : "sin registrar"}</p>}
+                  <p className="mt-2 font-bold">Ganancia bruta: {costoEnvioConocido ? dinero(gananciaEstimada) : "pendiente del costo de envío"}</p>
+                  {costoEnvioConocido && gananciaEstimada < 0 && <p className="mt-1 font-bold text-rose-700">Atención: pérdida estimada.</p>}
+                  <p className="mt-1 text-slate-500">Antes de IVA, comisiones y gastos generales.</p>
                 </div>
               </div>
             </section>
