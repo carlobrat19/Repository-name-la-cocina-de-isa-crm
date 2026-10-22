@@ -10,7 +10,7 @@ type Ingrediente = { id: string; nombre: string; unidad_base: "g" | "ml" | "unid
 type Compra = { id: string; ingrediente_id: string; cantidad: number; total: number; created_at: string };
 type Edicion = { categoria: string; ingredienteId: string; cantidadBase: string; compraId: string };
 
-const categorias = ["Por clasificar", "Materia prima", "Empaques", "Mensajería y envíos", "Utensilios de cocina", "Equipo de cocina", "Mobiliario", "Servicios", "Publicidad", "Otros gastos"];
+const categorias = ["Por clasificar", "Materia prima", "Empaques", "Limpieza e higiene", "Mensajería y envíos", "Utensilios de cocina", "Equipo de cocina", "Mobiliario", "Servicios", "Publicidad", "Otros gastos"];
 
 export default function RevisarFactura({ factura, lineas, ingredientes, compras, comprasVinculadas, cerrar, alGuardar }: { factura: Factura; lineas: Linea[]; ingredientes: Ingrediente[]; compras: Compra[]; comprasVinculadas: Set<string | null>; cerrar: () => void; alGuardar: () => Promise<void> }) {
   const [categoria, setCategoria] = useState(factura.categoria);

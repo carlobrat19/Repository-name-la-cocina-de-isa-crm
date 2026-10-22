@@ -17,7 +17,7 @@ type Compra = { id: string; ingrediente_id: string; cantidad: number; total: num
 type Equivalencia = { id: string; proveedor_id: string; descripcion: string; ingrediente_id: string };
 type LineaFormulario = { descripcion: string; categoria: string; cantidad: string; unidad: string; cantidadBase: string; monto: string; ingredienteId: string; compraId: string; recordar: boolean };
 
-const categorias = ["Materia prima", "Empaques", "Mensajería y envíos", "Utensilios de cocina", "Equipo de cocina", "Mobiliario", "Servicios", "Publicidad", "Otros gastos"];
+const categorias = ["Materia prima", "Empaques", "Limpieza e higiene", "Mensajería y envíos", "Utensilios de cocina", "Equipo de cocina", "Mobiliario", "Servicios", "Publicidad", "Otros gastos"];
 const nuevaLinea = (): LineaFormulario => ({ descripcion: "", categoria: "Materia prima", cantidad: "", unidad: "", cantidadBase: "", monto: "", ingredienteId: "", compraId: "", recordar: false });
 const dinero = (valor: number | string | null | undefined) => moneda(Number(valor || 0));
 const texto = (valor: string) => valor.trim().toLocaleLowerCase("es-GT");
@@ -70,6 +70,7 @@ export default function ComprasFacturasPage() {
   const [filtroProveedor, setFiltroProveedor] = useState("");
   const [facturaEnlace, setFacturaEnlace] = useState("");
   const [revisandoFacturaId, setRevisandoFacturaId] = useState("");
+  const [busquedaArticulo, setBusquedaArticulo] = useState("");
 
   async function cargar() {
     setCargando(true);
@@ -105,6 +106,26 @@ export default function ComprasFacturasPage() {
   }), [facturas, proveedores, desde, hasta, filtroProveedor, busqueda, facturaEnlace]);
   const totalFiltrado = filtradas.reduce((suma, factura) => suma + Number(factura.total || 0), 0);
   const porProveedor = useMemo(() => proveedores.map((proveedor) => ({ proveedor, documentos: filtradas.filter((factura) => factura.proveedor_id === proveedor.id) })).filter((item) => item.documentos.length).map((item) => ({ nombre: item.proveedor.nombre, cantidad: item.documentos.length, total: item.documentos.reduce((suma, factura) => suma + Number(factura.total || 0), 0) })).sort((a, b) => b.total - a.total), [proveedores, filtradas]);
+  const resumenArticulos = useMemo(() => {
+    const ids = new Set(filtradas.map((factura) => factura.id));
+    const porCategoria = new Map<string, { lineas: number; monto: number }>();
+    const porArticulo = new Map<string, { descripcion: string; categoria: string; lineas: number; facturas: Set<string>; monto: number }>();
+    for (const linea of lineasGuardadas) {
+      if (!ids.has(linea.factura_id)) continue;
+      const categoria = linea.categoria || "Por clasificar";
+      const monto = Number(linea.monto || 0);
+      const grupo = porCategoria.get(categoria) || { lineas: 0, monto: 0 };
+      grupo.lineas++; grupo.monto += monto; porCategoria.set(categoria, grupo);
+      const id = `${categoria}|${linea.descripcion.trim().toLocaleUpperCase("es-GT")}`;
+      const articulo = porArticulo.get(id) || { descripcion: linea.descripcion.trim(), categoria, lineas: 0, facturas: new Set<string>(), monto: 0 };
+      articulo.lineas++; articulo.facturas.add(linea.factura_id); articulo.monto += monto; porArticulo.set(id, articulo);
+    }
+    return {
+      categorias: [...porCategoria].map(([categoria, datos]) => ({ categoria, ...datos })).sort((a, b) => b.monto - a.monto),
+      articulos: [...porArticulo.values()].sort((a, b) => b.monto - a.monto),
+    };
+  }, [filtradas, lineasGuardadas]);
+  const articulosVisibles = resumenArticulos.articulos.filter((item) => `${item.descripcion} ${item.categoria}`.toLocaleLowerCase("es-GT").includes(texto(busquedaArticulo))).slice(0, 50);
 
   function actualizarLinea(indice: number, cambio: Partial<LineaFormulario>) {
     setLineas((actual) => actual.map((linea, posicion) => posicion === indice ? { ...linea, ...cambio } : linea));
@@ -202,10 +223,15 @@ export default function ComprasFacturasPage() {
     <header className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-orange-600">Finanzas y control</p><h1 className="mt-2 text-4xl font-black text-slate-950">Compras y facturas</h1><p className="mt-2 text-sm text-slate-600">Documenta comprobantes y proveedores sin duplicar las compras que ya registras.</p></div><button type="button" onClick={() => void cargar()} disabled={cargando} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold"><RefreshCw size={16}/>{cargando ? "Actualizando…" : "Actualizar"}</button></header>
     {error && <p role="alert" className="rounded-xl bg-rose-50 p-4 text-sm font-semibold text-rose-700">{error}</p>}
     {aviso && <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{aviso}</p>}
-    <ImportarZipSat usuarioId={usuarioId} proveedores={proveedores} facturas={facturas} alGuardar={cargar}/>
+    <ImportarZipSat usuarioId={usuarioId} proveedores={proveedores} facturas={facturas} lineasExistentes={lineasGuardadas} alGuardar={cargar}/>
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 p-5"><div><h2 className="text-xl font-black">Revisar y vincular una factura</h2><p className="mt-1 text-sm text-slate-500">Clasifica sus líneas y, si corresponde, vincula compras de ingredientes ya registradas.</p></div><select aria-label="Seleccionar factura para revisar" value={revisandoFacturaId} onChange={(event) => setRevisandoFacturaId(event.target.value)} className="min-w-64 max-w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"><option value="">Seleccionar factura</option>{facturas.map((factura) => <option key={factura.id} value={factura.id}>{factura.fecha} · {proveedores.find((item) => item.id === factura.proveedor_id)?.nombre || "Proveedor"} · {factura.numero || "Sin número"}</option>)}</select></div>
       {facturas.find((factura) => factura.id === revisandoFacturaId) && <RevisarFactura key={revisandoFacturaId} factura={facturas.find((factura) => factura.id === revisandoFacturaId)!} lineas={lineasGuardadas.filter((linea) => linea.factura_id === revisandoFacturaId)} ingredientes={ingredientes} compras={compras} comprasVinculadas={comprasVinculadas} cerrar={() => setRevisandoFacturaId("")} alGuardar={cargar}/>}
+    </section>
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="text-xl font-black">Control de artículos documentados</h2><p className="mt-1 text-sm text-slate-500">Suma de líneas de las facturas que coinciden con los filtros del historial. Es información documental, no un gasto adicional ni un cambio de inventario.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{resumenArticulos.categorias.map((item) => <div key={item.categoria} className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-bold text-slate-600">{item.categoria} · {item.lineas} líneas</p><p className="mt-1 text-lg font-black">{dinero(item.monto)}</p></div>)}{!resumenArticulos.categorias.length && <p className="text-sm text-slate-500">Todavía no hay artículos documentados en este rango.</p>}</div>
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><h3 className="font-black">Artículos por descripción y categoría</h3><input aria-label="Buscar artículo documentado" placeholder="Buscar artículo o categoría" value={busquedaArticulo} onChange={(event) => setBusquedaArticulo(event.target.value)} className="min-w-60 rounded-xl border border-slate-200 p-2 text-sm"/></div>
+      <div className="mt-3 max-h-80 overflow-auto rounded-xl border border-slate-200"><table className="w-full min-w-[620px] text-left text-sm"><thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Artículo</th><th className="p-3">Categoría</th><th className="p-3">Líneas / facturas</th><th className="p-3 text-right">Monto</th></tr></thead><tbody>{articulosVisibles.map((item) => <tr key={`${item.categoria}|${item.descripcion}`} className="border-t border-slate-100"><td className="p-3 font-semibold">{item.descripcion}</td><td className="p-3">{item.categoria}</td><td className="p-3">{item.lineas} / {item.facturas.size}</td><td className="p-3 text-right font-bold">{dinero(item.monto)}</td></tr>)}{!articulosVisibles.length && <tr><td colSpan={4} className="p-5 text-center text-slate-500">Sin artículos para esta búsqueda.</td></tr>}</tbody></table></div>
     </section>
     <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
       <section className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="text-xl font-black">Proveedores</h2><p className="mt-1 text-sm text-slate-500">El NIT ayuda a reconocerlos y detectar facturas repetidas.</p>
