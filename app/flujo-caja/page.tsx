@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight, CreditCard, Pencil, WalletCards } from "lucide-react";
 import { moneda } from "@/lib/crm";
 import { supabase } from "@/lib/supabase";
@@ -20,10 +21,11 @@ export default function FlujoCajaPage() {
   const [nombreCuenta, setNombreCuenta] = useState(""); const [tipoCuenta, setTipoCuenta] = useState<Cuenta["tipo"]>("Caja"); const [saldoInicial, setSaldoInicial] = useState(""); const [fechaSaldoInicial, setFechaSaldoInicial] = useState(new Date().toISOString().slice(0, 10)); const [creandoCuenta, setCreandoCuenta] = useState(false); const [cuentaInicialId, setCuentaInicialId] = useState(""); const [saldoConfigurado, setSaldoConfigurado] = useState(""); const [guardandoSaldo, setGuardandoSaldo] = useState(false);
   const [periodo, setPeriodo] = useState("Mes"); const [desde, setDesde] = useState(""); const [hasta, setHasta] = useState(""); const [tipoFiltro, setTipoFiltro] = useState("Todos"); const [cuentaFiltro, setCuentaFiltro] = useState("Todas"); const [origenFiltro, setOrigenFiltro] = useState("Todos"); const [busqueda, setBusqueda] = useState("");
   const [editando, setEditando] = useState<Movimiento | null>(null);
+  const [facturasPorCompra, setFacturasPorCompra] = useState<Record<string, string>>({});
   const [edicion, setEdicion] = useState({ tipo: "Gasto" as Movimiento["tipo"], categoria: "", descripcion: "", monto: "", fecha: "", cuenta_id: "", cuenta_destino_id: "", metodo_pago: "Efectivo" });
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
 
-  async function cargar() { setCargando(true); setError(""); const [movimientosRespuesta, cuentasRespuesta] = await Promise.all([supabase.from("movimientos_caja").select("id,tipo,categoria,descripcion,monto,fecha,cuenta,cuenta_id,cuenta_destino_id,metodo_pago,origen,origen_id,pedido_id,created_at").order("fecha", { ascending: false }).order("created_at", { ascending: false }).limit(500), supabase.from("cuentas_financieras").select("id,nombre,tipo,saldo_inicial,fecha_saldo_inicial,activa,notas,sucursal_id").order("created_at")]); const consultaError = movimientosRespuesta.error || cuentasRespuesta.error; if (consultaError) { console.error(consultaError); setError("No se pudo cargar el flujo de caja."); } else { setMovimientos((movimientosRespuesta.data || []) as Movimiento[]); setCuentasData((cuentasRespuesta.data || []) as Cuenta[]); } setCargando(false); }
+  async function cargar() { setCargando(true); setError(""); const [movimientosRespuesta, cuentasRespuesta, facturasRespuesta] = await Promise.all([supabase.from("movimientos_caja").select("id,tipo,categoria,descripcion,monto,fecha,cuenta,cuenta_id,cuenta_destino_id,metodo_pago,origen,origen_id,pedido_id,created_at").order("fecha", { ascending: false }).order("created_at", { ascending: false }).limit(500), supabase.from("cuentas_financieras").select("id,nombre,tipo,saldo_inicial,fecha_saldo_inicial,activa,notas,sucursal_id").order("created_at"), supabase.from("facturas_compra_lineas").select("factura_id,compra_ingrediente_id").not("compra_ingrediente_id", "is", null).limit(2000)]); const consultaError = movimientosRespuesta.error || cuentasRespuesta.error; if (consultaError) { console.error(consultaError); setError("No se pudo cargar el flujo de caja."); } else { setMovimientos((movimientosRespuesta.data || []) as Movimiento[]); setCuentasData((cuentasRespuesta.data || []) as Cuenta[]); } if (!facturasRespuesta.error) setFacturasPorCompra(Object.fromEntries((facturasRespuesta.data || []).filter((item) => item.compra_ingrediente_id).map((item) => [item.compra_ingrediente_id, item.factura_id]))); setCargando(false); }
   useEffect(() => { const timer = window.setTimeout(() => void cargar(), 0); return () => window.clearTimeout(timer); }, []);
 
   const rango = useMemo(() => { const hoy = new Date(); const final = hoy.toISOString().slice(0, 10); if (periodo === "Personalizado") return { inicio: desde, final: hasta }; if (periodo === "Todo") return { inicio: "", final: "" }; const inicio = new Date(hoy); if (periodo === "Hoy") return { inicio: final, final }; if (periodo === "Semana") inicio.setDate(hoy.getDate() - 6); if (periodo === "Mes") inicio.setDate(1); return { inicio: inicio.toISOString().slice(0, 10), final }; }, [periodo, desde, hasta]);
@@ -219,6 +221,7 @@ export default function FlujoCajaPage() {
 </td>
 <td className="p-4">
 <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">{movimiento.origen === "pago" ? "Cobro" : movimiento.origen === "compra_ingrediente" ? "Compra ingrediente" : "Manual"}</span>
+{movimiento.origen === "compra_ingrediente" && movimiento.origen_id && facturasPorCompra[movimiento.origen_id] && <Link href={`/compras-facturas?factura=${facturasPorCompra[movimiento.origen_id]}`} className="mt-2 block text-xs font-bold text-orange-700 underline">Ver factura</Link>}
 </td>
 <td className={`p-4 text-right text-base font-black ${movimiento.tipo === "Ingreso" ? "text-emerald-600" : movimiento.tipo === "Gasto" ? "text-rose-600" : "text-blue-600"}`}>{movimiento.tipo === "Ingreso" ? "+" : movimiento.tipo === "Gasto" ? "−" : "↔"}{dinero(movimiento.monto)}</td>
 <td className="p-4 text-right"><button type="button" onClick={() => abrirEdicion(movimiento)} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-orange-50"><Pencil size={13} /> Editar</button></td>
