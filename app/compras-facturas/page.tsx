@@ -6,6 +6,8 @@ import { FileText, Plus, RefreshCw, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { moneda } from "@/lib/crm";
 import { useCrmAuth } from "@/components/auth/AuthGate";
+import ImportarZipSat from "@/components/compras-facturas/ImportarZipSat";
+import RevisarFactura from "@/components/compras-facturas/RevisarFactura";
 
 type Proveedor = { id: string; nombre: string; nit: string | null; contacto: string | null; telefono: string | null; correo: string | null };
 type Factura = { id: string; proveedor_id: string; numero: string | null; fecha: string; total: number; impuesto: number; categoria: string; estado: string; origen: string; comprobante_path: string | null; notas: string | null };
@@ -67,6 +69,7 @@ export default function ComprasFacturasPage() {
   const [hasta, setHasta] = useState("");
   const [filtroProveedor, setFiltroProveedor] = useState("");
   const [facturaEnlace, setFacturaEnlace] = useState("");
+  const [revisandoFacturaId, setRevisandoFacturaId] = useState("");
 
   async function cargar() {
     setCargando(true);
@@ -199,6 +202,11 @@ export default function ComprasFacturasPage() {
     <header className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-orange-600">Finanzas y control</p><h1 className="mt-2 text-4xl font-black text-slate-950">Compras y facturas</h1><p className="mt-2 text-sm text-slate-600">Documenta comprobantes y proveedores sin duplicar las compras que ya registras.</p></div><button type="button" onClick={() => void cargar()} disabled={cargando} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold"><RefreshCw size={16}/>{cargando ? "Actualizando…" : "Actualizar"}</button></header>
     {error && <p role="alert" className="rounded-xl bg-rose-50 p-4 text-sm font-semibold text-rose-700">{error}</p>}
     {aviso && <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{aviso}</p>}
+    <ImportarZipSat usuarioId={usuarioId} proveedores={proveedores} facturas={facturas} alGuardar={cargar}/>
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-5"><div><h2 className="text-xl font-black">Revisar y vincular una factura</h2><p className="mt-1 text-sm text-slate-500">Clasifica sus líneas y, si corresponde, vincula compras de ingredientes ya registradas.</p></div><select aria-label="Seleccionar factura para revisar" value={revisandoFacturaId} onChange={(event) => setRevisandoFacturaId(event.target.value)} className="min-w-64 max-w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"><option value="">Seleccionar factura</option>{facturas.map((factura) => <option key={factura.id} value={factura.id}>{factura.fecha} · {proveedores.find((item) => item.id === factura.proveedor_id)?.nombre || "Proveedor"} · {factura.numero || "Sin número"}</option>)}</select></div>
+      {facturas.find((factura) => factura.id === revisandoFacturaId) && <RevisarFactura key={revisandoFacturaId} factura={facturas.find((factura) => factura.id === revisandoFacturaId)!} lineas={lineasGuardadas.filter((linea) => linea.factura_id === revisandoFacturaId)} ingredientes={ingredientes} compras={compras} comprasVinculadas={comprasVinculadas} cerrar={() => setRevisandoFacturaId("")} alGuardar={cargar}/>}
+    </section>
     <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
       <section className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="text-xl font-black">Proveedores</h2><p className="mt-1 text-sm text-slate-500">El NIT ayuda a reconocerlos y detectar facturas repetidas.</p>
         <form onSubmit={crearProveedor} className="mt-5 space-y-3"><label className="block text-sm font-bold">Nombre<input required value={nombreProveedor} onChange={(event) => setNombreProveedor(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 p-3"/></label><label className="block text-sm font-bold">NIT<input value={nitProveedor} onChange={(event) => setNitProveedor(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 p-3"/></label><label className="block text-sm font-bold">Contacto<input value={contactoProveedor} onChange={(event) => setContactoProveedor(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 p-3"/></label><div className="grid grid-cols-2 gap-3"><label className="block text-sm font-bold">Teléfono<input value={telefonoProveedor} onChange={(event) => setTelefonoProveedor(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 p-3"/></label><label className="block text-sm font-bold">Correo<input type="email" value={correoProveedor} onChange={(event) => setCorreoProveedor(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 p-3"/></label></div><button disabled={guardando} className="w-full rounded-xl bg-slate-950 p-3 text-sm font-bold text-white disabled:opacity-50">Agregar proveedor</button></form>
