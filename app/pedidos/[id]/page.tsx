@@ -241,10 +241,7 @@ export default function DetallePedidoPage() {
   const descuentoValor = Number(pedido?.descuento_valor || 0);
   const descuento = editando ? Math.round((pedido?.descuento_tipo === "Porcentaje" ? subtotal * descuentoValor / 100 : descuentoValor) * 100) / 100 : Number(pedido?.descuento || 0);
   const total = editando ? subtotal - descuento + envio : Number(pedido?.total ?? subtotal - descuento + envio);
-  const costoProductos = detalles.reduce((suma, detalle) => suma + Number(detalle.costo || 0) * Number(detalle.cantidad || 0), 0);
-  const costoCortesias = detalles.filter((detalle) => detalle.es_cortesia).reduce((suma, detalle) => suma + Number(detalle.costo || 0) * Number(detalle.cantidad || 0), 0);
   const costoEnvioConocido = !pedido?.requiere_envio || pedido.costo_envio_real !== null && pedido.costo_envio_real !== undefined;
-  const gananciaEstimada = total - costoProductos - (pedido?.requiere_envio ? Number(pedido.costo_envio_real || 0) : 0);
   const abonadoRegistrado = pagos.reduce(
     (suma, pago) => suma + Number(pago.monto || 0),
     0,
@@ -932,14 +929,6 @@ export default function DetallePedidoPage() {
                     <span>Total</span>
                     <span>{dinero(total)}</span>
                   </div>
-                </div>
-                <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-3 text-xs text-slate-700 sm:mx-6 sm:mb-5">
-                  <p className="font-bold text-slate-950">Rentabilidad estimada</p>
-                  <p className="mt-1">Costo de productos: {dinero(costoProductos)} · incluye cortesías: {dinero(costoCortesias)}</p>
-                  {pedido.requiere_envio && <p className="mt-1">Costo real de entrega: {costoEnvioConocido ? dinero(pedido.costo_envio_real) : "sin registrar"}</p>}
-                  <p className="mt-2 font-bold">Ganancia bruta: {costoEnvioConocido ? dinero(gananciaEstimada) : "pendiente del costo de envío"}</p>
-                  {costoEnvioConocido && gananciaEstimada < 0 && <p className="mt-1 font-bold text-rose-700">Atención: pérdida estimada.</p>}
-                  <p className="mt-1 text-slate-500">Antes de IVA, comisiones y gastos generales.</p>
                 </div>
               </div>
             </section>

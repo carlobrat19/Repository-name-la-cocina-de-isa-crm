@@ -303,11 +303,6 @@ export default function PedidosPage() {
   const descuentoCalculado = Math.min(subtotalProductos, Math.round((descuentoTipo === "Porcentaje" ? subtotalProductos * descuentoValor / 100 : descuentoValor) * 100) / 100);
   const envioCobrado = requiereEnvio && !envioGratis ? costoEnvio : 0;
   const totalPedido = Math.round((subtotalProductos - descuentoCalculado + envioCobrado) * 100) / 100;
-  const costoProductos = carrito.reduce((total, item) => total + item.costo * item.cantidad, 0);
-  const costoCortesias = carrito.filter((item) => item.esCortesia).reduce((total, item) => total + item.costo * item.cantidad, 0);
-  const valorCortesias = carrito.filter((item) => item.esCortesia).reduce((total, item) => total + Number(productos.find((producto) => producto.id === item.id)?.precio_venta || 0) * item.cantidad, 0);
-  const envioRealRegistrado = !requiereEnvio || costoEnvioReal.trim() !== "";
-  const gananciaEstimada = totalPedido - costoProductos - (requiereEnvio ? Number(costoEnvioReal || 0) : 0);
   const totalUnidades = useMemo(
     () => carrito.reduce((total, item) => total + item.cantidad, 0),
     [carrito],
@@ -1101,15 +1096,6 @@ export default function PedidosPage() {
                       </span>
                     </div>
                   )}
-                </div>
-                <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-3 text-xs text-slate-700">
-                  <p className="font-bold text-slate-950">Impacto estimado de cortesías y descuentos</p>
-                  <div className="mt-2 flex justify-between"><span>Cortesías: valor normal / costo de producir</span><span>{formatMoney(valorCortesias)} / {formatMoney(costoCortesias)}</span></div>
-                  <div className="mt-1 flex justify-between"><span>Costo de todos los productos</span><span>{formatMoney(costoProductos)}</span></div>
-                  {requiereEnvio && <div className="mt-1 flex justify-between"><span>Costo real del envío</span><span>{envioRealRegistrado ? formatMoney(Number(costoEnvioReal)) : "Sin registrar"}</span></div>}
-                  <div className="mt-2 flex justify-between border-t border-orange-200 pt-2 font-bold"><span>Ganancia bruta estimada</span><span>{envioRealRegistrado ? formatMoney(gananciaEstimada) : "Pendiente de costo de envío"}</span></div>
-                  {envioRealRegistrado && gananciaEstimada < 0 && <p className="mt-2 font-bold text-rose-700">Atención: este pedido quedaría con pérdida estimada.</p>}
-                  <p className="mt-2 text-slate-500">Estimación antes de IVA, comisiones y gastos generales. El mínimo de compra no se aplica automáticamente.</p>
                 </div>
                 <div className="mt-4 flex items-end justify-between">
                   <div>
