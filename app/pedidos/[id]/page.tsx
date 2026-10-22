@@ -228,7 +228,7 @@ export default function DetallePedidoPage() {
       : Number(pedido.subtotal_productos ?? subtotalEditado)
     : 0;
   const envio = Number(pedido?.costo_envio || 0);
-  const total = editando && puedeEditarProductos ? subtotal + envio : Number(pedido?.total || subtotal + envio);
+  const total = editando ? subtotal + envio : Number(pedido?.total ?? subtotal + envio);
   const abonadoRegistrado = pagos.reduce(
     (suma, pago) => suma + Number(pago.monto || 0),
     0,
@@ -253,6 +253,10 @@ export default function DetallePedidoPage() {
     if (!pedido) return;
     if (!pedido.cliente?.trim()) {
       alert("Escribe el nombre del cliente antes de guardar.");
+      return;
+    }
+    if (!Number.isFinite(envio) || envio < 0) {
+      alert("El costo de envío debe ser un monto válido igual o mayor a cero.");
       return;
     }
     setGuardando(true);
@@ -731,6 +735,19 @@ export default function DetallePedidoPage() {
                         <option value="mensajeria">Mensajería externa</option>
                       </select>
                     </label>}
+                    {pedido.requiere_envio && (
+                      <label className="block text-xs font-bold text-slate-600">
+                        Costo de envío (Q)
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={pedido.costo_envio ?? ""}
+                          onChange={(event) => actualizar("costo_envio", event.target.value)}
+                          className={`${input} mt-1.5`}
+                        />
+                      </label>
+                    )}
                     <label className="block text-xs font-bold text-slate-600">
                       Vendedor responsable
                       <select
@@ -775,6 +792,9 @@ export default function DetallePedidoPage() {
                       label="Tipo de entrega"
                       value={pedido.requiere_envio ? (pedido.entrega_mensajero ? "Mensajería externa" : "Nuestro equipo") : "Recoger en tienda"}
                     />
+                    {pedido.requiere_envio && (
+                      <Field label="Costo de envío" value={dinero(envio)} />
+                    )}
                     <Field
                       label="Responsable"
                       value={pedido.vendedor || "Sin asignar"}
