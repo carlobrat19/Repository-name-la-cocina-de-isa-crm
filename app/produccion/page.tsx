@@ -159,6 +159,13 @@ export default function ProduccionPage() {
     return Boolean(requeridos?.size && Array.from(requeridos.entries()).every(([productoId, cantidad]) => (avancePorPedidoProducto.get(`${pedidoId}:${productoId}`) || 0) >= cantidad));
   };
   const alternarSeleccion = (id: string) => setSeleccion((actual) => actual.includes(id) ? actual.filter((item) => item !== id) : [...actual, id]);
+  const alternarTodaTanda = (tanda: Tanda) => setSeleccion((actual) => {
+    const claves = tanda.pedidos.map(({ pedido }) => claveSeleccion(tanda, pedido.id));
+    const todasSeleccionadas = claves.every((clave) => actual.includes(clave));
+    return todasSeleccionadas
+      ? actual.filter((clave) => !claves.includes(clave))
+      : Array.from(new Set([...actual, ...claves]));
+  });
   async function iniciarTanda(tanda: Tanda) {
     const elegidos = tanda.pedidos.map(({ pedido }) => pedido).filter((pedido) => pedido.estado === "Pendiente" && seleccion.includes(claveSeleccion(tanda, pedido.id)));
     if (!elegidos.length || procesandoTanda) return;
@@ -222,6 +229,7 @@ export default function ProduccionPage() {
       </div>
       <div className="grid gap-4 lg:grid-cols-2">{tandas.map((tanda) => {
         const elegidos = tanda.pedidos.filter(({ pedido }) => seleccion.includes(claveSeleccion(tanda, pedido.id)));
+        const todosSeleccionados = elegidos.length === tanda.pedidos.length;
         const pendientesElegidos = elegidos.filter(({ pedido }) => pedido.estado === "Pendiente");
         const produccionElegidos = elegidos.filter(({ pedido, cantidad }) => pedido.estado === "Producción" && (avancePorPedidoProducto.get(`${pedido.id}:${tanda.producto?.id}`) || 0) < cantidad);
         const unidadesElegidas = elegidos.reduce((total, item) => total + item.cantidad, 0);
@@ -229,7 +237,7 @@ export default function ProduccionPage() {
         return <article key={tanda.clave} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 bg-slate-50 p-5">
             <div><p className="text-xs font-bold uppercase tracking-wide text-orange-600">Entrega {tanda.fecha}</p><h2 className="mt-1 text-lg font-black text-slate-950">{tanda.producto?.nombre || "Producto eliminado"}</h2><p className="text-sm text-slate-600">{tanda.pedidos.length} pedidos · {unidadesListas} de {tanda.unidades} unidades listas</p></div>
-            <span className="rounded-xl bg-orange-100 px-3 py-2 text-lg font-black text-orange-700">{tanda.unidades}</span>
+            <div className="flex items-center gap-2"><button type="button" onClick={() => alternarTodaTanda(tanda)} disabled={procesandoTanda} aria-pressed={todosSeleccionados} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 disabled:opacity-40">{todosSeleccionados ? "Quitar selección" : "Seleccionar todos"}</button><span className="rounded-xl bg-orange-100 px-3 py-2 text-lg font-black text-orange-700">{tanda.unidades}</span></div>
           </div>
           <div className="max-h-[380px] divide-y divide-slate-100 overflow-y-auto">{tanda.pedidos.map(({ pedido, cantidad }) => {
             const preparadas = Math.min(cantidad, avancePorPedidoProducto.get(`${pedido.id}:${tanda.producto?.id}`) || 0);
