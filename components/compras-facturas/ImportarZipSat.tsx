@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { moneda } from "@/lib/crm";
+import CrearInsumoFactura, { type InsumoFactura } from "@/components/compras-facturas/CrearInsumoFactura";
 
 type Proveedor = { id: string; nombre: string; nit: string | null };
 type FacturaExistente = { id: string; proveedor_id: string; numero: string | null };
@@ -152,6 +153,15 @@ export default function ImportarZipSat({ usuarioId, proveedores, facturas, linea
     setCantidadPorUnidad("");
   }
 
+  async function vincularNuevoInsumo(nuevo: InsumoFactura, archivo?: string, indice?: number) {
+    const descripcion = articuloDetalle;
+    setFilas((actual) => actual.map((fila) => ({ ...fila, items: fila.items.map((item, posicion) => {
+      const coincide = archivo == null ? descripcionClave(item.descripcion) === descripcion : fila.archivo === archivo && posicion === indice;
+      return coincide ? { ...item, ingredienteId: nuevo.id, cantidadBase: convertirCantidad(item.cantidad, item.unidad, nuevo.unidad_base), recordar: false } : item;
+    }) })));
+    await alGuardar();
+  }
+
   function aplicarCantidadPorUnidad(descripcion: string) {
     const factor = Number(cantidadPorUnidad);
     if (!ingredienteGrupo || !Number.isFinite(factor) || factor <= 0) return;
@@ -293,6 +303,7 @@ export default function ImportarZipSat({ usuarioId, proveedores, facturas, linea
         {!!ocurrenciasArticulo.length ? <div className="min-w-0 rounded-xl border border-orange-200 bg-white p-4">
           <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black">{ocurrenciasArticulo[0].item.descripcion} · {ocurrenciasArticulo.length} líneas</h3><button type="button" onClick={() => setArticuloDetalle("")} className="text-xs font-bold text-slate-600 underline">Cerrar</button></div>
           <label className="mt-3 block max-w-lg text-xs font-bold">Ingrediente que corresponde a este artículo<select aria-label={`Ingrediente para ${ocurrenciasArticulo[0].item.descripcion}`} value={ingredienteGrupoId} disabled={importando} onChange={(event) => cambiarIngredienteGrupo(articuloDetalle, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"><option value="">Selecciona un ingrediente existente</option>{ingredientes.map((ingrediente) => <option key={ingrediente.id} value={ingrediente.id}>{ingrediente.nombre} ({ingrediente.unidad_base})</option>)}</select></label>
+          <CrearInsumoFactura descripcion={ocurrenciasArticulo[0].item.descripcion} existentes={ingredientes} alCrear={(nuevo) => vincularNuevoInsumo(nuevo)}/>
           <p className="mt-2 text-xs text-slate-500">Asignar ingrediente no crea compra ni aumenta existencias. Revisa la cantidad base de cada línea antes de importar.</p>
           {ingredienteGrupo && <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg bg-orange-50 p-3"><label className="text-xs font-bold">Cantidad en {ingredienteGrupo.unidad_base} por cada unidad de factura<input type="number" min="0.001" step="0.001" value={cantidadPorUnidad} onChange={(event) => setCantidadPorUnidad(event.target.value)} placeholder="Ej. 453.592 por libra" className="mt-1 block w-56 rounded-lg border border-slate-200 p-2 text-sm"/></label><button type="button" disabled={importando || !Number.isFinite(Number(cantidadPorUnidad)) || Number(cantidadPorUnidad) <= 0} onClick={() => aplicarCantidadPorUnidad(articuloDetalle)} className="rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Calcular para todas las líneas</button></div>}
           <div className="mt-3 max-h-72 overflow-auto"><table className="w-full min-w-[700px] text-left text-xs"><thead className="bg-slate-100"><tr><th className="p-2">Proveedor / factura</th><th className="p-2">Cantidad del XML</th><th className="p-2">Monto</th><th className="p-2">Ingrediente</th><th className="p-2">Cantidad para ingrediente</th></tr></thead><tbody>{ocurrenciasArticulo.map(({ fila, item, indice }) => { const ingrediente = ingredientes.find((opcion) => opcion.id === item.ingredienteId); return <tr key={`${fila.archivo}-${indice}`} className="border-t border-slate-200"><td className="p-2">{fila.proveedor}<span className="block text-slate-500">{fila.numero} · {fila.fecha}</span></td><td className="p-2">{item.cantidad ?? "—"} {item.unidad || ""}</td><td className="p-2">{moneda(item.monto)}</td><td className="p-2">{ingrediente?.nombre || "Sin vincular"}</td><td className="p-2"><div className="flex items-center gap-2"><input aria-label={`Cantidad base de ${item.descripcion} en factura ${fila.numero}`} type="number" min="0.001" step="0.001" value={item.cantidadBase} disabled={importando || !ingrediente} onChange={(event) => cambiarCantidadBase(fila.archivo, indice, event.target.value)} placeholder="Cantidad" className="w-28 rounded-lg border border-slate-200 p-2"/><span>{ingrediente?.unidad_base || ""}</span></div></td></tr>; })}</tbody></table></div>
@@ -311,6 +322,7 @@ export default function ImportarZipSat({ usuarioId, proveedores, facturas, linea
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <label className="text-xs font-bold">Categoría<select value={item.categoria} disabled={importando} onChange={(event) => cambiarCategoriaLinea(detalle.archivo, indice, event.target.value, false)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-xs">{categorias.map((opcion) => <option key={opcion}>{opcion}</option>)}</select>{item.sugerida && <span className="font-normal text-blue-700">Sugerida · revisa antes de importar</span>}</label>
               <label className="text-xs font-bold">Ingrediente existente<select value={item.ingredienteId} disabled={importando} onChange={(event) => cambiarIngredienteLinea(detalle.archivo, indice, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-xs"><option value="">Sin vincular</option>{ingredientes.map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.nombre} ({opcion.unidad_base})</option>)}</select></label>
+              <CrearInsumoFactura descripcion={item.descripcion} existentes={ingredientes} alCrear={(nuevo) => vincularNuevoInsumo(nuevo, detalle.archivo, indice)}/>
               <label className="text-xs font-bold">Cantidad para ingrediente {ingrediente ? `(${ingrediente.unidad_base})` : ""}<input type="number" min="0.001" step="0.001" value={item.cantidadBase} disabled={importando || !ingrediente} onChange={(event) => cambiarCantidadBase(detalle.archivo, indice, event.target.value)} placeholder="Ingresa cantidad base" className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-xs"/></label>
             </div>
             {sugerido && !item.ingredienteId && <button type="button" disabled={importando} onClick={() => cambiarIngredienteLinea(detalle.archivo, indice, sugerido.id)} className="mt-2 text-xs font-bold text-blue-700 underline">Sugerencia del proveedor: {sugerido.nombre} · usar</button>}
