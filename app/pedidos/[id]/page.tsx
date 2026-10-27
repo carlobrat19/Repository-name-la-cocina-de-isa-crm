@@ -268,6 +268,10 @@ export default function DetallePedidoPage() {
       alert("Escribe el nombre del cliente antes de guardar.");
       return;
     }
+    if (pedido.requiere_envio && (!pedido.direccion?.trim() || !pedido.departamento_entrega?.trim() || !pedido.municipio_entrega?.trim() || !pedido.zona_entrega?.trim())) {
+      alert("Completa dirección, departamento, municipio y zona para cambiar a envío.");
+      return;
+    }
     if (!Number.isFinite(tarifaEnvio) || tarifaEnvio < 0) {
       alert("El costo de envío debe ser un monto válido igual o mayor a cero.");
       return;
@@ -298,6 +302,7 @@ export default function DetallePedidoPage() {
         observaciones: pedido.observaciones || null,
         vendedor: pedido.vendedor || null,
         canal_origen: pedido.canal_origen || "Manual",
+        requiere_envio: Boolean(pedido.requiere_envio),
         entrega_mensajero: Boolean(pedido.requiere_envio) && Boolean(pedido.entrega_mensajero),
         costo_envio: envio,
         envio_tarifa: tarifaEnvio,
@@ -719,6 +724,18 @@ export default function DetallePedidoPage() {
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 {editando ? (
                   <>
+                    <label className="block text-xs font-bold text-slate-600">
+                      Tipo de entrega
+                      <select value={!pedido.requiere_envio ? "recoger" : pedido.entrega_mensajero ? "mensajeria" : "propia"} onChange={(event) => {
+                        const tipo = event.target.value;
+                        setPedido((actual) => actual ? { ...actual, requiere_envio: tipo !== "recoger", entrega_mensajero: tipo === "mensajeria" } : actual);
+                      }} className={`${input} mt-1.5`}>
+                        <option value="recoger">Recoger en tienda</option>
+                        <option value="propia">Nuestro equipo</option>
+                        <option value="mensajeria">Mensajería externa</option>
+                      </select>
+                    </label>
+                    {pedido.requiere_envio && <>
                     <Editable
                       label="Dirección de entrega"
                       value={pedido.direccion || ""}
@@ -743,6 +760,7 @@ export default function DetallePedidoPage() {
                       value={pedido.zona_entrega || ""}
                       onChange={(value) => actualizar("zona_entrega", value)}
                     />
+                    </>}
                     <Editable
                       label="Fecha de entrega"
                       type="date"
@@ -754,13 +772,6 @@ export default function DetallePedidoPage() {
                       value={pedido.hora_entrega || ""}
                       onChange={(value) => actualizar("hora_entrega", value)}
                     />
-                    {pedido.requiere_envio && <label className="block text-xs font-bold text-slate-600">
-                      Tipo de entrega
-                      <select value={pedido.entrega_mensajero ? "mensajeria" : "propia"} onChange={(event) => actualizar("entrega_mensajero", event.target.value === "mensajeria")} className={`${input} mt-1.5`}>
-                        <option value="propia">Nuestro equipo</option>
-                        <option value="mensajeria">Mensajería externa</option>
-                      </select>
-                    </label>}
                     {pedido.requiere_envio && (
                       <label className="block text-xs font-bold text-slate-600">
                         Tarifa de envío al cliente (Q)
