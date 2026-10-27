@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { resumirCantidadesPorProducto } from "@/lib/pendientes-cantidades";
+import { exportarExcel } from "@/lib/exportar-excel";
 
 const ETAPAS = ["Pendiente", "Producción", "Empaquetado", "En Ruta", "Entregado"] as const;
 type Etapa = (typeof ETAPAS)[number];
 type Detalle = { producto_id: string | null; cantidad: number | string | null; productos: { nombre: string | null; categoria: string | null } | null };
-type Pedido = { id: string; codigo: string | null; cliente_id: string | null; cliente: string | null; fecha_entrega: string | null; estado: string | null; vendedor: string | null; requiere_envio: boolean | null; entrega_mensajero: boolean | null; pedido_detalle: Detalle[] | null };
+type Pedido = { id: string; codigo: string | null; cliente_id: string | null; cliente: string | null; telefono: string | null; fecha_entrega: string | null; estado: string | null; vendedor: string | null; requiere_envio: boolean | null; entrega_mensajero: boolean | null; pedido_detalle: Detalle[] | null };
 type Resumen = { clave: string; nombre: string; categoria: string | null; total: number; porEtapa: Record<Etapa, number>; proximaEntrega: string | null; pedidos: number };
 type ResumenDiario = { clave: string; nombre: string; categoria: string | null; porFecha: Record<string, number>; total: number };
 type ClienteDiario = { clave: string; nombre: string; pedidos: Pedido[]; productos: Map<string, { nombre: string; cantidad: number }>; unidades: number };
@@ -38,7 +39,7 @@ export default function ProductosPendientesPage() {
     const tamanoPagina = 500;
     for (let pagina = 0; ; pagina += 1) {
       const { data, error: consultaError } = await supabase.from("pedidos")
-        .select("id,codigo,cliente_id,cliente,fecha_entrega,estado,vendedor,requiere_envio,entrega_mensajero,pedido_detalle(producto_id,cantidad,productos(nombre,categoria))")
+        .select("id,codigo,cliente_id,cliente,telefono,fecha_entrega,estado,vendedor,requiere_envio,entrega_mensajero,pedido_detalle(producto_id,cantidad,productos(nombre,categoria))")
         .order("fecha_entrega", { ascending: true }).order("id", { ascending: true })
         .range(pagina * tamanoPagina, (pagina + 1) * tamanoPagina - 1);
       if (consultaError) { console.error(consultaError); setError("No se pudo cargar la planificación. Intenta actualizar."); setCargando(false); return; }
@@ -103,9 +104,36 @@ export default function ProductosPendientesPage() {
   }, [filtrados, productoFiltro]);
   const unidades = productos.reduce((total, producto) => total + producto.total, 0); const hoy = hoyGuatemala(); const entregasHoy = filtrados.filter((pedido) => fechaPedido(pedido) === hoy).length; const pedidosMensajeria = filtrados.filter((pedido) => pedido.requiere_envio && pedido.entrega_mensajero).length;
   const limpiar = () => { setBusqueda(""); setFechaInicio(""); setFechaFin(""); setEstado("Pendiente"); setVendedor("Todos"); setEnvio("Todos"); setTipoEntrega("Todos"); setProductoFiltro("Todos"); };
+  function descargarPendientes() {
+    const detalle = filtrados.flatMap((pedido) => detallesVisibles(pedido, productoFiltro).map((item) => ({
+      "Fecha entrega": fechaPedido(pedido) === "Sin fecha" ? "" : fechaPedido(pedido),
+      "Pedido": pedido.codigo || "",
+      "Cliente": pedido.cliente || "",
+      "Teléfono": pedido.telefono || "",
+      "Producto": item.productos?.nombre || "Producto eliminado",
+      "Categoría": item.productos?.categoria || "",
+      "Cantidad": Number(item.cantidad || 0),
+      "Estado": pedido.estado || "",
+      "Vendedor": pedido.vendedor || "",
+      "Tipo entrega": !pedido.requiere_envio ? "Recoger en tienda" : pedido.entrega_mensajero ? "Mensajería externa" : "Nuestro equipo",
+    })));
+    const resumen = productos.map((producto) => ({
+      "Producto": producto.nombre,
+      "Categoría": producto.categoria || "",
+      "Pedidos": producto.pedidos,
+      "Pendiente": producto.porEtapa.Pendiente,
+      "Producción": producto.porEtapa.Producción,
+      "Empaquetado": producto.porEtapa.Empaquetado,
+      "En ruta": producto.porEtapa["En Ruta"],
+      "Entregado": producto.porEtapa.Entregado,
+      "Total unidades": producto.total,
+      "Próxima entrega": producto.proximaEntrega || "",
+    }));
+    exportarExcel("pendientes-la-cocina-de-isa", [{ nombre: "Detalle", filas: detalle }, { nombre: "Resumen por producto", filas: resumen }]);
+  }
 
   return <main className="min-h-screen bg-slate-100 px-4 py-7 sm:px-7 lg:px-10"><div className="mx-auto max-w-[1600px]">
-    <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-orange-600">Planificación de cocina</p><h1 className="mt-2 text-4xl font-black text-slate-950">Productos pendientes</h1><p className="mt-2 text-sm text-slate-600">Consolida cantidades por producto, prioridad de entrega y estado operativo.</p></div><div className="flex gap-3"><Link href="/produccion" className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800">Ver producción</Link><button onClick={() => void cargar()} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white">Actualizar</button></div></header>
+    <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-orange-600">Planificación de cocina</p><h1 className="mt-2 text-4xl font-black text-slate-950">Productos pendientes</h1><p className="mt-2 text-sm text-slate-600">Consolida cantidades por producto, prioridad de entrega y estado operativo.</p></div><div className="flex flex-wrap gap-3"><button type="button" onClick={descargarPendientes} disabled={cargando || Boolean(error)} className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 disabled:opacity-50">Descargar Excel</button><Link href="/produccion" className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800">Ver producción</Link><button onClick={() => void cargar()} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white">Actualizar</button></div></header>
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{ETAPAS.map((etapa) => <button key={etapa} onClick={() => setEstado(etapa)} className={`rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 ${estilo[etapa]} ${estado === etapa ? "ring-2 ring-slate-950 ring-offset-2" : ""}`}><p className="text-xs font-bold uppercase">{etapa}</p><p className="mt-2 text-3xl font-black">{metricas[etapa]}</p><p className="mt-1 text-xs">pedidos</p></button>)}</section>
     <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6">

@@ -12,6 +12,7 @@ import {
   Cake,
   Check,
   ClipboardList,
+  Download,
   MapPin,
   MessageCircle,
   Pencil,
@@ -24,6 +25,8 @@ import {
 } from "lucide-react";
 import { CANALES, Cliente, moneda } from "@/lib/crm";
 import { supabase } from "@/lib/supabase";
+import { exportarExcel } from "@/lib/exportar-excel";
+import { cargarTodasLasPaginas } from "@/lib/cargar-paginas";
 
 type Direccion = {
   id: string;
@@ -120,17 +123,21 @@ export default function ClientesPage() {
   const cargar = useCallback(async () => {
     setLoading(true);
     const [clientesRespuesta, direccionesRespuesta] = await Promise.all([
-      supabase
+      cargarTodasLasPaginas((inicio, fin) => supabase
         .from("clientes")
         .select("*")
-        .order("created_at", { ascending: false }),
-      supabase
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(inicio, fin)),
+      cargarTodasLasPaginas((inicio, fin) => supabase
         .from("cliente_direcciones")
         .select(
           "id, cliente_id, etiqueta, direccion, departamento, municipio, zona, referencia, principal",
         )
         .order("principal", { ascending: false })
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(inicio, fin)),
     ]);
     if (clientesRespuesta.error || direccionesRespuesta.error)
       alert(
@@ -368,6 +375,34 @@ export default function ClientesPage() {
     ],
   );
 
+  function descargarClientes() {
+    const filas = filtrados.map((cliente) => ({
+      "Cliente": cliente.nombre,
+      "Teléfono": cliente.telefono || "",
+      "Correo": cliente.email || "",
+      "NIT": cliente.nit || "",
+      "Razón social": cliente.razon_social || "",
+      "Canal": cliente.canal_origen || "",
+      "Estado": cliente.estado || "Activo",
+      "Fecha de nacimiento": cliente.fecha_nacimiento || "",
+      "Saldo pendiente (Q)": Number(cliente.saldo || 0),
+      "Fecha de registro": cliente.created_at?.slice(0, 10) || "",
+      "Notas": cliente.notas || "",
+    }));
+    const ubicaciones = filtrados.flatMap((cliente) => (direcciones[cliente.id] || []).map((direccion) => ({
+      "Cliente": cliente.nombre,
+      "Teléfono": cliente.telefono || "",
+      "Etiqueta": direccion.etiqueta || "",
+      "Dirección": direccion.direccion || "",
+      "Departamento": direccion.departamento || "",
+      "Municipio": direccion.municipio || "",
+      "Zona": direccion.zona || "",
+      "Referencia": direccion.referencia || "",
+      "Principal": Boolean(direccion.principal),
+    })));
+    exportarExcel("clientes-la-cocina-de-isa", [{ nombre: "Clientes", filas }, { nombre: "Direcciones", filas: ubicaciones }]);
+  }
+
   const clientesActivos = clientes.filter(
     (cliente) => cliente.estado !== "Inactivo",
   ).length;
@@ -452,7 +487,7 @@ export default function ClientesPage() {
       </header>
       <div className="min-w-0">
         <div className="mb-4 flex justify-end">
-          <button type="button" onClick={nuevoCliente} className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-orange-600"><Plus size={18}/> Nuevo cliente</button>
+          <div className="flex flex-wrap gap-2"><button type="button" onClick={descargarClientes} disabled={loading} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 disabled:opacity-50"><Download size={18}/> Descargar Excel</button><button type="button" onClick={nuevoCliente} className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-orange-600"><Plus size={18}/> Nuevo cliente</button></div>
         </div>
         {formularioAbierto && <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/50 p-3 backdrop-blur-sm sm:p-6">
         <form

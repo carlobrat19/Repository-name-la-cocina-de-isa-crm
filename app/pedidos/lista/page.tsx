@@ -6,6 +6,7 @@ import {
   CalendarDays,
   ChevronRight,
   CircleDollarSign,
+  Download,
   ChefHat,
   LayoutGrid,
   List,
@@ -21,6 +22,8 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "../../../lib/supabase";
+import { exportarExcel } from "../../../lib/exportar-excel";
+import { cargarTodasLasPaginas } from "../../../lib/cargar-paginas";
 
 type Pedido = {
   id: string;
@@ -115,9 +118,9 @@ export default function ListaPedidosPage() {
   async function cargarPedidos() {
     setLoading(true);
     const [pedidosResult, detallesResult, productosResult] = await Promise.all([
-      supabase.from("pedidos").select("*").order("numero_pedido", { ascending: false }),
-      supabase.from("pedido_detalle").select("*"),
-      supabase.from("productos").select("id, nombre"),
+      cargarTodasLasPaginas((inicio, fin) => supabase.from("pedidos").select("*").order("numero_pedido", { ascending: false }).range(inicio, fin)),
+      cargarTodasLasPaginas((inicio, fin) => supabase.from("pedido_detalle").select("*").order("id").range(inicio, fin)),
+      cargarTodasLasPaginas((inicio, fin) => supabase.from("productos").select("id, nombre").order("id").range(inicio, fin)),
     ]);
 
     if (pedidosResult.error || detallesResult.error || productosResult.error) {
@@ -202,6 +205,49 @@ export default function ListaPedidosPage() {
     setSinFechaEntrega(false);
   };
 
+  function descargarPedidos() {
+    const filas = pedidosFiltrados.map((pedido) => ({
+      "Pedido": pedido.codigo || "",
+      "Cliente": pedido.cliente || "",
+      "Teléfono": pedido.telefono || "",
+      "Fecha pedido": pedido.fecha_pedido?.slice(0, 10) || "",
+      "Fecha entrega": pedido.fecha_entrega?.slice(0, 10) || "",
+      "Estado pedido": pedido.estado || "",
+      "Estado pago": pedido.pago_estado || "",
+      "Medio de pago": pedido.forma_pago || "",
+      "Tipo de entrega": !pedido.requiere_envio ? "Recoger en tienda" : pedido.entrega_mensajero ? "Mensajería externa" : "Nuestro equipo",
+      "Dirección": pedido.direccion || "",
+      "Departamento": pedido.departamento_entrega || "",
+      "Municipio": pedido.municipio_entrega || "",
+      "Zona": pedido.zona_entrega || "",
+      "Vendedor": pedido.vendedor || "",
+      "Productos": (detallesPorPedido.get(pedido.id) || []).map((item) => `${item.cantidad || 0} × ${productosPorId.get(item.producto_id || "") || "Producto eliminado"}${item.es_cortesia ? " (cortesía)" : ""}`).join("; "),
+      "Descuento (Q)": Number(pedido.descuento || 0),
+      "Envío cobrado (Q)": Number(pedido.costo_envio || 0),
+      "Total (Q)": Number(pedido.total || 0),
+      "Saldo pendiente (Q)": Number(pedido.saldo_pendiente || 0),
+    }));
+    const ids = new Set(pedidosFiltrados.map((pedido) => pedido.id));
+    const porId = new Map(pedidosFiltrados.map((pedido) => [pedido.id, pedido]));
+    const articulos = detalles.filter((detalle) => ids.has(detalle.pedido_id)).map((detalle) => {
+      const pedido = porId.get(detalle.pedido_id);
+      const cantidad = Number(detalle.cantidad || 0);
+      const precio = Number(detalle.precio || 0);
+      return {
+        "Pedido": pedido?.codigo || "",
+        "Cliente": pedido?.cliente || "",
+        "Fecha entrega": pedido?.fecha_entrega?.slice(0, 10) || "",
+        "Estado pedido": pedido?.estado || "",
+        "Producto": productosPorId.get(detalle.producto_id || "") || "Producto eliminado",
+        "Cantidad": cantidad,
+        "Precio unitario (Q)": precio,
+        "Subtotal (Q)": cantidad * precio,
+        "Cortesía": Boolean(detalle.es_cortesia),
+      };
+    });
+    exportarExcel("pedidos-la-cocina-de-isa", [{ nombre: "Pedidos", filas }, { nombre: "Artículos", filas: articulos }]);
+  }
+
   async function eliminarPedido(pedido: Pedido) {
     const codigo = pedido.codigo || "";
     if (!codigo) { setError("Este pedido no tiene código; no se puede confirmar su eliminación."); return; }
@@ -226,9 +272,12 @@ export default function ListaPedidosPage() {
             <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Pedidos</h1>
             <p className="mt-1 text-sm text-slate-500">Controla ventas, entregas, pagos y producción desde una sola vista.</p>
           </div>
+          <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={descargarPedidos} disabled={loading || Boolean(error)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-800 disabled:opacity-50"><Download className="h-4 w-4" /> Descargar Excel</button>
           <Link href="/pedidos" className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition hover:bg-orange-600">
             <Plus className="h-4 w-4" /> Nuevo pedido
           </Link>
+          </div>
         </header>
 
         {(error || mensaje) && <p role={error ? "alert" : "status"} className={`rounded-xl border p-4 text-sm font-semibold ${error ? "border-rose-200 bg-rose-50 text-rose-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>{error || mensaje}</p>}

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "../../lib/supabase";
+import { exportarExcel } from "../../lib/exportar-excel";
+import { cargarTodasLasPaginas } from "../../lib/cargar-paginas";
 
 type IngredienteReceta = {
   cantidad: number;
@@ -143,7 +145,7 @@ useEffect(() => {
 async function obtenerProductos(){
 
 const [productosRespuesta, recetasRespuesta, ingredientesRespuesta, componentesRespuesta, insumosRespuesta] = await Promise.all([
-supabase.from("productos").select("*").order("id", { ascending: false }),
+cargarTodasLasPaginas((inicio, fin) => supabase.from("productos").select("*").order("id", { ascending: false }).range(inicio, fin)),
 supabase.from("recetas_estandar").select("producto_id,rendimiento,unidad_rendimiento,merma_pct,margen_pct,iva_pct,recargo_carta_pct,comision_canal_pct,costos_adicionales,receta_ingredientes(cantidad,ingredientes(nombre,unidad_base,costo_referencia,stock_actual))").eq("activa", true),
 supabase.from("ingredientes").select("id,nombre,unidad_base,costo_referencia,stock_actual,activo").order("nombre"),
 supabase.from("combo_componentes").select("combo_id,producto_id,cantidad"),
@@ -502,6 +504,28 @@ const margenIngredientes = costoIngredientes == null ? null : ventaSinIva - comi
 return [producto.id, { costoTotal, costoIngredientes, margenCompleto, margenIngredientes, porcentajeCompleto: ventaSinIva > 0 ? margenCompleto / ventaSinIva * 100 : 0, porcentajeIngredientes: margenIngredientes != null && ventaSinIva > 0 ? margenIngredientes / ventaSinIva * 100 : null, porcentajeComision: comision * 100, tieneReceta: Boolean(receta) || (producto.tipo_producto === "combo" && (componentes.length + insumosDirectos.length > 0)) }];
 }));
 }, [productos, recetasCatalogo, componentesCatalogo, insumosCatalogo, ingredientesDisponibles]);
+function descargarProductos() {
+  const filas = productosFiltrados.map((producto) => {
+    const metrica = metricasGanancia.get(producto.id);
+    return {
+      "Producto": producto.nombre,
+      "Código": producto.sku || "",
+      "Categoría": producto.categoria || "",
+      "Tipo": producto.tipo_producto || "preparado",
+      "Estado": producto.estado || "",
+      "Precio (Q)": Number(producto.precio_venta || 0),
+      "Costo producción (Q)": Number(producto.costo || 0),
+      "Existencia": Number(producto.stock || 0),
+      "Stock mínimo": Number(producto.stock_minimo || 0),
+      "Publicado": Boolean(producto.publicar_catalogo),
+      "Disponible online": Boolean(producto.disponible_online),
+      "Canales": (producto.canales_venta || []).join(", "),
+      "Margen completo (%)": metrica?.porcentajeCompleto ?? null,
+      "Margen ingredientes (%)": metrica?.porcentajeIngredientes ?? null,
+    };
+  });
+  exportarExcel("productos-la-cocina-de-isa", [{ nombre: "Productos", filas }]);
+}
 const productosConMargen = productos.filter((producto) => metricasGanancia.get(producto.id)?.tieneReceta);
 const margenPromedio = productosConMargen.length ? productosConMargen.reduce((total, producto) => total + (metricasGanancia.get(producto.id)?.porcentajeCompleto || 0), 0) / productosConMargen.length : 0;
 const productosConMargenIngredientes = productosConMargen.filter((producto) => metricasGanancia.get(producto.id)?.porcentajeIngredientes != null);
@@ -554,7 +578,7 @@ return(
 
 <div className="w-full min-w-0">
 
-<header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-orange-600">Catálogo comercial</p><h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950">Productos</h1><p className="mt-2 max-w-2xl text-sm text-slate-600">Administra tu catálogo, fotos, disponibilidad e información para ventas y canales digitales.</p></div><button type="button" onClick={abrirNuevoProducto} className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-black text-white transition hover:bg-orange-600">+ Nuevo producto</button></header>
+<header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-orange-600">Catálogo comercial</p><h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950">Productos</h1><p className="mt-2 max-w-2xl text-sm text-slate-600">Administra tu catálogo, fotos, disponibilidad e información para ventas y canales digitales.</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={descargarProductos} className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-800">Descargar Excel</button><button type="button" onClick={abrirNuevoProducto} className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-black text-white transition hover:bg-orange-600">+ Nuevo producto</button></div></header>
 
 <section className="mb-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
   <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Productos activos</p><p className="mt-2 text-3xl font-black text-slate-950">{productosActivos}</p><p className="mt-1 text-sm text-slate-500">de {productos.length} registrados</p></div>
