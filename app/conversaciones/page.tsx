@@ -299,6 +299,9 @@ export default function ConversacionesPage() {
       ),
     [conversaciones, filtro, canalFiltro],
   );
+  const abiertas = conversaciones.filter((item) => item.estado === "Abierta").length;
+  const sinAsignar = conversaciones.filter((item) => item.estado === "Abierta" && !item.responsable_id).length;
+  const porCalificar = conversaciones.filter((item) => item.estado === "Abierta" && (!item.leads?.estado || item.leads.estado === "Nuevo")).length;
   const responsable = seleccionada
     ? perfiles.find((perfil) => perfil.id === seleccionada.responsable_id)
     : null;
@@ -791,6 +794,12 @@ export default function ConversacionesPage() {
           {aviso}
         </p>
       )}
+      <div className="mb-3 grid shrink-0 grid-cols-2 gap-2 xl:grid-cols-4" aria-label="Resumen de atención">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Abiertas</p><p className="text-xl font-black text-slate-950">{abiertas}</p></div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Sin asesor</p><p className="text-xl font-black text-orange-600">{sinAsignar}</p></div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Por calificar</p><p className="text-xl font-black text-slate-950">{porCalificar}</p></div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Canales</p><p className="truncate text-xs font-bold text-slate-700">{CANALES.filter((canal) => conversaciones.some((item) => item.canal === canal)).join(" · ") || "Sin registros"}</p><p className="text-[10px] text-slate-500">Registros manuales; Meta sin conectar</p></div>
+      </div>
       <div className="mb-3 grid grid-cols-3 gap-2 lg:hidden" role="tablist" aria-label="Vistas de conversaciones">
         {(["lista", "chat", "detalle"] as const).map((vista) => <button key={vista} type="button" role="tab" aria-selected={vistaMovil === vista} onClick={() => setVistaMovil(vista)} className={`rounded-xl px-2 py-2.5 text-xs font-bold ${vistaMovil === vista ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{vista === "lista" ? "Conversaciones" : vista === "chat" ? "Chat" : "Detalles"}</button>)}
       </div>
