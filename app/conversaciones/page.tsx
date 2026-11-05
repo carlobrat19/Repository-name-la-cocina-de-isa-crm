@@ -4,11 +4,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   CheckCircle2,
   ClipboardPlus,
+  Link2,
   MessageCircle,
+  Package,
   Plus,
   Send,
+  Smile,
   StickyNote,
   UserRound,
   UserRoundCheck,
@@ -33,6 +37,7 @@ type Cliente = {
 type Lead = {
   id: string;
   estado: string;
+  campana: string | null;
   responsable_id: string | null;
   valor_estimado: number | string;
   ultima_actividad_at: string;
@@ -97,6 +102,20 @@ const ETAPAS = [
   "Perdido",
 ];
 const CANALES = ["WhatsApp", "Instagram", "Facebook", "Web"] as const;
+const EMOJIS = ["😊", "👋", "✅", "🎂", "🚚", "💚", "🙏", "🎁"];
+const ATAJOS = [
+  { titulo: "Saludo", texto: "¡Hola! Gracias por escribir a La Cocina de Isa. ¿En qué podemos ayudarte? 😊" },
+  { titulo: "Datos de entrega", texto: "Para preparar tu pedido, ¿nos compartes tu nombre, teléfono, dirección, departamento, municipio, zona, fecha y hora deseada de entrega?" },
+  { titulo: "Confirmar productos", texto: "¿Me confirmas los productos y las cantidades que deseas? Así revisamos disponibilidad y total antes de registrar el pedido." },
+  { titulo: "Pago por verificar", texto: "Gracias por compartir tu comprobante. Verificaremos el pago y te confirmaremos cuando quede registrado; por ahora sigue pendiente de validación." },
+] as const;
+function contenidoConEnlaces(contenido: string) {
+  return contenido.split(/(https?:\/\/[^\s]+)/g).map((fragmento, indice) =>
+    /^https?:\/\//.test(fragmento)
+      ? <a key={indice} href={fragmento} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 break-all">{fragmento}</a>
+      : fragmento,
+  );
+}
 const fecha = (valor: string | null) =>
   valor
     ? new Date(valor).toLocaleString("es-GT", {
@@ -117,6 +136,12 @@ export default function ConversacionesPage() {
     [usuarioId, setUsuarioId] = useState<string | null>(null),
     [texto, setTexto] = useState(""),
     [nota, setNota] = useState(""),
+    [queja, setQueja] = useState(""),
+    [mostrarQueja, setMostrarQueja] = useState(false),
+    [urlAdjunto, setUrlAdjunto] = useState(""),
+    [mostrarEnlace, setMostrarEnlace] = useState(false),
+    [mostrarEmojis, setMostrarEmojis] = useState(false),
+    [busquedaProducto, setBusquedaProducto] = useState(""),
     [filtro, setFiltro] = useState(""),
     [error, setError] = useState(""),
     [aviso, setAviso] = useState(""),
@@ -125,6 +150,7 @@ export default function ConversacionesPage() {
     nombre: "",
     telefono: "",
     canal: "WhatsApp" as (typeof CANALES)[number],
+    campana: "",
     responsableId: "",
   });
   const [productos, setProductos] = useState<Producto[]>([]),
@@ -154,7 +180,7 @@ export default function ConversacionesPage() {
         supabase
           .from("conversaciones")
           .select(
-            "id,canal,ultimo_mensaje,ultimo_mensaje_at,estado,cliente_id,responsable_id,prioridad,proxima_accion_at,lead_id,clientes(id,nombre,telefono,email,nit,razon_social,direccion),leads(id,estado,responsable_id,valor_estimado,ultima_actividad_at)",
+            "id,canal,ultimo_mensaje,ultimo_mensaje_at,estado,cliente_id,responsable_id,prioridad,proxima_accion_at,lead_id,clientes(id,nombre,telefono,email,nit,razon_social,direccion),leads(id,estado,campana,responsable_id,valor_estimado,ultima_actividad_at)",
           )
           .order("ultimo_mensaje_at", { ascending: false, nullsFirst: false }),
         supabase
@@ -265,7 +291,7 @@ export default function ConversacionesPage() {
   const visibles = useMemo(
     () =>
       conversaciones.filter((item) =>
-        `${item.clientes?.nombre || ""} ${item.clientes?.telefono || ""} ${item.canal} ${item.leads?.estado || ""}`
+        `${item.clientes?.nombre || ""} ${item.clientes?.telefono || ""} ${item.canal} ${item.leads?.estado || ""} ${item.leads?.campana || ""}`
           .toLowerCase()
           .includes(filtro.toLowerCase()),
       ),
@@ -276,6 +302,26 @@ export default function ConversacionesPage() {
     : null;
   const cliente = seleccionada?.clientes || null;
   const etapa = seleccionada?.leads?.estado || "Nuevo";
+  const productosVisibles = productos.filter((producto) =>
+    producto.nombre.toLocaleLowerCase("es").includes(busquedaProducto.toLocaleLowerCase("es")),
+  ).slice(0, 8);
+  const datosCompletos = Boolean(datosPedido.nombre.trim() && datosPedido.telefono.trim() && datosPedido.direccion.trim());
+  async function guardarCampana(campana: string) {
+    if (!seleccionada?.lead_id) return;
+    const valor = campana.trim().slice(0, 200) || null;
+    const { error: guardarError } = await supabase
+      .from("leads")
+      .update({ campana: valor })
+      .eq("id", seleccionada.lead_id);
+    if (guardarError) {
+      setError(guardarError.message);
+      return;
+    }
+    const siguiente = { ...seleccionada, leads: seleccionada.leads ? { ...seleccionada.leads, campana: valor } : null };
+    setSeleccionada(siguiente);
+    setConversaciones((actuales) => actuales.map((item) => item.id === siguiente.id ? siguiente : item));
+    setAviso("Origen de la conversación guardado.");
+  }
   async function seleccionar(conversacion: Conversacion) {
     setSeleccionada(conversacion);
     setAviso("");
@@ -357,6 +403,31 @@ export default function ConversacionesPage() {
       });
     if (actividadError) throw actividadError;
   }
+  function agregarEnlace() {
+    try {
+      const enlace = new URL(urlAdjunto.trim());
+      if (!(["https:", "http:"].includes(enlace.protocol))) throw new Error();
+      setTexto((actual) => `${actual}${actual ? "\n" : ""}${enlace.href}`);
+      setUrlAdjunto("");
+      setMostrarEnlace(false);
+      setError("");
+    } catch {
+      setError("Ingresa un enlace válido que comience con https:// o http://.");
+    }
+  }
+  async function registrarQueja() {
+    if (!seleccionada || !queja.trim()) return;
+    setError("");
+    try {
+      await registrarActividad("Nota", `Queja: ${queja.trim()}`);
+      setQueja("");
+      setMostrarQueja(false);
+      await cargarDetalle(seleccionada);
+      setAviso("Queja registrada en el historial para seguimiento humano.");
+    } catch (causa) {
+      setError(causa instanceof Error ? causa.message : "No se pudo registrar la queja.");
+    }
+  }
   async function enviar() {
     if (!seleccionada || !texto.trim() || !usuarioId) return;
     setError("");
@@ -392,7 +463,7 @@ export default function ConversacionesPage() {
     setTexto("");
     await cargar();
     await cargarDetalle(seleccionada);
-    setAviso("Respuesta guardada como interna. Se enviará al activar la API.");
+    setAviso("Borrador interno guardado. No se envió al cliente.");
   }
   async function guardarNota(event: FormEvent) {
     event.preventDefault();
@@ -572,12 +643,13 @@ export default function ConversacionesPage() {
         nombre: nuevo.nombre.trim(),
         telefono: nuevo.telefono.trim() || null,
         canal: nuevo.canal,
+        campana: nuevo.campana.trim() || null,
         estado: "Nuevo",
         cliente_id: clienteId,
         responsable_id: nuevo.responsableId || usuarioId,
         creado_por: usuarioId,
       })
-      .select("id,estado,responsable_id,valor_estimado,ultima_actividad_at")
+      .select("id,estado,campana,responsable_id,valor_estimado,ultima_actividad_at")
       .single();
     if (lead.error) {
       setError(lead.error.message);
@@ -596,7 +668,7 @@ export default function ConversacionesPage() {
         ultimo_mensaje_at: new Date().toISOString(),
       })
       .select(
-        "id,canal,ultimo_mensaje,ultimo_mensaje_at,estado,cliente_id,responsable_id,prioridad,proxima_accion_at,lead_id,clientes(id,nombre,telefono,email,nit),leads(id,estado,responsable_id,valor_estimado,ultima_actividad_at)",
+        "id,canal,ultimo_mensaje,ultimo_mensaje_at,estado,cliente_id,responsable_id,prioridad,proxima_accion_at,lead_id,clientes(id,nombre,telefono,email,nit),leads(id,estado,campana,responsable_id,valor_estimado,ultima_actividad_at)",
       )
       .single();
     if (conversacion.error) {
@@ -613,6 +685,7 @@ export default function ConversacionesPage() {
       nombre: "",
       telefono: "",
       canal: "WhatsApp",
+      campana: "",
       responsableId: "",
     });
     setNuevoAbierto(false);
@@ -632,8 +705,7 @@ export default function ConversacionesPage() {
             Bandeja de conversaciones
           </h1>
           <p className="mt-2 text-slate-500">
-            Prospecta, asigna responsables, registra seguimiento y genera
-            pedidos antes de conectar Meta.
+            Atiende, cotiza y prepara pedidos desde el catálogo activo. Los mensajes se guardan como borradores internos hasta conectar Meta.
           </p>
         </div>
         <button
@@ -693,6 +765,13 @@ export default function ConversacionesPage() {
               </option>
             ))}
           </select>
+          <input
+            value={nuevo.campana}
+            onChange={(event) => setNuevo({ ...nuevo, campana: event.target.value })}
+            placeholder="Origen o campaña (opcional)"
+            maxLength={200}
+            className="rounded-xl border border-orange-100 bg-white px-3 py-2.5 text-sm md:col-span-4"
+          />
           <div className="md:col-span-4">
             <button className="rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-bold text-white">
               Crear prospecto y conversación
@@ -744,6 +823,7 @@ export default function ConversacionesPage() {
                 <p className="mt-1 truncate text-xs text-slate-500">
                   {item.ultimo_mensaje || "Sin mensajes"}
                 </p>
+                {item.leads?.campana && <p className="mt-1 truncate text-[11px] text-sky-700">Origen: {item.leads.campana}</p>}
                 <div className="mt-2 flex items-center justify-between text-[11px]">
                   <span className="font-bold text-orange-700">
                     {item.leads?.estado || "Nuevo"}
@@ -807,7 +887,7 @@ export default function ConversacionesPage() {
                     key={mensaje.id}
                     className={`max-w-[82%] rounded-2xl p-3 text-sm ${mensaje.direccion === "Saliente" ? "ml-auto bg-slate-950 text-white" : "bg-white text-slate-700 shadow-sm"}`}
                   >
-                    <p>{mensaje.contenido}</p>
+                    <p className="whitespace-pre-wrap break-words">{contenidoConEnlaces(mensaje.contenido || "")}</p>
                     <p className="mt-1 text-[10px] opacity-60">
                       {fecha(mensaje.enviado_at)} · {mensaje.estado_envio}
                     </p>
@@ -825,24 +905,30 @@ export default function ConversacionesPage() {
                   </div>
                 )}
               </div>
-              <div className="border-t bg-white p-4">
-                <div className="flex gap-3">
-                  <input
-                    value={texto}
-                    onChange={(event) => setTexto(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") void enviar();
-                    }}
-                    placeholder="Registrar respuesta interna antes de activar la API…"
-                    className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400"
-                  />
-                  <button
-                    onClick={() => void enviar()}
-                    className="rounded-xl bg-slate-950 px-4 text-white"
-                  >
-                    <Send size={18} />
-                  </button>
+              <div className="space-y-3 border-t bg-white p-4">
+                <div className="flex flex-wrap gap-2" aria-label="Respuestas rápidas">
+                  {ATAJOS.map((atajo) => <button key={atajo.titulo} type="button" onClick={() => setTexto((actual) => `${actual}${actual ? "\n" : ""}${atajo.texto}`)} className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-orange-300 hover:bg-orange-50">{atajo.titulo}</button>)}
                 </div>
+                <details className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <summary className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-800"><Package size={15} /> Catálogo activo · agregar producto al borrador</summary>
+                  <input value={busquedaProducto} onChange={(event) => setBusquedaProducto(event.target.value)} placeholder="Buscar producto" aria-label="Buscar producto activo" className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+                  <div className="mt-2 grid gap-1 sm:grid-cols-2">
+                    {productosVisibles.map((producto) => <button key={producto.id} type="button" onClick={() => setTexto((actual) => `${actual}${actual ? "\n" : ""}${producto.nombre} · Q${Number(producto.precio_venta || 0).toFixed(2)}. Cantidad por confirmar.`)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs hover:border-orange-300">{producto.nombre} <span className="font-bold">Q{Number(producto.precio_venta || 0).toFixed(2)}</span></button>)}
+                    {!productosVisibles.length && <p className="text-xs text-slate-500">No hay productos activos que coincidan.</p>}
+                  </div>
+                </details>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setMostrarEmojis((actual) => !actual)} aria-expanded={mostrarEmojis} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold"><Smile size={15} /> Emoji</button>
+                  <button type="button" onClick={() => setMostrarEnlace((actual) => !actual)} aria-expanded={mostrarEnlace} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold"><Link2 size={15} /> Enlace</button>
+                  <span className="self-center text-[11px] text-slate-500">Fotos, audios, videos y archivos: pendiente de almacenamiento privado.</span>
+                </div>
+                {mostrarEmojis && <div className="flex flex-wrap gap-1" aria-label="Elegir emoji">{EMOJIS.map((emoji) => <button key={emoji} type="button" onClick={() => setTexto((actual) => `${actual}${emoji}`)} className="rounded-lg border border-slate-200 px-2 py-1 text-lg" aria-label={`Agregar ${emoji}`}>{emoji}</button>)}</div>}
+                {mostrarEnlace && <div className="flex gap-2"><input type="url" value={urlAdjunto} onChange={(event) => setUrlAdjunto(event.target.value)} placeholder="https://..." aria-label="Enlace para incluir" className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" /><button type="button" onClick={agregarEnlace} className="rounded-lg bg-slate-900 px-3 text-xs font-bold text-white">Agregar</button></div>}
+                <div className="flex gap-2">
+                  <textarea value={texto} onChange={(event) => setTexto(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void enviar(); } }} rows={3} placeholder="Redacta una respuesta interna…" aria-label="Borrador de respuesta" className="min-w-0 flex-1 resize-y rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400" />
+                  <button type="button" onClick={() => void enviar()} disabled={!texto.trim()} className="inline-flex items-center gap-2 self-end rounded-xl bg-slate-950 px-4 py-3 text-xs font-bold text-white disabled:opacity-40"><Send size={16} /> Guardar borrador</button>
+                </div>
+                <p className="text-[11px] text-slate-500">Solo se guarda en el CRM: no se envía al cliente. Ctrl+Enter para guardar.</p>
               </div>
             </>
           ) : (
@@ -896,6 +982,38 @@ export default function ConversacionesPage() {
                   ))}
                 </select>
               </div>
+              <div>
+                <label htmlFor="origen-campana" className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                  Origen o campaña
+                </label>
+                <input
+                  id="origen-campana"
+                  key={seleccionada.id}
+                  defaultValue={seleccionada.leads?.campana || ""}
+                  onBlur={(event) => void guardarCampana(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+                  disabled={!seleccionada.lead_id}
+                  maxLength={200}
+                  placeholder="Ej. anuncio de fiambre, referido, orgánico"
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm disabled:bg-slate-100"
+                />
+                <p className="mt-1 text-[11px] text-slate-500">Se guarda al salir del campo. La atribución automática requiere conectar Meta.</p>
+              </div>
+              <section className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-orange-800">Venta guiada</p>
+                <p className="mt-1 text-[11px] text-orange-700">Prepara el pedido con revisión humana antes de confirmar.</p>
+                <ol className="mt-3 space-y-2 text-xs text-slate-700">
+                  <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-600" /> 1. Elegir productos activos y cantidades</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 size={14} className={datosCompletos ? "text-green-600" : "text-slate-300"} /> 2. Nombre, teléfono y dirección {datosCompletos ? "listos" : "pendientes"}</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-slate-300" /> 3. Confirmar fecha, hora, entrega y total en el pedido</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-slate-300" /> 4. Verificar el pago; comprobante no equivale a pago recibido</li>
+                </ol>
+                <p className="mt-3 text-[11px] text-orange-700">La toma automática por IA se habilitará solo cuando Meta y la validación de pedidos estén conectados.</p>
+              </section>
+              <section className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                <button type="button" onClick={() => setMostrarQueja((actual) => !actual)} aria-expanded={mostrarQueja} className="flex w-full items-center justify-between gap-2 text-left text-xs font-bold text-rose-800"><span className="inline-flex items-center gap-2"><AlertTriangle size={15} /> Registrar queja</span><span>{mostrarQueja ? "Cerrar" : "Abrir"}</span></button>
+                {mostrarQueja && <div className="mt-3 space-y-2"><textarea value={queja} onChange={(event) => setQueja(event.target.value)} placeholder="Describe el problema y el seguimiento acordado" aria-label="Detalle de la queja" rows={4} className="w-full rounded-lg border border-rose-200 bg-white p-2 text-xs" /><button type="button" onClick={() => void registrarQueja()} disabled={!queja.trim()} className="rounded-lg bg-rose-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">Guardar queja interna</button><p className="text-[11px] text-rose-700">Queda en el historial; no envía una respuesta automática.</p></div>}
+              </section>
               <section className="rounded-xl border border-green-200 bg-green-50 p-3">
                 <p className="text-xs font-bold uppercase tracking-wide text-green-800">Datos para pedido</p>
                 <p className="mt-1 text-[11px] leading-4 text-green-700">Completa y guarda estos datos antes de crear o convertir el pedido.</p>
