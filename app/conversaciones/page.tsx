@@ -128,6 +128,7 @@ const nombrePerfil = (perfil: Perfil) => perfil.nombre?.trim() || perfil.email;
 export default function ConversacionesPage() {
   const router = useRouter();
   const [vistaMovil, setVistaMovil] = useState<"lista" | "chat" | "detalle">("lista");
+  const [canalFiltro, setCanalFiltro] = useState<"Todos" | (typeof CANALES)[number]>("Todos");
   const [conversaciones, setConversaciones] = useState<Conversacion[]>([]),
     [perfiles, setPerfiles] = useState<Perfil[]>([]),
     [seleccionada, setSeleccionada] = useState<Conversacion | null>(null),
@@ -291,11 +292,12 @@ export default function ConversacionesPage() {
   const visibles = useMemo(
     () =>
       conversaciones.filter((item) =>
+        (canalFiltro === "Todos" || item.canal === canalFiltro) &&
         `${item.clientes?.nombre || ""} ${item.clientes?.telefono || ""} ${item.canal} ${item.leads?.estado || ""} ${item.leads?.campana || ""}`
           .toLowerCase()
           .includes(filtro.toLowerCase()),
       ),
-    [conversaciones, filtro],
+    [conversaciones, filtro, canalFiltro],
   );
   const responsable = seleccionada
     ? perfiles.find((perfil) => perfil.id === seleccionada.responsable_id)
@@ -695,17 +697,17 @@ export default function ConversacionesPage() {
   }
 
   return (
-    <section className="p-6 md:p-10">
-      <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <section className="flex min-w-0 flex-col bg-slate-100 p-4 md:p-5 lg:h-dvh lg:overflow-hidden">
+      <header className="mb-4 flex shrink-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm font-bold uppercase tracking-[.2em] text-green-600">
-            Atención comercial
+          <p className="text-xs font-bold uppercase tracking-[.2em] text-orange-600">
+            Bandeja omnicanal · atención comercial
           </p>
-          <h1 className="text-4xl font-black text-slate-950">
-            Bandeja de conversaciones
+          <h1 className="text-2xl font-black text-slate-950 lg:text-3xl">
+            Conversaciones
           </h1>
-          <p className="mt-2 text-slate-500">
-            Atiende, cotiza y prepara pedidos desde el catálogo activo. Los mensajes se guardan como borradores internos hasta conectar Meta.
+          <p className="mt-1 text-xs text-slate-500 sm:text-sm">
+            Atiende, cotiza y prepara pedidos. Los mensajes son borradores internos hasta conectar Meta.
           </p>
         </div>
         <button
@@ -718,7 +720,7 @@ export default function ConversacionesPage() {
       {nuevoAbierto && (
         <form
           onSubmit={crearAtencion}
-          className="mb-6 grid gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-4 md:grid-cols-4"
+          className="mb-3 grid shrink-0 gap-3 overflow-y-auto rounded-2xl border border-orange-200 bg-orange-50 p-4 md:grid-cols-4 lg:max-h-[32vh]"
         >
           <input
             required
@@ -792,20 +794,19 @@ export default function ConversacionesPage() {
       <div className="mb-3 grid grid-cols-3 gap-2 lg:hidden" role="tablist" aria-label="Vistas de conversaciones">
         {(["lista", "chat", "detalle"] as const).map((vista) => <button key={vista} type="button" role="tab" aria-selected={vistaMovil === vista} onClick={() => setVistaMovil(vista)} className={`rounded-xl px-2 py-2.5 text-xs font-bold ${vistaMovil === vista ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{vista === "lista" ? "Conversaciones" : vista === "chat" ? "Chat" : "Detalles"}</button>)}
       </div>
-      <div className="grid min-h-[60vh] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:min-h-[650px] lg:grid-cols-[340px_minmax(0,1fr)_320px]">
-        <aside className={`${vistaMovil === "lista" ? "block" : "hidden"} border-b border-slate-200 lg:block lg:border-b-0 lg:border-r`}>
+      <div className="grid min-h-[65vh] min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(230px,25%)_minmax(0,1fr)_minmax(260px,25%)]">
+        <aside className={`${vistaMovil === "lista" ? "flex" : "hidden"} min-h-0 min-w-0 flex-col border-b border-slate-200 lg:flex lg:border-b-0 lg:border-r`}>
           <div className="border-b p-4">
+            <div className="mb-3 flex items-center justify-between gap-2"><div><p className="text-sm font-black text-slate-950">Bandeja de entrada</p><p className="text-xs text-slate-500">{visibles.length} conversaciones</p></div><span className="rounded-full bg-orange-50 px-2 py-1 text-[10px] font-bold text-orange-700">CRM manual</span></div>
             <input
               value={filtro}
               onChange={(event) => setFiltro(event.target.value)}
               placeholder="Buscar cliente, canal o etapa"
               className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-orange-400"
             />
-            <p className="mt-3 text-xs font-bold text-slate-500">
-              {visibles.length} conversación{visibles.length === 1 ? "" : "es"}
-            </p>
+            <div className="mt-3 flex flex-wrap gap-1" aria-label="Filtrar por canal">{(["Todos", ...CANALES] as const).map((canal) => <button key={canal} type="button" aria-pressed={canalFiltro === canal} onClick={() => setCanalFiltro(canal)} className={`rounded-lg px-2 py-1 text-[11px] font-bold ${canalFiltro === canal ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{canal}</button>)}</div>
           </div>
-          <div className="max-h-[600px] divide-y overflow-y-auto">
+          <div className="min-h-0 flex-1 divide-y overflow-y-auto overscroll-contain">
             {visibles.map((item) => (
               <button
                 key={item.id}
@@ -841,10 +842,10 @@ export default function ConversacionesPage() {
             )}
           </div>
         </aside>
-        <main className={`${vistaMovil === "chat" ? "flex" : "hidden"} min-h-[60vh] min-w-0 flex-col lg:flex lg:min-h-[500px]`}>
+        <main className={`${vistaMovil === "chat" ? "flex" : "hidden"} min-h-[65vh] min-w-0 flex-col lg:flex lg:min-h-0`}>
           {seleccionada ? (
             <>
-              <header className="border-b p-5">
+              <header className="shrink-0 border-b p-3 lg:p-4">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div className="flex gap-3">
                     <span className="rounded-full bg-green-100 p-2 text-green-700">
@@ -881,7 +882,7 @@ export default function ConversacionesPage() {
                   </div>
                 </div>
               </header>
-              <div className="flex-1 space-y-3 bg-slate-50 p-5">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-slate-50 p-4">
                 {mensajes.map((mensaje) => (
                   <div
                     key={mensaje.id}
@@ -905,7 +906,7 @@ export default function ConversacionesPage() {
                   </div>
                 )}
               </div>
-              <div className="space-y-3 border-t bg-white p-4">
+              <div className="max-h-[48vh] shrink-0 space-y-2 overflow-y-auto overscroll-contain border-t bg-white p-3 lg:max-h-[44%]">
                 <div className="flex flex-wrap gap-2" aria-label="Respuestas rápidas">
                   {ATAJOS.map((atajo) => <button key={atajo.titulo} type="button" onClick={() => setTexto((actual) => `${actual}${actual ? "\n" : ""}${atajo.texto}`)} className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-orange-300 hover:bg-orange-50">{atajo.titulo}</button>)}
                 </div>
@@ -925,7 +926,7 @@ export default function ConversacionesPage() {
                 {mostrarEmojis && <div className="flex flex-wrap gap-1" aria-label="Elegir emoji">{EMOJIS.map((emoji) => <button key={emoji} type="button" onClick={() => setTexto((actual) => `${actual}${emoji}`)} className="rounded-lg border border-slate-200 px-2 py-1 text-lg" aria-label={`Agregar ${emoji}`}>{emoji}</button>)}</div>}
                 {mostrarEnlace && <div className="flex gap-2"><input type="url" value={urlAdjunto} onChange={(event) => setUrlAdjunto(event.target.value)} placeholder="https://..." aria-label="Enlace para incluir" className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" /><button type="button" onClick={agregarEnlace} className="rounded-lg bg-slate-900 px-3 text-xs font-bold text-white">Agregar</button></div>}
                 <div className="flex gap-2">
-                  <textarea value={texto} onChange={(event) => setTexto(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void enviar(); } }} rows={3} placeholder="Redacta una respuesta interna…" aria-label="Borrador de respuesta" className="min-w-0 flex-1 resize-y rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400" />
+                  <textarea value={texto} onChange={(event) => setTexto(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void enviar(); } }} rows={2} placeholder="Redacta una respuesta interna…" aria-label="Borrador de respuesta" className="min-w-0 flex-1 resize-y rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400" />
                   <button type="button" onClick={() => void enviar()} disabled={!texto.trim()} className="inline-flex items-center gap-2 self-end rounded-xl bg-slate-950 px-4 py-3 text-xs font-bold text-white disabled:opacity-40"><Send size={16} /> Guardar borrador</button>
                 </div>
                 <p className="text-[11px] text-slate-500">Solo se guarda en el CRM: no se envía al cliente. Ctrl+Enter para guardar.</p>
@@ -940,7 +941,7 @@ export default function ConversacionesPage() {
             </div>
           )}
         </main>
-        <aside className={`${vistaMovil === "detalle" ? "block" : "hidden"} border-t border-slate-200 bg-white lg:block lg:border-l lg:border-t-0`}>
+        <aside className={`${vistaMovil === "detalle" ? "block" : "hidden"} min-h-0 min-w-0 overflow-y-auto overscroll-contain border-t border-slate-200 bg-white lg:block lg:border-l lg:border-t-0`}>
           {seleccionada ? (
             <div className="space-y-5 p-5">
               <div>
