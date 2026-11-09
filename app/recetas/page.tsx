@@ -8,6 +8,7 @@ type Producto = {
   id: string;
   nombre: string;
   categoria: string | null;
+  estado: string;
   precio_venta: number | string;
   costo: number | string | null;
 };
@@ -47,6 +48,7 @@ export default function RecetasPage() {
   const [modoProducto, setModoProducto] = useState<"existente" | "nuevo">(
     "existente",
   );
+  const [grupoProducto, setGrupoProducto] = useState<"venta" | "interno">("venta");
   const [productoId, setProductoId] = useState("");
   const [nombreProductoNuevo, setNombreProductoNuevo] = useState("");
   const [categoriaProductoNueva, setCategoriaProductoNueva] = useState("");
@@ -76,7 +78,7 @@ export default function RecetasPage() {
     const [productosRespuesta, ingredientesRespuesta, cuentasRespuesta] = await Promise.all([
       supabase
         .from("productos")
-        .select("id,nombre,categoria,precio_venta,costo")
+        .select("id,nombre,categoria,estado,precio_venta,costo")
         .in("estado", ["Activo", "Interno"])
         .order("nombre"),
       supabase
@@ -206,6 +208,9 @@ export default function RecetasPage() {
   const productoActual = productos.find(
     (producto) => producto.id === productoId,
   );
+  const productosDelGrupo = productos.filter((producto) =>
+    grupoProducto === "interno" ? producto.estado === "Interno" : producto.estado === "Activo",
+  );
   const ingredienteComprado = ingredientes.find(
     (ingrediente) => ingrediente.id === ingredienteCompra,
   );
@@ -236,13 +241,13 @@ export default function RecetasPage() {
     if (
       (!productoId && modoProducto === "existente") ||
       (modoProducto === "nuevo" &&
-        (!nombreProductoNuevo.trim() || !precioVentaNuevo)) ||
+        (!nombreProductoNuevo.trim() || (grupoProducto === "venta" && !precioVentaNuevo))) ||
       !Number(rendimiento) ||
       Number(rendimiento) <= 0 ||
       !lineas.length
     ) {
       alert(
-        "Define el producto, su precio final, el rendimiento y al menos un ingrediente.",
+        "Define el producto, el rendimiento y al menos un ingrediente. Los productos de venta también necesitan precio final.",
       );
       return;
     }
@@ -258,9 +263,11 @@ export default function RecetasPage() {
         .insert({
           nombre: nombreProductoNuevo.trim(),
           categoria: categoriaProductoNueva.trim() || null,
-          precio_venta: Number(precioVentaNuevo),
+          precio_venta: grupoProducto === "interno" ? 0 : Number(precioVentaNuevo),
           costo: costoCompletoPorUnidad,
-          estado: "Activo",
+          estado: grupoProducto === "interno" ? "Interno" : "Activo",
+          tipo_producto: "preparado",
+          ...(grupoProducto === "interno" ? { publicar_catalogo: false, disponible_online: false, canales_venta: [], stock: 0 } : {}),
         })
         .select("id")
         .single();
@@ -282,9 +289,9 @@ export default function RecetasPage() {
           unidad_rendimiento: unidadRendimiento,
           merma_pct: Number(merma || 0) / 100,
           margen_pct: Number(costosIndirectos || 0) / 100,
-          iva_pct: Number(iva || 0) / 100,
-          recargo_carta_pct: Number(recargoCarta || 0) / 100,
-          comision_canal_pct: Number(comisionCanal || 0) / 100,
+          iva_pct: grupoProducto === "interno" ? 0 : Number(iva || 0) / 100,
+          recargo_carta_pct: grupoProducto === "interno" ? 0 : Number(recargoCarta || 0) / 100,
+          comision_canal_pct: grupoProducto === "interno" ? 0 : Number(comisionCanal || 0) / 100,
           costos_adicionales: Number(costosAdicionales || 0),
           activa: true,
         },
@@ -331,6 +338,11 @@ export default function RecetasPage() {
     }
     alert("Receta guardada y costo del producto actualizado.");
     await cargarBase();
+    if (modoProducto === "nuevo") {
+      setModoProducto("existente");
+      setNombreProductoNuevo("");
+      setPrecioVentaNuevo("");
+    }
   };
 
   const registrarCompra = async () => {
@@ -407,6 +419,14 @@ export default function RecetasPage() {
               </h2>
             </div>
             <div className="space-y-6 p-6">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-600">Tipo de receta</p>
+                <div className="grid gap-2 sm:grid-cols-2" role="group" aria-label="Tipo de receta">
+                  <button type="button" aria-pressed={grupoProducto === "venta"} onClick={() => { setGrupoProducto("venta"); void cargarReceta(""); setNombreProductoNuevo(""); setPrecioVentaNuevo(""); }} className={`rounded-xl px-4 py-3 text-sm font-bold ${grupoProducto === "venta" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>Productos de venta</button>
+                  <button type="button" aria-pressed={grupoProducto === "interno"} onClick={() => { setGrupoProducto("interno"); void cargarReceta(""); setNombreProductoNuevo(""); setPrecioVentaNuevo(""); }} className={`rounded-xl px-4 py-3 text-sm font-bold ${grupoProducto === "interno" ? "bg-teal-700 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>Preparaciones internas</button>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">{grupoProducto === "interno" ? "Recetas de componentes para boxes: no se venden por separado." : "Recetas de los productos que ofreces a clientes."}</p>
+              </div>
               <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
                 <p className="text-xs font-bold uppercase tracking-wide text-orange-700">
                   ¿Cómo quieres comenzar?
@@ -452,7 +472,7 @@ export default function RecetasPage() {
                       className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500"
                     />
                   </label>
-                  <label className="text-sm font-bold text-slate-700">
+                  {grupoProducto === "venta" && <label className="text-sm font-bold text-slate-700">
                     Precio final de venta (Q)
                     <input
                       type="number"
@@ -465,16 +485,15 @@ export default function RecetasPage() {
                       placeholder="0.00"
                       className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500"
                     />
-                  </label>
+                  </label>}
                   <p className="md:col-span-2 text-xs text-slate-500">
-                    Al guardar la receta, se creará este producto y se conectará
-                    automáticamente con su costo calculado.
+                    {grupoProducto === "interno" ? "Se creará una preparación interna con costo calculado, sin precio de venta ni publicación en el catálogo." : "Al guardar la receta, se creará este producto y se conectará automáticamente con su costo calculado."}
                   </p>
                 </div>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="text-sm font-bold text-slate-700">
-                    Producto existente
+                    {grupoProducto === "interno" ? "Preparación interna existente" : "Producto de venta existente"}
                     <select
                       value={productoId}
                       onChange={(event) =>
@@ -483,7 +502,7 @@ export default function RecetasPage() {
                       className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-3 font-medium outline-none focus:border-orange-500"
                     >
                       <option value="">Selecciona el producto</option>
-                      {productos.map((producto) => (
+                      {productosDelGrupo.map((producto) => (
                         <option key={producto.id} value={producto.id}>
                           {producto.nombre}
                         </option>
@@ -492,15 +511,15 @@ export default function RecetasPage() {
                   </label>
                   <div className="rounded-xl bg-slate-950 p-4 text-white">
                     <p className="text-xs text-slate-300">
-                      Precio final actual
+                      {grupoProducto === "interno" ? "Costo actual por porción" : "Precio final actual"}
                     </p>
                     <p className="mt-1 text-2xl font-black">
                       {productoActual
-                        ? dinero(Number(productoActual.precio_venta))
+                        ? dinero(Number(grupoProducto === "interno" ? productoActual.costo : productoActual.precio_venta))
                         : "—"}
                     </p>
                     <p className="mt-1 text-xs text-slate-400">
-                      Se conserva al actualizar la receta.
+                      {grupoProducto === "interno" ? "Se recalcula al guardar la receta; no tiene precio de venta." : "Se conserva al actualizar la receta."}
                     </p>
                   </div>
                 </div>
@@ -556,7 +575,7 @@ export default function RecetasPage() {
                   />
                   <span className="mt-1 block text-xs font-normal text-slate-500">Luz, agua, gas, salarios, alquiler y otros costos fijos.</span>
                 </label>
-                <label className="text-sm font-bold text-slate-700">
+                {grupoProducto === "venta" && <label className="text-sm font-bold text-slate-700">
                   IVA (%)
                   <input
                     type="number"
@@ -566,8 +585,8 @@ export default function RecetasPage() {
                     onChange={(event) => setIva(event.target.value)}
                     className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500"
                   />
-                </label>
-                <label className="text-sm font-bold text-slate-700">
+                </label>}
+                {grupoProducto === "venta" && <label className="text-sm font-bold text-slate-700">
                   Utilidad / recargo de carta (%)
                   <input
                     type="number"
@@ -578,8 +597,8 @@ export default function RecetasPage() {
                     className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500"
                   />
                   <span className="mt-1 block text-xs font-normal text-slate-500">Recargo comercial definido por el negocio. Ej.: 50%.</span>
-                </label>
-                <label className="text-sm font-bold text-slate-700">
+                </label>}
+                {grupoProducto === "venta" && <label className="text-sm font-bold text-slate-700">
                   Comisión POS / plataforma (%)
                   <input
                     type="number"
@@ -590,7 +609,7 @@ export default function RecetasPage() {
                     className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500"
                   />
                   <span className="mt-1 block text-xs font-normal text-slate-500">Solo si aplica: tarjeta, plataforma o marketplace. Déjalo en 0 para venta directa.</span>
-                </label>
+                </label>}
                 <label className="text-sm font-bold text-slate-700">
                   Costos adicionales directos del lote (Q)
                   <input
@@ -782,29 +801,27 @@ export default function RecetasPage() {
                     {dinero(costoCompletoPorUnidad)}
                   </p>
                 </div>
-                <div className="rounded-2xl bg-white/10 p-4">
+                {grupoProducto === "venta" && <div className="rounded-2xl bg-white/10 p-4">
                   <p className="text-xs text-slate-300">Utilidad de carta</p>
                   <p className="mt-1 text-2xl font-black">
                     {dinero(utilidadCartaMonto)}
                   </p>
-                </div>
-                <div className="rounded-2xl bg-white/10 p-4">
+                </div>}
+                {grupoProducto === "venta" && <div className="rounded-2xl bg-white/10 p-4">
                   <p className="text-xs text-slate-300">IVA</p>
                   <p className="mt-1 text-2xl font-black">
                     {dinero(ivaMonto)}
                   </p>
-                </div>
-                <div className="rounded-2xl bg-orange-500 p-4">
+                </div>}
+                {grupoProducto === "venta" && <div className="rounded-2xl bg-orange-500 p-4">
                   <p className="text-xs text-orange-100">Precio sugerido</p>
                   <p className="mt-1 text-2xl font-black">
                     {dinero(precioSugerido)}
                   </p>
-                </div>
+                </div>}
               </div>
               <p className="mt-5 text-xs leading-5 text-slate-400">
-                Fórmula Intecap: merma → indirectos → utilidad de carta →
-                comisión del canal (si aplica) → IVA. Al guardar, el costo
-                completo se sincroniza al producto; no modifica tu precio final.
+                {grupoProducto === "interno" ? "Preparación interna: el costo de ingredientes, merma e indirectos se incorpora a la box. No se calcula precio de venta individual." : "Fórmula Intecap: merma → indirectos → utilidad de carta → comisión del canal (si aplica) → IVA. Al guardar, el costo completo se sincroniza al producto; no modifica tu precio final."}
               </p>
             </section>
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
