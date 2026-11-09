@@ -84,6 +84,8 @@ const [publicarCatalogo,setPublicarCatalogo]=useState(false);
 const [disponibleOnline,setDisponibleOnline]=useState(true);
 const [canalesVenta,setCanalesVenta]=useState<string[]>(["WhatsApp", "Web"]);
 const [tipoProducto,setTipoProducto]=useState<"preparado" | "reventa" | "combo">("preparado");
+const [usoInterno,setUsoInterno]=useState(false);
+const [estadoOriginal,setEstadoOriginal]=useState("Activo");
 const [componentesCombo,setComponentesCombo]=useState<ComponenteCombo[]>([]);
 const [ingredientesCombo,setIngredientesCombo]=useState<IngredienteCombo[]>([]);
 const [ingredientesDisponibles,setIngredientesDisponibles]=useState<IngredienteDisponible[]>([]);
@@ -228,6 +230,7 @@ setStock("0"); setStockMinimo("0"); setDescripcion(""); setSku("");
 setTiempoPreparacion(""); setEtiquetas(""); setPublicarCatalogo(false);
 setDisponibleOnline(true); setCanalesVenta(["WhatsApp", "Web"]);
 setTipoProducto("preparado"); setComponentesCombo([]); setIngredientesCombo([]); setCostoAdicionalCombo("0");
+setUsoInterno(false); setEstadoOriginal("Activo");
 setMermaCombo("0"); setIndirectosCombo("0"); setGananciaCombo("0"); setComisionCombo("0"); setIvaCombo("12");
 setFotoProducto(null); setFotoActual(""); setFotoPrevia("");
 }
@@ -271,9 +274,10 @@ async function guardarProducto(){
 if(
 !nombre
 ||
-!precio
+(!usoInterno && !precio)
 ||
-(tipoProducto !== "combo" && !costo)
+(!usoInterno && tipoProducto !== "combo" && !costo)
+|| (usoInterno && tipoProducto !== "preparado")
 ||
 (tipoProducto === "combo" && componentesCombo.length + ingredientesCombo.length === 0)
 ||
@@ -283,10 +287,14 @@ if(
 || (tipoProducto === "combo" && new Set(ingredientesCombo.map((componente) => componente.ingrediente_id)).size !== ingredientesCombo.length)
 || (tipoProducto === "combo" && [mermaCombo, indirectosCombo, gananciaCombo, comisionCombo, ivaCombo, costoAdicionalCombo].some((valor) => !Number.isFinite(Number(valor)) || Number(valor) < 0))
 || (tipoProducto === "combo" && Number(comisionCombo) >= 100)
+|| (tipoProducto === "combo" && componentesCombo.some((componente) => {
+  const producto = productos.find((item) => item.id === componente.producto_id);
+  return producto?.estado === "Interno" && !recetasCatalogo.some((receta) => receta.producto_id === producto.id);
+}))
 ){
 
 alert(
-tipoProducto === "combo" ? "Agrega componentes válidos al combo." : "Completa campos"
+tipoProducto === "combo" ? "Agrega componentes válidos. Toda preparación interna debe tener una receta activa antes de incluirla en la box." : "Completa campos"
 );
 
 return;
@@ -317,19 +325,19 @@ if (productoConMismoSku) {
  const datosProducto = {
  nombre,
  categoria: categoria || null,
- precio_venta: Number(precio),
- costo: tipoProducto === "combo" ? costoTotalCombo : Number(costo),
+ precio_venta: usoInterno ? 0 : Number(precio),
+ costo: tipoProducto === "combo" ? costoTotalCombo : Number(costo || 0),
  // El stock de un combo es virtual: depende de sus componentes, no se duplica.
- stock: tipoProducto === "combo" ? 0 : Number(stock || 0),
+ stock: tipoProducto === "combo" || usoInterno ? 0 : Number(stock || 0),
  stock_minimo: Number(stockMinimo || 0),
  descripcion: descripcion.trim() || null,
  sku: skuVisible.trim() || null,
  imagen_url: imagenUrl,
  tiempo_preparacion_min: tiempoPreparacion === "" ? null : Number(tiempoPreparacion),
  etiquetas: etiquetas.split(",").map((etiqueta) => etiqueta.trim()).filter(Boolean),
- publicar_catalogo: publicarCatalogo,
- disponible_online: disponibleOnline,
- canales_venta: canalesVenta,
+ publicar_catalogo: usoInterno ? false : publicarCatalogo,
+ disponible_online: usoInterno ? false : disponibleOnline,
+ canales_venta: usoInterno ? [] : canalesVenta,
  tipo_producto: tipoProducto,
  costo_adicional_combo: tipoProducto === "combo" ? Number(costoAdicionalCombo || 0) : 0,
  combo_merma_pct: tipoProducto === "combo" ? Number(mermaCombo) / 100 : 0,
@@ -352,7 +360,7 @@ await supabase
 "productos"
 )
 
-.update(datosProducto)
+.update({ ...datosProducto, estado: usoInterno ? "Interno" : estadoOriginal === "Interno" ? "Activo" : estadoOriginal })
 
 .eq(
 "id",
@@ -372,7 +380,7 @@ await supabase
 "productos"
 )
 
-.insert([{ ...datosProducto, estado: "Activo" }])
+.insert([{ ...datosProducto, estado: usoInterno ? "Interno" : "Activo" }])
 .select("id")
 .single();
 
@@ -486,7 +494,7 @@ const stockActual = Number(producto.stock || 0);
 const stockMinimoActual = Number(producto.stock_minimo || 0);
 const pasaInventario = inventarioFiltro === "Todos" || (inventarioFiltro === "Sin existencias" && stockActual <= 0) || (inventarioFiltro === "Stock bajo" && stockActual > 0 && stockActual <= stockMinimoActual) || (inventarioFiltro === "Disponible" && stockActual > stockMinimoActual);
 const pasaCatalogo = catalogoFiltro === "Todos" || (catalogoFiltro === "Publicado" && producto.publicar_catalogo) || (catalogoFiltro === "No publicado" && !producto.publicar_catalogo) || (catalogoFiltro === "Disponible online" && producto.disponible_online);
-const pasaEstado = estadoFiltro === "Todos" || (estadoFiltro === "Activos" && producto.estado === "Activo") || (estadoFiltro === "Inactivos" && producto.estado !== "Activo");
+const pasaEstado = estadoFiltro === "Todos" || (estadoFiltro === "Activos" && producto.estado === "Activo") || (estadoFiltro === "Internos" && producto.estado === "Interno") || (estadoFiltro === "Inactivos" && producto.estado === "Inactivo");
 return texto.includes(busquedaProducto.trim().toLowerCase()) && (categoriaFiltro === "Todas" || producto.categoria === categoriaFiltro) && pasaInventario && pasaCatalogo && pasaEstado && (canalFiltro === "Todos" || (producto.canales_venta || []).includes(canalFiltro));
 });
 const metricasGanancia = useMemo(() => {
@@ -533,14 +541,14 @@ function descargarProductos() {
   });
   exportarExcel("productos-la-cocina-de-isa", [{ nombre: "Productos", filas }]);
 }
-const productosConMargen = productos.filter((producto) => metricasGanancia.get(producto.id)?.tieneReceta);
+const productosConMargen = productos.filter((producto) => producto.estado === "Activo" && metricasGanancia.get(producto.id)?.tieneReceta);
 const margenPromedio = productosConMargen.length ? productosConMargen.reduce((total, producto) => total + (metricasGanancia.get(producto.id)?.porcentajeCompleto || 0), 0) / productosConMargen.length : 0;
 const productosConMargenIngredientes = productosConMargen.filter((producto) => metricasGanancia.get(producto.id)?.porcentajeIngredientes != null);
 const margenPromedioIngredientes = productosConMargenIngredientes.length ? productosConMargenIngredientes.reduce((total, producto) => total + (metricasGanancia.get(producto.id)?.porcentajeIngredientes || 0), 0) / productosConMargenIngredientes.length : 0;
 const comisionPromedio = productosConMargen.length ? productosConMargen.reduce((total, producto) => total + (metricasGanancia.get(producto.id)?.porcentajeComision || 0), 0) / productosConMargen.length : 0;
 const productosMargenBajo = productosConMargen.filter((producto) => (metricasGanancia.get(producto.id)?.porcentajeCompleto || 0) < 20).length;
 const productosActivos = productos.filter((producto) => producto.estado === "Activo").length;
-const productosPublicados = productos.filter((producto) => producto.publicar_catalogo).length;
+const productosPublicados = productos.filter((producto) => producto.estado === "Activo" && producto.publicar_catalogo).length;
 function verFicha(producto: Producto) {
   setEditorAbierto(false);
   void cargarResumenProducto(producto);
@@ -552,6 +560,8 @@ function editarProducto(producto: Producto) {
   setEditorAbierto(true);
   setNombre(producto.nombre);
   setTipoProducto(producto.tipo_producto || "preparado");
+  setUsoInterno(producto.estado === "Interno");
+  setEstadoOriginal(producto.estado || "Activo");
   setCostoAdicionalCombo(String(producto.costo_adicional_combo ?? 0));
   void cargarComponentesCombo(producto.id);
   void cargarIngredientesCombo(producto.id);
@@ -662,15 +672,17 @@ e.target.value
 <input
 type="number"
 className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
-placeholder="Precio final de venta"
+placeholder={usoInterno ? "Sin precio de venta (componente interno)" : "Precio final de venta"}
 value={precio}
+disabled={usoInterno}
 onChange={(e)=>
 setPrecio(
 e.target.value
 )}
 />
 
-<label className="text-sm font-bold text-slate-700">Tipo de producto<select value={tipoProducto} onChange={(e) => setTipoProducto(e.target.value as "preparado" | "reventa" | "combo")} className="mt-2 w-full border border-slate-200 bg-white p-4 rounded-2xl outline-none transition focus:border-orange-500"><option value="preparado">Preparado con receta</option><option value="reventa">Artículo de reventa</option><option value="combo">Combo / box</option></select><span className="mt-1 block text-xs font-normal text-slate-500">{tipoProducto === "combo" ? "Se vende como una sola box y descuenta sus componentes." : tipoProducto === "reventa" ? "Se compra listo para vender, como Lays o bebidas." : "Se produce a partir de su receta estándar."}</span></label>
+<label className="text-sm font-bold text-slate-700">Tipo de producto<select value={tipoProducto} onChange={(e) => setTipoProducto(e.target.value as "preparado" | "reventa" | "combo")} disabled={usoInterno} className="mt-2 w-full border border-slate-200 bg-white p-4 rounded-2xl outline-none transition focus:border-orange-500 disabled:bg-slate-100"><option value="preparado">Preparado con receta</option><option value="reventa">Artículo de reventa</option><option value="combo">Combo / box</option></select><span className="mt-1 block text-xs font-normal text-slate-500">{tipoProducto === "combo" ? "Se vende como una sola box y descuenta sus componentes." : tipoProducto === "reventa" ? "Se compra listo para vender, como Lays o bebidas." : "Se produce a partir de su receta estándar."}</span></label>
+<label className="flex items-start gap-3 rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm text-teal-950 sm:col-span-2"><input type="checkbox" checked={usoInterno} disabled={Boolean(productoEditando && estadoOriginal !== "Interno" && tipoProducto === "combo")} onChange={(event) => { setUsoInterno(event.target.checked); if (event.target.checked) { setTipoProducto("preparado"); setPrecio(""); setPublicarCatalogo(false); setDisponibleOnline(false); } }} className="mt-1"/><span><b>Preparación interna · no se vende sola</b><span className="mt-1 block text-xs font-normal">Para cóctel, fresco o pan que forma parte de una box. Guarda este producto, crea su receta en «Recetas y costos» y luego selecciónalo en la composición de la box. Sus ingredientes se descuentan al iniciar la producción del pedido, no al guardar la receta.</span></span></label>
 
 {tipoProducto === "combo" && <div className="space-y-5 rounded-2xl border border-orange-200 bg-orange-50 p-4 sm:col-span-2">
   <div><p className="font-black text-slate-950">Composición de la box</p><p className="mt-1 text-xs text-slate-600">Combina productos preparados o de reventa con insumos directos. Estos últimos se descuentan del inventario de ingredientes al iniciar Producción.</p></div>
@@ -689,13 +701,13 @@ e.target.value
   {skuVisible.trim() && productos.some((producto) => producto.id !== productoEditando && producto.sku?.trim().toLowerCase() === skuVisible.trim().toLowerCase()) && <p className="text-xs font-semibold text-rose-700">Este SKU ya pertenece a otro producto.</p>}
 </div>
 <label className="text-sm font-bold text-slate-700">Tiempo de preparación (minutos)<input type="number" min="0" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={tiempoPreparacion} onChange={(e) => setTiempoPreparacion(e.target.value)} /></label>
-{tipoProducto === "combo" ? <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900"><b>Existencia virtual</b><p className="mt-1 text-xs">El máximo vendible depende del componente con menor disponibilidad en cada sucursal. No se ingresa inventario propio para esta box.</p></div> : <label className="text-sm font-bold text-slate-700">Existencias disponibles para vender<input type="number" min="0" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={stock} onChange={(e) => setStock(e.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-500">Unidades listas para aceptar pedidos.</span></label>}
+{tipoProducto === "combo" || usoInterno ? <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900"><b>Existencia virtual</b><p className="mt-1 text-xs">La box descuenta los ingredientes de esta preparación al iniciar producción. No se ingresa existencia propia aquí.</p></div> : <label className="text-sm font-bold text-slate-700">Existencias disponibles para vender<input type="number" min="0" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={stock} onChange={(e) => setStock(e.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-500">Unidades listas para aceptar pedidos.</span></label>}
 <label className="text-sm font-bold text-slate-700">Stock mínimo de alerta<input type="number" min="0" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={stockMinimo} onChange={(e) => setStockMinimo(e.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-500">El sistema marcará stock bajo al llegar a esta cantidad.</span></label>
 <input className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 sm:col-span-2" placeholder="Etiquetas separadas por coma: regalo, postre, aniversario" value={etiquetas} onChange={(e) => setEtiquetas(e.target.value)} />
 <label className="rounded-2xl border border-dashed border-orange-300 bg-orange-50/50 p-4 text-sm font-bold text-slate-700 sm:col-span-2">Foto principal para catálogo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => seleccionarFoto(e.target.files?.[0] || null)} className="mt-2 block w-full text-sm font-normal" /><span className="mt-2 block text-xs font-normal text-slate-500">JPG, PNG o WebP · máximo 5 MB · idealmente imagen cuadrada o vertical.</span>{(fotoPrevia || fotoActual) && <div className="mt-4 flex items-center gap-3 rounded-xl bg-white p-3"><Image src={fotoPrevia || fotoActual} alt="Vista previa del producto" width={72} height={72} className="size-[72px] rounded-xl border border-slate-200 object-cover" /><span className="text-xs font-normal text-emerald-700">{fotoPrevia ? "Nueva foto lista para guardar." : "Este producto ya tiene una foto. Selecciona otra solo si deseas reemplazarla."}</span></div>}</label>
-<div className="grid gap-3 rounded-2xl bg-slate-50 p-4 sm:col-span-2"><p className="text-sm font-black text-slate-900">Catálogo y canales de venta</p><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={publicarCatalogo} onChange={(e) => setPublicarCatalogo(e.target.checked)} /> Publicar en el catálogo digital</label><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={disponibleOnline} onChange={(e) => setDisponibleOnline(e.target.checked)} /> Disponible para pedidos en línea</label><div className="flex flex-wrap gap-3">{["WhatsApp", "Web", "Facebook", "Instagram", "PedidosYa", "Uber Eats"].map((canal) => <label key={canal} className="flex items-center gap-1 text-xs font-semibold"><input type="checkbox" checked={canalesVenta.includes(canal)} onChange={(e) => setCanalesVenta(e.target.checked ? [...canalesVenta, canal] : canalesVenta.filter((actual) => actual !== canal))} /> {canal}</label>)}</div></div>
+{!usoInterno && <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 sm:col-span-2"><p className="text-sm font-black text-slate-900">Catálogo y canales de venta</p><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={publicarCatalogo} onChange={(e) => setPublicarCatalogo(e.target.checked)} /> Publicar en el catálogo digital</label><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={disponibleOnline} onChange={(e) => setDisponibleOnline(e.target.checked)} /> Disponible para pedidos en línea</label><div className="flex flex-wrap gap-3">{["WhatsApp", "Web", "Facebook", "Instagram", "PedidosYa", "Uber Eats"].map((canal) => <label key={canal} className="flex items-center gap-1 text-xs font-semibold"><input type="checkbox" checked={canalesVenta.includes(canal)} onChange={(e) => setCanalesVenta(e.target.checked ? [...canalesVenta, canal] : canalesVenta.filter((actual) => actual !== canal))} /> {canal}</label>)}</div></div>}
 
-{tipoProducto !== "combo" && <label className="text-sm font-bold text-slate-700">Costo actual (Q)<input type="number" min="0" step="0.01" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={costo} onChange={(e) => setCosto(e.target.value)} /></label>}
+{tipoProducto !== "combo" && <label className="text-sm font-bold text-slate-700">Costo estimado (Q) · se actualiza al guardar la receta<input type="number" min="0" step="0.01" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={costo} onChange={(e) => setCosto(e.target.value)} /></label>}
 
 <button
 
@@ -738,10 +750,11 @@ subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
 <div className="mb-6 flex flex-wrap gap-2" role="group" aria-label="Vista de productos">
 <button type="button" aria-pressed={vistaProductos === "administracion"} onClick={() => setVistaProductos("administracion")} className={`rounded-xl px-4 py-2.5 text-sm font-bold transition ${vistaProductos === "administracion" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700 hover:border-orange-300"}`}>Administración</button>
 <button type="button" aria-pressed={vistaProductos === "catalogo"} onClick={() => setVistaProductos("catalogo")} className={`rounded-xl px-4 py-2.5 text-sm font-bold transition ${vistaProductos === "catalogo" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700 hover:border-orange-300"}`}>Catálogo visual</button>
+<button type="button" aria-pressed={estadoFiltro === "Internos"} onClick={() => { setEstadoFiltro(estadoFiltro === "Internos" ? "Activos" : "Internos"); setVistaProductos("administracion"); }} className={`rounded-xl px-4 py-2.5 text-sm font-bold transition ${estadoFiltro === "Internos" ? "bg-teal-700 text-white" : "border border-teal-200 bg-teal-50 text-teal-800"}`}>Preparaciones internas</button>
 </div>
 <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
 <div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-500">Catálogo</p><h2 className="mt-2 text-3xl font-black text-slate-950">{vistaProductos === "catalogo" ? "Catálogo visual" : "Productos guardados"}</h2><p className="mt-1 text-sm text-slate-500">{productosFiltrados.length} de {productos.length} productos visibles</p></div>
-<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"><Link href="/recetas" className="rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-orange-600">Recetas y costos</Link><input aria-label="Buscar productos" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-500" placeholder="Nombre, código, etiqueta o categoría" value={busquedaProducto} onChange={(event) => setBusquedaProducto(event.target.value)} /><select aria-label="Filtrar por categoría" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={categoriaFiltro} onChange={(event) => setCategoriaFiltro(event.target.value)}><option>Todas</option>{categorias.map((categoria) => <option key={categoria}>{categoria}</option>)}</select><select aria-label="Filtrar por inventario" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={inventarioFiltro} onChange={(event) => setInventarioFiltro(event.target.value)}><option>Todos</option><option>Disponible</option><option>Stock bajo</option><option>Sin existencias</option></select><select aria-label="Filtrar por catálogo" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={catalogoFiltro} onChange={(event) => setCatalogoFiltro(event.target.value)}><option>Todos</option><option>Publicado</option><option>No publicado</option><option>Disponible online</option></select><select aria-label="Filtrar por canal" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={canalFiltro} onChange={(event) => setCanalFiltro(event.target.value)}><option>Todos</option>{canales.map((canal) => <option key={canal}>{canal}</option>)}</select><select aria-label="Filtrar por estado" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={estadoFiltro} onChange={(event) => setEstadoFiltro(event.target.value)}><option>Activos</option><option>Inactivos</option><option>Todos</option></select></div>
+<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"><Link href="/recetas" className="rounded-xl bg-slate-950 px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-orange-600">Recetas y costos</Link><input aria-label="Buscar productos" className="rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-500" placeholder="Nombre, código, etiqueta o categoría" value={busquedaProducto} onChange={(event) => setBusquedaProducto(event.target.value)} /><select aria-label="Filtrar por categoría" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={categoriaFiltro} onChange={(event) => setCategoriaFiltro(event.target.value)}><option>Todas</option>{categorias.map((categoria) => <option key={categoria}>{categoria}</option>)}</select><select aria-label="Filtrar por inventario" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={inventarioFiltro} onChange={(event) => setInventarioFiltro(event.target.value)}><option>Todos</option><option>Disponible</option><option>Stock bajo</option><option>Sin existencias</option></select><select aria-label="Filtrar por catálogo" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={catalogoFiltro} onChange={(event) => setCatalogoFiltro(event.target.value)}><option>Todos</option><option>Publicado</option><option>No publicado</option><option>Disponible online</option></select><select aria-label="Filtrar por canal" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={canalFiltro} onChange={(event) => setCanalFiltro(event.target.value)}><option>Todos</option>{canales.map((canal) => <option key={canal}>{canal}</option>)}</select><select aria-label="Filtrar por estado" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-orange-500" value={estadoFiltro} onChange={(event) => setEstadoFiltro(event.target.value)}><option>Activos</option><option value="Internos">Preparaciones internas</option><option>Inactivos</option><option>Todos</option></select></div>
 </div>
 </div>
 
@@ -772,13 +785,13 @@ subiendoFoto ? "Subiendo foto..." : "Guardar Producto"
       <div className="min-w-0"><h3 className="break-words font-bold text-slate-950">{producto.nombre}</h3><p className="text-xs text-slate-500">{producto.sku || "Sin código"} · {producto.categoria || "Sin categoría"}</p><p className="mt-2 text-xs text-slate-600">{etiquetaTipo(producto.tipo_producto)} · {producto.estado || "Sin estado"}</p></div>
     </div>
     <div className="grid min-w-0 grid-cols-2 gap-3 text-sm">
-      <div><p className="text-xs text-slate-500">Precio final</p><p className="font-bold text-emerald-700">Q{Number(producto.precio_venta).toFixed(2)}</p></div>
+      <div><p className="text-xs text-slate-500">Precio final</p><p className="font-bold text-emerald-700">{producto.estado === "Interno" ? "No se vende sola" : `Q${Number(producto.precio_venta).toFixed(2)}`}</p></div>
       <div><p className="text-xs text-slate-500">Costo producción</p><p className="font-bold text-rose-600">Q{Number(producto.costo || 0).toFixed(2)}</p></div>
       <div><p className="text-xs text-slate-500">Existencia</p><p className="font-bold text-slate-900">{Number(producto.stock || 0)} u.</p></div>
       <div><p className="text-xs text-slate-500">Catálogo</p><p className="font-bold text-slate-900">{producto.publicar_catalogo ? "Publicado" : "Interno"}</p><p className="text-[11px] text-slate-500">{producto.disponible_online && Number(producto.stock || 0) > 0 ? "Disponible online" : "No disponible"}</p></div>
     </div>
-    <div className="grid min-w-0 gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-2 lg:col-span-2 2xl:col-span-1"><div><p className="mb-1 text-xs font-bold text-slate-600">Margen completo</p><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="completo" /></div><div><p className="mb-1 text-xs font-bold text-slate-600">Margen ingredientes</p><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="ingredientes" /></div></div>
-    <div className="flex flex-wrap gap-2 lg:col-span-2 2xl:col-span-1 2xl:w-28 2xl:flex-col"><button type="button" onClick={() => verFicha(producto)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700">Ver ficha</button><button type="button" onClick={() => editarProducto(producto)} className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-bold text-white">Editar / foto</button><button type="button" onClick={() => void cambiarEstadoProducto(producto)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700">{producto.estado === "Activo" ? "Desactivar" : "Reactivar"}</button><button type="button" onClick={() => void eliminarProducto(producto.id, producto.nombre)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white">Eliminar</button></div>
+    <div className="grid min-w-0 gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-2 lg:col-span-2 2xl:col-span-1">{producto.estado === "Interno" ? <p className="text-sm text-slate-600 sm:col-span-2">Componente de box · el margen se calcula en el producto final.</p> : <><div><p className="mb-1 text-xs font-bold text-slate-600">Margen completo</p><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="completo" /></div><div><p className="mb-1 text-xs font-bold text-slate-600">Margen ingredientes</p><MargenProducto metrica={metricasGanancia.get(producto.id)} tipo="ingredientes" /></div></>}</div>
+    <div className="flex flex-wrap gap-2 lg:col-span-2 2xl:col-span-1 2xl:w-28 2xl:flex-col"><button type="button" onClick={() => verFicha(producto)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700">Ver ficha</button><button type="button" onClick={() => editarProducto(producto)} className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-bold text-white">Editar / foto</button>{producto.estado !== "Interno" && <button type="button" onClick={() => void cambiarEstadoProducto(producto)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700">{producto.estado === "Activo" ? "Desactivar" : "Reactivar"}</button>}<button type="button" onClick={() => void eliminarProducto(producto.id, producto.nombre)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white">Eliminar</button></div>
   </article>
 ))}
 {productosFiltrados.length === 0 && <p className="p-8 text-center text-sm text-slate-500">No encontramos productos con esos filtros.</p>}

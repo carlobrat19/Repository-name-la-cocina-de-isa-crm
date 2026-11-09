@@ -77,7 +77,7 @@ export default function RecetasPage() {
       supabase
         .from("productos")
         .select("id,nombre,categoria,precio_venta,costo")
-        .eq("estado", "Activo")
+        .in("estado", ["Activo", "Interno"])
         .order("nombre"),
       supabase
         .from("ingredientes")
