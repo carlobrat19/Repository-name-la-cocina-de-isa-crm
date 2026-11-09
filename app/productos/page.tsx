@@ -6,6 +6,7 @@ import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import { exportarExcel } from "../../lib/exportar-excel";
 import { cargarTodasLasPaginas } from "../../lib/cargar-paginas";
+import { sugerirSku } from "../../lib/sugerir-sku";
 
 type IngredienteReceta = {
   cantidad: number;
@@ -75,6 +76,8 @@ const [stock,setStock]=useState("0");
 const [stockMinimo,setStockMinimo]=useState("0");
 const [descripcion,setDescripcion]=useState("");
 const [sku,setSku]=useState("");
+const [skuEditadoManualmente,setSkuEditadoManualmente]=useState(false);
+const [catalogoCargado,setCatalogoCargado]=useState(false);
 const [tiempoPreparacion,setTiempoPreparacion]=useState("");
 const [etiquetas,setEtiquetas]=useState("");
 const [publicarCatalogo,setPublicarCatalogo]=useState(false);
@@ -121,6 +124,8 @@ setProductoEditando
 useState<string|null>(
 null
 );
+const skuSugerido = useMemo(() => catalogoCargado ? sugerirSku(categoria, productos) : null, [catalogoCargado, categoria, productos]);
+const skuVisible = !productoEditando && !skuEditadoManualmente ? skuSugerido ?? "" : sku;
 
 useEffect(() => {
   if (!editorAbierto && !productoReceta) return;
@@ -166,6 +171,7 @@ const productosCargados = (data || []) as Producto[];
 setProductos(
 productosCargados
 );
+setCatalogoCargado(true);
 setRecetasCatalogo((recetasRespuesta.data || []) as unknown as RecetaPiloto[]);
 if (!ingredientesRespuesta.error) setIngredientesDisponibles((ingredientesRespuesta.data || []) as IngredienteDisponible[]);
 if (!componentesRespuesta.error) setComponentesCatalogo((componentesRespuesta.data || []).map((item) => ({ ...item, cantidad: String(item.cantidad) })));
@@ -217,6 +223,7 @@ setFotoPrevia(URL.createObjectURL(archivo));
 function limpiarFormulario() {
 setProductoEditando(null);
 setNombre(""); setCategoria(""); setPrecio(""); setCosto("");
+setSkuEditadoManualmente(false);
 setStock("0"); setStockMinimo("0"); setDescripcion(""); setSku("");
 setTiempoPreparacion(""); setEtiquetas(""); setPublicarCatalogo(false);
 setDisponibleOnline(true); setCanalesVenta(["WhatsApp", "Web"]);
@@ -286,12 +293,12 @@ return;
 
 }
 
-const skuNormalizado = sku.trim().toLowerCase();
+const skuNormalizado = skuVisible.trim().toLowerCase();
 const productoConMismoSku = skuNormalizado
   ? productos.find((producto) => producto.id !== productoEditando && producto.sku?.trim().toLowerCase() === skuNormalizado)
   : null;
 if (productoConMismoSku) {
-  alert(`El código ${sku.trim()} ya pertenece a «${productoConMismoSku.nombre}». Usa un código diferente o deja el campo vacío.`);
+  alert(`El código ${skuVisible.trim()} ya pertenece a «${productoConMismoSku.nombre}». Usa un código diferente o deja el campo vacío.`);
   return;
 }
 
@@ -316,7 +323,7 @@ if (productoConMismoSku) {
  stock: tipoProducto === "combo" ? 0 : Number(stock || 0),
  stock_minimo: Number(stockMinimo || 0),
  descripcion: descripcion.trim() || null,
- sku: sku.trim() || null,
+ sku: skuVisible.trim() || null,
  imagen_url: imagenUrl,
  tiempo_preparacion_min: tiempoPreparacion === "" ? null : Number(tiempoPreparacion),
  etiquetas: etiquetas.split(",").map((etiqueta) => etiqueta.trim()).filter(Boolean),
@@ -380,7 +387,7 @@ if(error){
 console.error(error);
 
 alert(error.code === "23505" && error.message.includes("productos_sku_unico_idx")
-  ? `El código ${sku.trim()} ya está asignado a otro producto. Usa un código diferente o deja el campo vacío.`
+  ? `El código ${skuVisible.trim()} ya está asignado a otro producto. Actualiza el catálogo y usa el siguiente disponible.`
   : `No se pudo guardar el producto: ${error.message}`);
 
 return;
@@ -560,6 +567,7 @@ function editarProducto(producto: Producto) {
   setStockMinimo(String(producto.stock_minimo ?? 0));
   setDescripcion(producto.descripcion ?? "");
   setSku(producto.sku ?? "");
+  setSkuEditadoManualmente(true);
   setTiempoPreparacion(producto.tiempo_preparacion_min == null ? "" : String(producto.tiempo_preparacion_min));
   setEtiquetas((producto.etiquetas || []).join(", "));
   setPublicarCatalogo(Boolean(producto.publicar_catalogo));
@@ -642,12 +650,14 @@ e.target.value
 <input
 className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
 placeholder="Marca o categoría"
+list="marcas-producto"
 value={categoria}
 onChange={(e)=>
 setCategoria(
 e.target.value
 )}
 />
+<datalist id="marcas-producto"><option value="La Cocina de Isa" /><option value="Brasas Bravas" /></datalist>
 
 <input
 type="number"
@@ -672,7 +682,12 @@ e.target.value
 </div>}
 
 <textarea className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 sm:col-span-2" placeholder="Descripción comercial: qué incluye, sabor, tamaño y condiciones" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
-<input className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" placeholder="SKU o código interno" value={sku} onChange={(e) => setSku(e.target.value)} />
+<div className="space-y-2">
+  <label htmlFor="sku-producto" className="text-sm font-bold text-slate-700">SKU o código interno</label>
+  <input id="sku-producto" className="w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" placeholder="SKU o código interno" value={skuVisible} onChange={(e) => { setSku(e.target.value); setSkuEditadoManualmente(true); }} />
+  {skuSugerido ? <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600"><span>Siguiente disponible: <b className="text-slate-900">{skuSugerido}</b></span>{skuVisible.trim().toLowerCase() !== skuSugerido.toLowerCase() && <button type="button" onClick={() => { setSku(skuSugerido); setSkuEditadoManualmente(true); }} className="font-bold text-orange-700 underline">Usar sugerido</button>}</div> : <p className="text-xs text-slate-500">Escribe «La Cocina de Isa» o «Brasas Bravas» en Marca o categoría para sugerir un SKU.</p>}
+  {skuVisible.trim() && productos.some((producto) => producto.id !== productoEditando && producto.sku?.trim().toLowerCase() === skuVisible.trim().toLowerCase()) && <p className="text-xs font-semibold text-rose-700">Este SKU ya pertenece a otro producto.</p>}
+</div>
 <label className="text-sm font-bold text-slate-700">Tiempo de preparación (minutos)<input type="number" min="0" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={tiempoPreparacion} onChange={(e) => setTiempoPreparacion(e.target.value)} /></label>
 {tipoProducto === "combo" ? <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900"><b>Existencia virtual</b><p className="mt-1 text-xs">El máximo vendible depende del componente con menor disponibilidad en cada sucursal. No se ingresa inventario propio para esta box.</p></div> : <label className="text-sm font-bold text-slate-700">Existencias disponibles para vender<input type="number" min="0" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={stock} onChange={(e) => setStock(e.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-500">Unidades listas para aceptar pedidos.</span></label>}
 <label className="text-sm font-bold text-slate-700">Stock mínimo de alerta<input type="number" min="0" className="mt-2 w-full border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100" value={stockMinimo} onChange={(e) => setStockMinimo(e.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-500">El sistema marcará stock bajo al llegar a esta cantidad.</span></label>
