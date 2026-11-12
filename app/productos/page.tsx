@@ -66,6 +66,33 @@ function MargenProducto({ metrica, tipo }: { metrica?: MetricaGanancia; tipo: "c
   return <div className="min-w-[128px]"><p className={`font-black ${bajo ? "text-rose-700" : porcentaje < 35 ? "text-amber-700" : "text-emerald-700"}`}>{porcentaje.toFixed(1)}%</p><p className="mt-1 text-xs font-bold text-slate-700">Ganancia Q{margen?.toFixed(2)}</p><p className="mt-1 text-[11px] text-slate-500">{tipo === "completo" ? "Costo total" : "Costo ingredientes"} Q{costo?.toFixed(2)}</p></div>;
 }
 
+function FichaReventa({ producto, onCerrar }: { producto: Producto; onCerrar: () => void }) {
+  const costo = Number(producto.costo || 0);
+  const precio = Number(producto.precio_venta || 0);
+  const ivaPct = Number(producto.combo_iva_pct ?? 0);
+  const precioSinIva = precio / (1 + ivaPct);
+  const ivaIncluido = precio - precioSinIva;
+  const gananciaBruta = precioSinIva - costo;
+  const dinero = (valor: number) => `Q${valor.toFixed(2)}`;
+  return <section className="overflow-hidden rounded-[32px] bg-slate-950 p-6 text-white sm:p-8">
+    <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Ficha de reventa · {producto.categoria || "Sin categoría"}</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">{producto.nombre}</h1></div><button type="button" autoFocus onClick={onCerrar} className="rounded-lg border border-white/30 px-3 py-2 text-xs font-bold hover:bg-white/10">Cerrar ficha</button></div>
+    <p className="mt-3 text-sm text-slate-300">Artículo comprado listo para vender. Su costo es el valor guardado en el producto, sin receta de preparación.</p>
+    <div className="mt-6 rounded-2xl bg-white p-4 text-slate-950 sm:p-5">
+      <h2 className="text-lg font-black">Cómo se calcula el costo y precio de reventa</h2>
+      <p className="mt-1 text-xs text-slate-500">Desglose del costo y precio guardados. No se suponen merma, preparación, comisión ni una ganancia objetivo que no estén configuradas.</p>
+      <dl className="mt-4 divide-y divide-slate-100 text-sm">
+        <div className="flex justify-between gap-3 py-2"><dt>Costo de compra por unidad</dt><dd className="font-bold">{dinero(costo)}</dd></div>
+        <div className="flex justify-between gap-3 py-2 font-black"><dt>Costo completo registrado</dt><dd>{dinero(costo)}</dd></div>
+        <div className="flex justify-between gap-3 py-2"><dt>Precio antes de IVA incluido ({(ivaPct * 100).toFixed(0)}%)</dt><dd className="font-bold">{dinero(precioSinIva)}</dd></div>
+        <div className="flex justify-between gap-3 py-2"><dt>IVA incluido en el precio</dt><dd className="font-bold">{dinero(ivaIncluido)}</dd></div>
+        <div className="flex justify-between gap-3 py-2"><dt>Ganancia bruta estimada antes de otros gastos</dt><dd className={`font-bold ${gananciaBruta < 0 ? "text-rose-700" : "text-emerald-700"}`}>{dinero(gananciaBruta)}</dd></div>
+      </dl>
+      <div className="mt-3 rounded-xl bg-slate-100 p-4"><p className="text-xs font-bold uppercase text-slate-600">Precio final actual</p><p className="mt-1 text-2xl font-black">{dinero(precio)}</p></div>
+      <p className="mt-3 text-xs text-slate-500">No hay precio sugerido por receta para un artículo de reventa. La ganancia mostrada no descuenta comisiones, envío ni gastos generales.</p>
+    </div>
+  </section>;
+}
+
 function FichaCombo({
   combo,
   productos,
@@ -724,6 +751,7 @@ return(
 
 {productoReceta && <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"><div role="dialog" aria-modal="true" aria-label={`Ficha de ${productoReceta.nombre}`} className="mx-auto max-h-[calc(100dvh-1.5rem)] max-w-5xl overflow-y-auto rounded-[32px] shadow-2xl sm:max-h-[calc(100dvh-3rem)]">{(() => {
 if (productoReceta.tipo_producto === "combo") return <FichaCombo combo={productoReceta} productos={productos} ingredientes={ingredientesDisponibles} componentes={componentesCatalogo} insumos={insumosCatalogo} errorComposicion={errorComposicion} onCerrar={() => setProductoReceta(null)} onVerProducto={verFicha} />;
+if (productoReceta.tipo_producto === "reventa") return <FichaReventa producto={productoReceta} onCerrar={() => setProductoReceta(null)} />;
 if (cargandoFicha) return <section className="rounded-[32px] bg-slate-950 p-6 text-white sm:p-8"><div className="flex items-center justify-between gap-4"><p className="font-bold">Cargando ficha de {productoReceta.nombre}…</p><button type="button" onClick={() => setProductoReceta(null)} className="rounded-lg border border-white/30 px-3 py-2 text-xs font-bold">Cerrar</button></div></section>;
 if (!recetaPiloto) return <section className="rounded-[32px] bg-slate-950 p-6 text-white sm:p-8"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Ficha del producto · {productoReceta.categoria || "Sin categoría"}</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">{productoReceta.nombre}</h1></div><button type="button" autoFocus onClick={() => setProductoReceta(null)} className="rounded-lg border border-white/30 px-3 py-2 text-xs font-bold hover:bg-white/10">Cerrar</button></div><p className="mt-3 max-w-2xl text-sm text-slate-300">Este producto todavía no tiene una receta estándar. Créala para calcular sus costos automáticamente desde ingredientes e inventario.</p><Link href="/recetas" className="mt-6 inline-block rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white hover:bg-orange-400">Crear receta para este producto</Link></section>;
 const costoBase = recetaPiloto.receta_ingredientes.reduce((total, detalle) => total + Number(detalle.cantidad || 0) * Number(detalle.ingredientes?.costo_referencia || 0), 0);
@@ -736,6 +764,12 @@ const utilidadCarta = costoCompleto * Number(recetaPiloto.recargo_carta_pct || 0
 const precioAntesComision = costoCompleto + utilidadCarta;
 const precioSinIva = precioAntesComision / Math.max(0.01, 1 - Number(recetaPiloto.comision_canal_pct || 0));
 const precioSugerido = precioSinIva * (1 + Number(recetaPiloto.iva_pct || 0));
+const rendimiento = Math.max(0.001, Number(recetaPiloto.rendimiento || 1));
+const costoIngredientesPorUnidad = costoBase / rendimiento;
+const mermaPorUnidad = (conMerma - costoBase) / rendimiento;
+const adicionalesPorUnidad = Number(recetaPiloto.costos_adicionales || 0) / rendimiento;
+const dineroReceta = (valor: number) => `Q${valor.toFixed(2)}`;
+const porcentajeReceta = (valor: number | string) => `${(Number(valor || 0) * 100).toFixed(0)}%`;
 return <section className="overflow-hidden rounded-[32px] bg-slate-950 p-6 text-white sm:p-8">
 <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Ficha y receta estándar · {productoReceta.categoria || "Sin categoría"}</p>
 <h1 className="mt-2 text-3xl font-black sm:text-4xl">{productoReceta.nombre}</h1></div><button type="button" autoFocus onClick={() => setProductoReceta(null)} className="rounded-lg border border-white/30 px-3 py-2 text-xs font-bold hover:bg-white/10">Cerrar ficha</button></div>
@@ -743,6 +777,22 @@ return <section className="overflow-hidden rounded-[32px] bg-slate-950 p-6 text-
 <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo ingredientes</p><b className="text-2xl">Q{costoBase.toFixed(2)}</b></div><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo con merma</p><b className="text-2xl">Q{costoDirectoPorUnidad.toFixed(2)}</b></div><div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Costo completo</p><b className="text-2xl">Q{costoCompleto.toFixed(2)}</b></div><div className="rounded-2xl bg-orange-500 p-4"><p className="text-xs text-orange-100">Precio sugerido con IVA</p><b className="text-2xl">Q{precioSugerido.toFixed(2)}</b></div></div>
 <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-orange-400/40 bg-orange-500/10 p-4 sm:flex-row sm:items-end"><div className="flex-1"><label className="block text-xs font-bold uppercase tracking-wide text-orange-200">Precio final de venta</label><p className="mt-1 text-xs text-slate-300">Este es el precio que verá el cliente y el que se usará en los pedidos.</p><div className="mt-2 flex max-w-xs overflow-hidden rounded-xl bg-white"><span className="px-3 py-3 font-bold text-slate-600">Q</span><input aria-label={`Precio final de venta de ${productoReceta.nombre}`} type="number" min="0" step="0.01" className="w-full bg-white py-3 pr-3 text-lg font-bold text-slate-900 outline-none" value={precioFinalProducto} onChange={(event) => setPrecioFinalProducto(event.target.value)} /></div></div><button type="button" onClick={guardarPrecioFinalPan} disabled={guardandoPrecioFinal} className="rounded-xl bg-orange-500 px-5 py-3 font-bold text-white transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60">{guardandoPrecioFinal ? "Guardando..." : "Guardar precio final"}</button></div>
 <div className="mt-7 overflow-x-auto rounded-2xl bg-white text-slate-900"><table className="w-full text-sm"><thead className="bg-slate-100 text-left text-xs uppercase text-slate-500"><tr><th className="p-3">Ingrediente</th><th className="p-3">Cantidad</th><th className="p-3">Costo unitario</th><th className="p-3 text-right">Costo receta</th><th className="p-3 text-right">Stock</th></tr></thead><tbody>{recetaPiloto.receta_ingredientes.map((detalle) => <tr key={detalle.ingredientes?.nombre} className="border-t"><td className="p-3 font-bold">{detalle.ingredientes?.nombre}</td><td className="p-3">{Number(detalle.cantidad).toFixed(detalle.ingredientes?.unidad_base === "g" ? 1 : 2)} {detalle.ingredientes?.unidad_base}</td><td className="p-3">Q{Number(detalle.ingredientes?.costo_referencia || 0).toFixed(detalle.ingredientes?.unidad_base === "g" ? 4 : 2)}</td><td className="p-3 text-right font-bold">Q{(Number(detalle.cantidad) * Number(detalle.ingredientes?.costo_referencia || 0)).toFixed(2)}</td><td className="p-3 text-right">{Number(detalle.ingredientes?.stock_actual || 0).toFixed(detalle.ingredientes?.unidad_base === "g" ? 1 : 0)} {detalle.ingredientes?.unidad_base}</td></tr>)}</tbody></table></div>
+<div className="mt-6 rounded-2xl bg-white p-4 text-slate-950 sm:p-5">
+  <h2 className="text-lg font-black">Cómo se calcula el costo y precio de la receta</h2>
+  <p className="mt-1 text-xs text-slate-500">Valores por {recetaPiloto.unidad_rendimiento || "unidad"}, calculados con los costos actuales de ingredientes y los porcentajes de la receta. Rendimiento del lote: {Number(recetaPiloto.rendimiento || 1)}.</p>
+  <dl className="mt-4 divide-y divide-slate-100 text-sm">
+    <div className="flex justify-between gap-3 py-2"><dt>Ingredientes</dt><dd className="font-bold">{dineroReceta(costoIngredientesPorUnidad)}</dd></div>
+    <div className="flex justify-between gap-3 py-2"><dt>Merma ({porcentajeReceta(recetaPiloto.merma_pct)} sobre ingredientes)</dt><dd className="font-bold">{dineroReceta(mermaPorUnidad)}</dd></div>
+    <div className="flex justify-between gap-3 py-2"><dt>Otros costos directos</dt><dd className="font-bold">{dineroReceta(adicionalesPorUnidad)}</dd></div>
+    <div className="flex justify-between gap-3 py-2"><dt>Preparación / costos indirectos ({porcentajeReceta(recetaPiloto.margen_pct)})</dt><dd className="font-bold">{dineroReceta(indirectos)}</dd></div>
+    <div className="flex justify-between gap-3 py-2 font-black"><dt>Costo completo calculado</dt><dd>{dineroReceta(costoCompleto)}</dd></div>
+    <div className="flex justify-between gap-3 py-2"><dt>Ganancia sugerida ({porcentajeReceta(recetaPiloto.recargo_carta_pct)} sobre costo completo)</dt><dd className="font-bold">{dineroReceta(utilidadCarta)}</dd></div>
+    <div className="flex justify-between gap-3 py-2"><dt>Comisión prevista ({porcentajeReceta(recetaPiloto.comision_canal_pct)})</dt><dd className="font-bold">{dineroReceta(precioSinIva - precioAntesComision)}</dd></div>
+    <div className="flex justify-between gap-3 py-2"><dt>IVA ({porcentajeReceta(recetaPiloto.iva_pct)})</dt><dd className="font-bold">{dineroReceta(precioSugerido - precioSinIva)}</dd></div>
+  </dl>
+  <div className="mt-3 grid gap-3 sm:grid-cols-2"><div className="rounded-xl bg-orange-50 p-4"><p className="text-xs font-bold uppercase text-orange-700">Precio sugerido con IVA</p><p className="mt-1 text-2xl font-black text-orange-900">{dineroReceta(precioSugerido)}</p></div><div className="rounded-xl bg-slate-100 p-4"><p className="text-xs font-bold uppercase text-slate-600">Precio final actual</p><p className="mt-1 text-2xl font-black">{dineroReceta(Number(productoReceta.precio_venta || 0))}</p></div></div>
+  <p className="mt-3 text-xs text-slate-500">El precio sugerido es orientativo y no modifica el precio final. Si cambian los costos de ingredientes, el costo calculado puede diferir del costo guardado hasta actualizar la receta.</p>
+</div>
 <p className="mt-4 text-xs text-slate-300">Regla Intecap: {(Number(recetaPiloto.merma_pct) * 100).toFixed(0)}% merma · {(Number(recetaPiloto.margen_pct) * 100).toFixed(0)}% costos indirectos · {(Number(recetaPiloto.recargo_carta_pct) * 100).toFixed(0)}% utilidad de carta · {(Number(recetaPiloto.comision_canal_pct || 0) * 100).toFixed(0)}% comisión de canal · {(Number(recetaPiloto.iva_pct) * 100).toFixed(0)}% IVA.</p>
 </section>;
 })()}</div></div>}
