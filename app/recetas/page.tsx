@@ -55,6 +55,8 @@ export default function RecetasPage() {
   const [precioVentaNuevo, setPrecioVentaNuevo] = useState("");
   const [rendimiento, setRendimiento] = useState("1");
   const [unidadRendimiento, setUnidadRendimiento] = useState("unidad");
+  const [vistaLote, setVistaLote] = useState(false);
+  const [porcionesPrueba, setPorcionesPrueba] = useState("");
   const [merma, setMerma] = useState("0");
   const [costosIndirectos, setCostosIndirectos] = useState("35");
   const [iva, setIva] = useState("12");
@@ -122,6 +124,8 @@ export default function RecetasPage() {
     if (!data) {
       setRendimiento("1");
       setUnidadRendimiento("unidad");
+      setVistaLote(false);
+      setPorcionesPrueba("");
       setMerma("0");
       setCostosIndirectos("35");
       setIva("12");
@@ -133,6 +137,8 @@ export default function RecetasPage() {
     const receta = data as unknown as RecetaCargada;
     setRendimiento(String(receta.rendimiento));
     setUnidadRendimiento(receta.unidad_rendimiento || "unidad");
+    setVistaLote((receta.unidad_rendimiento || "").toLowerCase().startsWith("porci"));
+    setPorcionesPrueba("");
     setMerma(String(Number(receta.merma_pct) * 100));
     setCostosIndirectos(String(Number(receta.margen_pct) * 100));
     setIva(String(Number(receta.iva_pct) * 100));
@@ -197,6 +203,12 @@ export default function RecetasPage() {
   const costosIndirectosMonto =
     costoDirectoPorUnidad * (Number(costosIndirectos || 0) / 100);
   const costoCompletoPorUnidad = costoDirectoPorUnidad + costosIndirectosMonto;
+  const porcionesSimuladas = Number(porcionesPrueba);
+  const costoSimuladoPorPorcion =
+    porcionesSimuladas > 0
+      ? (costoDirectoLote * (1 + Number(costosIndirectos || 0) / 100)) /
+        porcionesSimuladas
+      : null;
   const utilidadCartaMonto =
     costoCompletoPorUnidad * (Number(recargoCarta || 0) / 100);
   const precioAntesComision = costoCompletoPorUnidad + utilidadCartaMonto;
@@ -529,9 +541,62 @@ export default function RecetasPage() {
                   Cargando receta…
                 </p>
               )}
+              <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-black text-slate-950">¿Preparas un lote para varias porciones?</p>
+                    <p className="mt-1 text-sm text-slate-600">Ejemplo: 1 sandía + 10 bananos + 1 piña + 1 melón. Anota cada cantidad completa abajo y divide el costo entre las porciones que salieron.</p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-pressed={vistaLote}
+                    onClick={() => {
+                      setVistaLote(!vistaLote);
+                      if (!vistaLote) setUnidadRendimiento("porciones");
+                    }}
+                    className={`rounded-xl px-4 py-2 text-sm font-bold ${vistaLote ? "bg-orange-500 text-white" : "bg-white text-slate-700"}`}
+                  >
+                    {vistaLote ? "Vista por lote activa" : "Calcular por lote"}
+                  </button>
+                </div>
+                {vistaLote && (
+                  <div className="mt-4 grid gap-3 rounded-xl bg-white p-4 sm:grid-cols-2">
+                    <div>
+                      <p className="text-xs font-bold uppercase text-slate-500">Costo completo del lote</p>
+                      <p className="mt-1 text-xl font-black text-slate-950">{dinero(costoDirectoLote * (1 + Number(costosIndirectos || 0) / 100))}</p>
+                      <p className="text-xs text-slate-500">Ingredientes, merma, costos directos e indirectos.</p>
+                    </div>
+                    <label className="text-sm font-bold text-slate-700">
+                      Probar si salen estas porciones
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={porcionesPrueba}
+                        onChange={(event) => setPorcionesPrueba(event.target.value)}
+                        placeholder="Ej. 12"
+                        className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500"
+                      />
+                    </label>
+                    {costoSimuladoPorPorcion !== null && Number.isInteger(porcionesSimuladas) && (
+                      <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                        <p className="text-sm text-slate-700">Si salen <strong>{porcionesSimuladas}</strong>, el costo completo sería <strong>{dinero(costoSimuladoPorPorcion)} por porción</strong>.</p>
+                        <button
+                          type="button"
+                          onClick={() => setRendimiento(String(porcionesSimuladas))}
+                          className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white"
+                        >
+                          Usar estas porciones
+                        </button>
+                      </div>
+                    )}
+                    <p className="text-xs text-slate-500 sm:col-span-2">La prueba no se guarda. Al saber cuántas porciones salieron, pulsa “Usar estas porciones” y guarda la receta. No ingreses aquí ingredientes ya incluidos en otra preparación para evitar duplicar costos.</p>
+                  </div>
+                )}
+              </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <label className="text-sm font-bold text-slate-700">
-                  Rendimiento
+                  {vistaLote ? "Porciones reales del lote" : "Rendimiento"}
                   <input
                     type="number"
                     min="0.001"
@@ -540,6 +605,7 @@ export default function RecetasPage() {
                     onChange={(event) => setRendimiento(event.target.value)}
                     className="mt-2 w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500"
                   />
+                  {vistaLote && <span className="mt-1 block text-xs font-normal text-slate-500">Este número determina el costo que se guardará por porción.</span>}
                 </label>
                 <label className="text-sm font-bold text-slate-700">
                   Unidad de rendimiento
