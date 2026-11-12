@@ -95,7 +95,22 @@ function FichaCombo({
     const ingrediente = ingredientes.find((actual) => actual.id === item.ingrediente_id);
     return total + Number(item.cantidad) * Number(ingrediente?.costo_referencia || 0);
   }, 0);
+  const mermaPct = Number(combo.combo_merma_pct || 0);
+  const indirectosPct = Number(combo.combo_indirectos_pct || 0);
+  const gananciaPct = Number(combo.combo_ganancia_pct || 0);
+  const comisionPct = Number(combo.combo_comision_pct || 0);
+  const ivaPct = Number(combo.combo_iva_pct ?? 0.12);
+  const costoMerma = costoInsumos * mermaPct;
+  const costoAdicional = Number(combo.costo_adicional_combo || 0);
+  const subtotalProduccion = costoProductos + costoInsumos + costoMerma + costoAdicional;
+  const costoPreparacion = subtotalProduccion * indirectosPct;
+  const costoCompletoCalculado = subtotalProduccion + costoPreparacion;
+  const gananciaSugerida = costoCompletoCalculado * gananciaPct;
+  const precioAntesComision = costoCompletoCalculado + gananciaSugerida;
+  const precioSinIva = precioAntesComision / Math.max(0.01, 1 - comisionPct);
+  const precioSugerido = precioSinIva * (1 + ivaPct);
   const dineroCombo = (valor: number) => `Q${valor.toFixed(2)}`;
+  const porcentajeCombo = (valor: number) => `${(valor * 100).toFixed(0)}%`;
   return <section className="overflow-hidden rounded-[32px] bg-slate-950 p-6 text-white sm:p-8">
     <div className="flex items-start justify-between gap-4">
       <div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Ficha de la box · {combo.categoria || "Sin categoría"}</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">{combo.nombre}</h1></div>
@@ -136,7 +151,26 @@ function FichaCombo({
         </div>
       </div>
     </div>
-    <p className="mt-5 text-xs text-slate-300">Costo adicional directo: {dineroCombo(Number(combo.costo_adicional_combo || 0))}. El costo completo guardado también considera merma y costos indirectos configurados para esta box; por eso puede diferir de la suma de las líneas.</p>
+    <div className="mt-6 rounded-2xl bg-white p-4 text-slate-950 sm:p-5">
+      <h2 className="text-lg font-black">Cómo se calcula el costo y precio de la box</h2>
+      <p className="mt-1 text-xs text-slate-500">Cálculo con los costos actuales de los componentes y los porcentajes guardados para esta box.</p>
+      <dl className="mt-4 divide-y divide-slate-100 text-sm">
+        <div className="flex justify-between gap-3 py-2"><dt>Productos incluidos</dt><dd className="font-bold">{dineroCombo(costoProductos)}</dd></div>
+        <div className="flex justify-between gap-3 py-2"><dt>Insumos directos</dt><dd className="font-bold">{dineroCombo(costoInsumos)}</dd></div>
+        <div className="flex justify-between gap-3 py-2"><dt>Merma ({porcentajeCombo(mermaPct)} sobre insumos)</dt><dd className="font-bold">{dineroCombo(costoMerma)}</dd></div>
+        <div className="flex justify-between gap-3 py-2"><dt>Otros costos directos</dt><dd className="font-bold">{dineroCombo(costoAdicional)}</dd></div>
+        <div className="flex justify-between gap-3 py-2"><dt>Preparación / costos indirectos ({porcentajeCombo(indirectosPct)})</dt><dd className="font-bold">{dineroCombo(costoPreparacion)}</dd></div>
+        <div className="flex justify-between gap-3 py-2 font-black"><dt>Costo completo calculado</dt><dd>{dineroCombo(costoCompletoCalculado)}</dd></div>
+        <div className="flex justify-between gap-3 py-2"><dt>Ganancia sugerida ({porcentajeCombo(gananciaPct)} sobre costo completo)</dt><dd className="font-bold">{dineroCombo(gananciaSugerida)}</dd></div>
+        <div className="flex justify-between gap-3 py-2"><dt>Comisión prevista ({porcentajeCombo(comisionPct)})</dt><dd className="font-bold">{dineroCombo(precioSinIva - precioAntesComision)}</dd></div>
+        <div className="flex justify-between gap-3 py-2"><dt>IVA ({porcentajeCombo(ivaPct)})</dt><dd className="font-bold">{dineroCombo(precioSugerido - precioSinIva)}</dd></div>
+      </dl>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl bg-orange-50 p-4"><p className="text-xs font-bold uppercase text-orange-700">Precio sugerido con IVA</p><p className="mt-1 text-2xl font-black text-orange-900">{dineroCombo(precioSugerido)}</p></div>
+        <div className="rounded-xl bg-slate-100 p-4"><p className="text-xs font-bold uppercase text-slate-600">Precio final actual</p><p className="mt-1 text-2xl font-black">{dineroCombo(Number(combo.precio_venta || 0))}</p></div>
+      </div>
+      <p className="mt-3 text-xs text-slate-500">El precio sugerido es orientativo y no cambia el precio final. Si actualizaste costos de componentes, el costo completo calculado puede diferir del costo guardado hasta que vuelvas a guardar la box.</p>
+    </div>
   </section>;
 }
 
