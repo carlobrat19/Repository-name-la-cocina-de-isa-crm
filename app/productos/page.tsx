@@ -66,6 +66,80 @@ function MargenProducto({ metrica, tipo }: { metrica?: MetricaGanancia; tipo: "c
   return <div className="min-w-[128px]"><p className={`font-black ${bajo ? "text-rose-700" : porcentaje < 35 ? "text-amber-700" : "text-emerald-700"}`}>{porcentaje.toFixed(1)}%</p><p className="mt-1 text-xs font-bold text-slate-700">Ganancia Q{margen?.toFixed(2)}</p><p className="mt-1 text-[11px] text-slate-500">{tipo === "completo" ? "Costo total" : "Costo ingredientes"} Q{costo?.toFixed(2)}</p></div>;
 }
 
+function FichaCombo({
+  combo,
+  productos,
+  ingredientes,
+  componentes,
+  insumos,
+  errorComposicion,
+  onCerrar,
+  onVerProducto,
+}: {
+  combo: Producto;
+  productos: Producto[];
+  ingredientes: IngredienteDisponible[];
+  componentes: (ComponenteCombo & { combo_id: string })[];
+  insumos: (IngredienteCombo & { combo_id: string })[];
+  errorComposicion: boolean;
+  onCerrar: () => void;
+  onVerProducto: (producto: Producto) => void;
+}) {
+  const productosIncluidos = componentes.filter((item) => item.combo_id === combo.id);
+  const insumosDirectos = insumos.filter((item) => item.combo_id === combo.id);
+  const costoProductos = productosIncluidos.reduce((total, item) => {
+    const producto = productos.find((actual) => actual.id === item.producto_id);
+    return total + Number(item.cantidad) * Number(producto?.costo || 0);
+  }, 0);
+  const costoInsumos = insumosDirectos.reduce((total, item) => {
+    const ingrediente = ingredientes.find((actual) => actual.id === item.ingrediente_id);
+    return total + Number(item.cantidad) * Number(ingrediente?.costo_referencia || 0);
+  }, 0);
+  const dineroCombo = (valor: number) => `Q${valor.toFixed(2)}`;
+  return <section className="overflow-hidden rounded-[32px] bg-slate-950 p-6 text-white sm:p-8">
+    <div className="flex items-start justify-between gap-4">
+      <div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Ficha de la box · {combo.categoria || "Sin categoría"}</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">{combo.nombre}</h1></div>
+      <button type="button" autoFocus onClick={onCerrar} className="rounded-lg border border-white/30 px-3 py-2 text-xs font-bold hover:bg-white/10">Cerrar ficha</button>
+    </div>
+    <p className="mt-3 text-sm text-slate-300">Composición guardada de una box: productos incluidos y materiales directos. Los costos unitarios muestran los valores actuales del catálogo.</p>
+    {errorComposicion && <p className="mt-5 rounded-xl bg-rose-100 p-3 text-sm font-bold text-rose-900">No se pudo cargar toda la composición. Actualiza la página antes de usar esta ficha.</p>}
+    <div className="mt-6 grid gap-3 sm:grid-cols-3">
+      <div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Productos incluidos</p><b className="mt-1 block text-2xl">{dineroCombo(costoProductos)}</b></div>
+      <div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Insumos directos</p><b className="mt-1 block text-2xl">{dineroCombo(costoInsumos)}</b></div>
+      <div className="rounded-2xl bg-orange-500 p-4"><p className="text-xs text-orange-100">Costo completo guardado</p><b className="mt-1 block text-2xl">{dineroCombo(Number(combo.costo || 0))}</b></div>
+    </div>
+    <div className="mt-6 grid gap-4 lg:grid-cols-2">
+      <div className="rounded-2xl bg-white p-4 text-slate-950">
+        <h2 className="text-lg font-black">Productos incluidos</h2>
+        <div className="mt-3 divide-y divide-slate-100">
+          {productosIncluidos.map((item) => {
+            const producto = productos.find((actual) => actual.id === item.producto_id);
+            return <div key={item.producto_id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+              <div><p className="font-bold">{producto?.nombre || "Producto no disponible"}</p><p className="text-xs text-slate-500">{Number(item.cantidad)} × {dineroCombo(Number(producto?.costo || 0))} · {producto?.estado === "Interno" ? "Preparación interna" : "Producto"}</p></div>
+              <div className="flex items-center gap-3"><b>{dineroCombo(Number(item.cantidad) * Number(producto?.costo || 0))}</b>{producto && <button type="button" onClick={() => onVerProducto(producto)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-orange-700">Ver ficha</button>}</div>
+            </div>;
+          })}
+          {!productosIncluidos.length && <p className="py-4 text-sm text-slate-500">No hay productos incluidos registrados.</p>}
+        </div>
+      </div>
+      <div className="rounded-2xl bg-white p-4 text-slate-950">
+        <h2 className="text-lg font-black">Insumos directos</h2>
+        <div className="mt-3 divide-y divide-slate-100">
+          {insumosDirectos.map((item) => {
+            const ingrediente = ingredientes.find((actual) => actual.id === item.ingrediente_id);
+            return <div key={item.ingrediente_id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+              <div><p className="font-bold">{ingrediente?.nombre || "Insumo no disponible"}</p><p className="text-xs text-slate-500">{Number(item.cantidad)} {ingrediente?.unidad_base || ""} × {dineroCombo(Number(ingrediente?.costo_referencia || 0))}/{ingrediente?.unidad_base || "unidad"}</p></div>
+              <b>{dineroCombo(Number(item.cantidad) * Number(ingrediente?.costo_referencia || 0))}</b>
+            </div>;
+          })}
+          {!insumosDirectos.length && <p className="py-4 text-sm text-slate-500">No hay insumos directos registrados.</p>}
+        </div>
+      </div>
+    </div>
+    <p className="mt-5 text-xs text-slate-300">Costo adicional directo: {dineroCombo(Number(combo.costo_adicional_combo || 0))}. El costo completo guardado también considera merma y costos indirectos configurados para esta box; por eso puede diferir de la suma de las líneas.</p>
+  </section>;
+}
+
 export default function ProductosPage() {
 
 const [nombre,setNombre]=useState("");
@@ -105,8 +179,10 @@ const [productos,setProductos]=
 useState<Producto[]>([]);
 const [componentesCatalogo,setComponentesCatalogo]=useState<(ComponenteCombo & { combo_id: string })[]>([]);
 const [insumosCatalogo,setInsumosCatalogo]=useState<(IngredienteCombo & { combo_id: string })[]>([]);
+const [errorComposicion,setErrorComposicion]=useState(false);
 
 const [recetaPiloto, setRecetaPiloto] = useState<RecetaPiloto | null>(null);
+const [cargandoFicha, setCargandoFicha] = useState(false);
 const [recetasCatalogo, setRecetasCatalogo] = useState<RecetaPiloto[]>([]);
 const [productoReceta, setProductoReceta] = useState<Producto | null>(null);
 const [precioFinalProducto, setPrecioFinalProducto] = useState("");
@@ -178,17 +254,22 @@ setRecetasCatalogo((recetasRespuesta.data || []) as unknown as RecetaPiloto[]);
 if (!ingredientesRespuesta.error) setIngredientesDisponibles((ingredientesRespuesta.data || []) as IngredienteDisponible[]);
 if (!componentesRespuesta.error) setComponentesCatalogo((componentesRespuesta.data || []).map((item) => ({ ...item, cantidad: String(item.cantidad) })));
 if (!insumosRespuesta.error) setInsumosCatalogo((insumosRespuesta.data || []).map((item) => ({ ...item, cantidad: String(item.cantidad) })));
+setErrorComposicion(Boolean(componentesRespuesta.error || insumosRespuesta.error));
 
 }
 
 async function cargarResumenProducto(producto: Producto) {
 setProductoReceta(producto);
+setRecetaPiloto(null);
 setPrecioFinalProducto(String(producto.precio_venta ?? ""));
+if (producto.tipo_producto === "combo") { setCargandoFicha(false); return; }
+setCargandoFicha(true);
 const recetaRespuesta = await supabase
 .from("recetas_estandar")
 .select("rendimiento, unidad_rendimiento, merma_pct, margen_pct, iva_pct, recargo_carta_pct, comision_canal_pct, costos_adicionales, receta_ingredientes(cantidad, ingredientes(nombre, unidad_base, costo_referencia, stock_actual))")
 .eq("producto_id", producto.id)
 .maybeSingle();
+setCargandoFicha(false);
 if (recetaRespuesta.error) { console.error(recetaRespuesta.error); return; }
 setRecetaPiloto(recetaRespuesta.data as RecetaPiloto | null);
 }
@@ -608,6 +689,8 @@ return(
 </section>
 
 {productoReceta && <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"><div role="dialog" aria-modal="true" aria-label={`Ficha de ${productoReceta.nombre}`} className="mx-auto max-h-[calc(100dvh-1.5rem)] max-w-5xl overflow-y-auto rounded-[32px] shadow-2xl sm:max-h-[calc(100dvh-3rem)]">{(() => {
+if (productoReceta.tipo_producto === "combo") return <FichaCombo combo={productoReceta} productos={productos} ingredientes={ingredientesDisponibles} componentes={componentesCatalogo} insumos={insumosCatalogo} errorComposicion={errorComposicion} onCerrar={() => setProductoReceta(null)} onVerProducto={verFicha} />;
+if (cargandoFicha) return <section className="rounded-[32px] bg-slate-950 p-6 text-white sm:p-8"><div className="flex items-center justify-between gap-4"><p className="font-bold">Cargando ficha de {productoReceta.nombre}…</p><button type="button" onClick={() => setProductoReceta(null)} className="rounded-lg border border-white/30 px-3 py-2 text-xs font-bold">Cerrar</button></div></section>;
 if (!recetaPiloto) return <section className="rounded-[32px] bg-slate-950 p-6 text-white sm:p-8"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-orange-400">Ficha del producto · {productoReceta.categoria || "Sin categoría"}</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">{productoReceta.nombre}</h1></div><button type="button" autoFocus onClick={() => setProductoReceta(null)} className="rounded-lg border border-white/30 px-3 py-2 text-xs font-bold hover:bg-white/10">Cerrar</button></div><p className="mt-3 max-w-2xl text-sm text-slate-300">Este producto todavía no tiene una receta estándar. Créala para calcular sus costos automáticamente desde ingredientes e inventario.</p><Link href="/recetas" className="mt-6 inline-block rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white hover:bg-orange-400">Crear receta para este producto</Link></section>;
 const costoBase = recetaPiloto.receta_ingredientes.reduce((total, detalle) => total + Number(detalle.cantidad || 0) * Number(detalle.ingredientes?.costo_referencia || 0), 0);
 const conMerma = costoBase * (1 + Number(recetaPiloto.merma_pct || 0));
