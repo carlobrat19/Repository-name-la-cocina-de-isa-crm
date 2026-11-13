@@ -127,11 +127,13 @@ function FichaCombo({
   const gananciaPct = Number(combo.combo_ganancia_pct || 0);
   const comisionPct = Number(combo.combo_comision_pct || 0);
   const ivaPct = Number(combo.combo_iva_pct ?? 0.12);
-  const costoMerma = costoInsumos * mermaPct;
+  const costoMerma = (costoProductos + costoInsumos) * mermaPct;
   const costoAdicional = Number(combo.costo_adicional_combo || 0);
   const subtotalProduccion = costoProductos + costoInsumos + costoMerma + costoAdicional;
   const costoPreparacion = subtotalProduccion * indirectosPct;
   const costoCompletoCalculado = subtotalProduccion + costoPreparacion;
+  const costoGuardado = Number(combo.costo || 0);
+  const costoPendienteDeActualizar = Math.abs(costoCompletoCalculado - costoGuardado) >= 0.01;
   const gananciaSugerida = costoCompletoCalculado * gananciaPct;
   const precioAntesComision = costoCompletoCalculado + gananciaSugerida;
   const precioSinIva = precioAntesComision / Math.max(0.01, 1 - comisionPct);
@@ -148,7 +150,7 @@ function FichaCombo({
     <div className="mt-6 grid gap-3 sm:grid-cols-3">
       <div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Productos incluidos</p><b className="mt-1 block text-2xl">{dineroCombo(costoProductos)}</b></div>
       <div className="rounded-2xl bg-white/10 p-4"><p className="text-xs text-slate-300">Insumos directos</p><b className="mt-1 block text-2xl">{dineroCombo(costoInsumos)}</b></div>
-      <div className="rounded-2xl bg-orange-500 p-4"><p className="text-xs text-orange-100">Costo completo guardado</p><b className="mt-1 block text-2xl">{dineroCombo(Number(combo.costo || 0))}</b></div>
+      <div className="rounded-2xl bg-orange-500 p-4"><p className="text-xs text-orange-100">{costoPendienteDeActualizar ? "Costo guardado · pendiente de actualizar" : "Costo completo guardado"}</p><b className="mt-1 block text-2xl">{dineroCombo(costoGuardado)}</b></div>
     </div>
     <div className="mt-6 grid gap-4 lg:grid-cols-2">
       <div className="rounded-2xl bg-white p-4 text-slate-950">
@@ -184,7 +186,7 @@ function FichaCombo({
       <dl className="mt-4 divide-y divide-slate-100 text-sm">
         <div className="flex justify-between gap-3 py-2"><dt>Productos incluidos</dt><dd className="font-bold">{dineroCombo(costoProductos)}</dd></div>
         <div className="flex justify-between gap-3 py-2"><dt>Insumos directos</dt><dd className="font-bold">{dineroCombo(costoInsumos)}</dd></div>
-        <div className="flex justify-between gap-3 py-2"><dt>Merma ({porcentajeCombo(mermaPct)} sobre insumos)</dt><dd className="font-bold">{dineroCombo(costoMerma)}</dd></div>
+        <div className="flex justify-between gap-3 py-2"><dt>Merma ({porcentajeCombo(mermaPct)} sobre productos e insumos)</dt><dd className="font-bold">{dineroCombo(costoMerma)}</dd></div>
         <div className="flex justify-between gap-3 py-2"><dt>Otros costos directos</dt><dd className="font-bold">{dineroCombo(costoAdicional)}</dd></div>
         <div className="flex justify-between gap-3 py-2"><dt>Preparación / costos indirectos ({porcentajeCombo(indirectosPct)})</dt><dd className="font-bold">{dineroCombo(costoPreparacion)}</dd></div>
         <div className="flex justify-between gap-3 py-2 font-black"><dt>Costo completo calculado</dt><dd>{dineroCombo(costoCompletoCalculado)}</dd></div>
@@ -196,7 +198,7 @@ function FichaCombo({
         <div className="rounded-xl bg-orange-50 p-4"><p className="text-xs font-bold uppercase text-orange-700">Precio sugerido con IVA</p><p className="mt-1 text-2xl font-black text-orange-900">{dineroCombo(precioSugerido)}</p></div>
         <div className="rounded-xl bg-slate-100 p-4"><p className="text-xs font-bold uppercase text-slate-600">Precio final actual</p><p className="mt-1 text-2xl font-black">{dineroCombo(Number(combo.precio_venta || 0))}</p></div>
       </div>
-      <p className="mt-3 text-xs text-slate-500">El precio sugerido es orientativo y no cambia el precio final. Si actualizaste costos de componentes, el costo completo calculado puede diferir del costo guardado hasta que vuelvas a guardar la box.</p>
+      <p className="mt-3 text-xs text-slate-500">El precio sugerido es orientativo y no cambia el precio final. {costoPendienteDeActualizar ? "Para sincronizar el costo guardado con este cálculo, abre Editar y guarda la box; los pedidos existentes no se recalculan." : "El costo guardado coincide con el cálculo actual."}</p>
     </div>
   </section>;
 }
@@ -337,7 +339,7 @@ setRecetaPiloto(recetaRespuesta.data as RecetaPiloto | null);
 
 const costoComponentesCombo = componentesCombo.reduce((total, componente) => total + (Number(productos.find((producto) => producto.id === componente.producto_id)?.costo || 0) * Number(componente.cantidad || 0)), 0);
 const costoIngredientesCombo = ingredientesCombo.reduce((total, componente) => total + Number(ingredientesDisponibles.find((ingrediente) => ingrediente.id === componente.ingrediente_id)?.costo_referencia || 0) * Number(componente.cantidad || 0), 0);
-const costoConMermaCombo = costoComponentesCombo + costoIngredientesCombo * (1 + Number(mermaCombo || 0) / 100) + Number(costoAdicionalCombo || 0);
+const costoConMermaCombo = (costoComponentesCombo + costoIngredientesCombo) * (1 + Number(mermaCombo || 0) / 100) + Number(costoAdicionalCombo || 0);
 const costoTotalCombo = costoConMermaCombo * (1 + Number(indirectosCombo || 0) / 100);
 const precioSugeridoCombo = costoTotalCombo * (1 + Number(gananciaCombo || 0) / 100) / Math.max(0.01, 1 - Number(comisionCombo || 0) / 100) * (1 + Number(ivaCombo || 0) / 100);
 const etiquetaTipo = (tipo?: Producto["tipo_producto"]) => tipo === "combo" ? "Combo / box" : tipo === "reventa" ? "Reventa" : "Preparado";
@@ -857,7 +859,7 @@ e.target.value
   <div className="rounded-xl bg-white p-4"><div className="flex items-center justify-between gap-2"><h3 className="text-sm font-black">Insumos directos</h3><button type="button" onClick={() => setIngredientesCombo((actual) => [...actual, { ingrediente_id: "", cantidad: "1" }])} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white">+ Insumo</button></div><p className="mt-1 text-xs text-slate-500">Registra Play-Doh, crayones, toppings o empaques como ingredientes en unidades, gramos o mililitros.</p><div className="mt-3 space-y-2">{ingredientesCombo.map((componente, indice) => { const ingrediente = ingredientesDisponibles.find((item) => item.id === componente.ingrediente_id); return <div key={indice} className="grid gap-2 sm:grid-cols-[1fr_130px_auto]"><select aria-label={`Insumo ${indice + 1}`} value={componente.ingrediente_id} onChange={(e) => setIngredientesCombo((actual) => actual.map((item, posicion) => posicion === indice ? { ...item, ingrediente_id: e.target.value } : item))} className="rounded-xl border border-orange-200 bg-white p-3 text-sm"><option value="">Seleccionar insumo</option>{ingredientesDisponibles.filter((item) => item.activo || item.id === componente.ingrediente_id).map((item) => <option key={item.id} value={item.id}>{item.nombre} · {item.unidad_base} · Q{Number(item.costo_referencia).toFixed(4)}</option>)}</select><label className="text-xs text-slate-500"><input aria-label={`Cantidad del insumo ${indice + 1}`} type="number" min="0.001" step="0.001" value={componente.cantidad} onChange={(e) => setIngredientesCombo((actual) => actual.map((item, posicion) => posicion === indice ? { ...item, cantidad: e.target.value } : item))} className="w-full rounded-xl border border-orange-200 bg-white p-3 text-sm text-slate-900"/>{ingrediente?.unidad_base || "unidad"}</label><button type="button" onClick={() => setIngredientesCombo((actual) => actual.filter((_, posicion) => posicion !== indice))} className="rounded-xl px-3 py-2 text-xs font-bold text-rose-700">Quitar</button></div>; })}</div></div>
   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><div className="rounded-xl bg-white p-3 text-sm">Productos: <b>Q{costoComponentesCombo.toFixed(2)}</b></div><div className="rounded-xl bg-white p-3 text-sm">Insumos: <b>Q{costoIngredientesCombo.toFixed(2)}</b></div><label className="rounded-xl bg-white p-3 text-xs font-bold">Otro costo directo (Q)<input type="number" min="0" step="0.01" value={costoAdicionalCombo} onChange={(e) => setCostoAdicionalCombo(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-2 text-sm"/></label></div>
   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{[["Merma %",mermaCombo,setMermaCombo],["Costos indirectos %",indirectosCombo,setIndirectosCombo],["Ganancia deseada %",gananciaCombo,setGananciaCombo],["Comisión prevista %",comisionCombo,setComisionCombo],["IVA %",ivaCombo,setIvaCombo]].map(([etiqueta,valor,actualizar]) => <label key={etiqueta as string} className="rounded-xl bg-white p-3 text-xs font-bold">{etiqueta as string}<input type="number" min="0" max={etiqueta === "Comisión prevista %" ? 99.99 : undefined} step="0.1" value={valor as string} onChange={(e) => (actualizar as (value: string) => void)(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-2 text-sm"/></label>)}</div>
-  <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-xl bg-slate-950 p-4 text-white"><p className="text-xs">Costo completo estimado</p><p className="text-xl font-black">Q{costoTotalCombo.toFixed(2)}</p></div><div className="rounded-xl bg-orange-500 p-4 text-white"><p className="text-xs">Precio sugerido con IVA</p><p className="text-xl font-black">Q{precioSugeridoCombo.toFixed(2)}</p><button type="button" onClick={() => setPrecio(precioSugeridoCombo.toFixed(2))} className="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-orange-700">Usar como precio final</button></div></div><p className="text-xs text-slate-600">El precio sugerido es orientativo; el precio final de venta se ingresa arriba. La merma y los porcentajes ajustan el costo y precio, pero no aumentan las cantidades descontadas del inventario.</p>
+  <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-xl bg-slate-950 p-4 text-white"><p className="text-xs">Costo completo estimado</p><p className="text-xl font-black">Q{costoTotalCombo.toFixed(2)}</p></div><div className="rounded-xl bg-orange-500 p-4 text-white"><p className="text-xs">Precio sugerido con IVA</p><p className="text-xl font-black">Q{precioSugeridoCombo.toFixed(2)}</p><button type="button" onClick={() => setPrecio(precioSugeridoCombo.toFixed(2))} className="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-orange-700">Usar como precio final</button></div></div><p className="text-xs text-slate-600">La merma se aplica al costo de todos los productos e insumos incluidos en la box, antes de sumar otros costos directos y preparación. El precio sugerido es orientativo; el precio final de venta se ingresa arriba. Estos porcentajes no aumentan las cantidades descontadas del inventario.</p>
 </div>}
 
 <textarea className="border border-slate-200 p-4 rounded-2xl outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 sm:col-span-2" placeholder="Descripción comercial: qué incluye, sabor, tamaño y condiciones" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
