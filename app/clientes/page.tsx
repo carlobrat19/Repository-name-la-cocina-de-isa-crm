@@ -107,6 +107,7 @@ export default function ClientesPage() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [formularioAbierto, setFormularioAbierto] = useState(false);
   const [buscar, setBuscar] = useState("");
+  const [soloConSaldo, setSoloConSaldo] = useState(false);
   const [canalFiltro, setCanalFiltro] = useState("Todos");
   const [estadoFiltro, setEstadoFiltro] = useState("Activos");
   const [fiscalFiltro, setFiscalFiltro] = useState("Todos");
@@ -122,7 +123,7 @@ export default function ClientesPage() {
 
   const cargar = useCallback(async () => {
     setLoading(true);
-    const [clientesRespuesta, direccionesRespuesta] = await Promise.all([
+    const [clientesRespuesta, direccionesRespuesta, saldosRespuesta] = await Promise.all([
       cargarTodasLasPaginas((inicio, fin) => supabase
         .from("clientes")
         .select("*")
@@ -138,12 +139,28 @@ export default function ClientesPage() {
         .order("created_at", { ascending: false })
         .order("id")
         .range(inicio, fin)),
+      cargarTodasLasPaginas((inicio, fin) => supabase
+        .from("pedidos")
+        .select("id, cliente_id, estado, saldo_pendiente")
+        .gt("saldo_pendiente", 0)
+        .not("cliente_id", "is", null)
+        .order("id")
+        .range(inicio, fin)),
     ]);
-    if (clientesRespuesta.error || direccionesRespuesta.error)
+    if (clientesRespuesta.error || direccionesRespuesta.error || saldosRespuesta.error) {
       alert(
-        `No se pudo cargar: ${(clientesRespuesta.error || direccionesRespuesta.error)?.message}`,
+        `No se pudo cargar: ${(clientesRespuesta.error || direccionesRespuesta.error || saldosRespuesta.error)?.message}`,
       );
-    setClientes((clientesRespuesta.data || []) as Cliente[]);
+      setLoading(false);
+      return;
+    }
+    const saldosPorCliente = new Map<string, number>();
+    for (const pedido of saldosRespuesta.data || []) {
+      if (!pedido.cliente_id || ["cancelado", "anulado"].includes(String(pedido.estado || "").trim().toLowerCase())) continue;
+      saldosPorCliente.set(pedido.cliente_id, (saldosPorCliente.get(pedido.cliente_id) || 0) + Number(pedido.saldo_pendiente || 0));
+    }
+    setClientes(((clientesRespuesta.data || []) as Cliente[])
+      .map((cliente) => ({ ...cliente, saldo: saldosPorCliente.get(cliente.id) || 0 })));
     const agrupadas: Record<string, Direccion[]> = {};
     for (const direccion of (direccionesRespuesta.data || []) as (Direccion & {
       cliente_id: string;
@@ -349,6 +366,7 @@ export default function ClientesPage() {
           (cliente as Cliente & { estado?: string }).estado || "Activo";
         return (
           texto.includes(buscar.toLowerCase()) &&
+          (!soloConSaldo || Number(cliente.saldo || 0) > 0) &&
           (canalFiltro === "Todos" || cliente.canal_origen === canalFiltro) &&
           (estadoFiltro === "Todos" ||
             (estadoFiltro === "Activos"
@@ -367,6 +385,7 @@ export default function ClientesPage() {
     [
       clientes,
       buscar,
+      soloConSaldo,
       canalFiltro,
       estadoFiltro,
       fiscalFiltro,
@@ -478,11 +497,16 @@ export default function ClientesPage() {
               {cumpleanerosEsteMes}
             </p>
           </div>
-          <div className="border-t border-slate-700 px-4 py-3 sm:border-l sm:border-t-0">
+          <button type="button" aria-pressed={soloConSaldo} onClick={() => {
+            setSoloConSaldo((actual) => !actual);
+            if (!soloConSaldo) { setBuscar(""); setCanalFiltro("Todos"); setEstadoFiltro("Todos"); setFiscalFiltro("Todos"); setCumpleFiltro("Todos"); }
+            document.getElementById("listado-clientes")?.scrollIntoView({ behavior: "smooth" });
+          }} className={`border-t border-slate-700 px-4 py-3 text-left transition hover:bg-white/10 sm:border-l sm:border-t-0 ${soloConSaldo ? "bg-white/10" : ""}`}>
             <p className="text-xs text-slate-300">Con saldo pendiente</p>
             <p className="text-xl font-black text-amber-300">{clientesConSaldo}</p>
             <p className="text-xs font-semibold text-amber-100">{moneda(saldoPorCobrar)}</p>
-          </div>
+            <p className="mt-1 text-[11px] text-amber-100">{soloConSaldo ? "Mostrar todos" : "Ver clientes"}</p>
+          </button>
         </div>
       </header>
       <div className="min-w-0">
@@ -622,7 +646,7 @@ export default function ClientesPage() {
           </button>
         </form>
         </div>}
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div id="listado-clientes" className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="space-y-3 border-b p-5">
             <label className="flex items-center gap-2 rounded-xl bg-slate-50 px-3">
               <Search size={18} className="text-slate-400" />
