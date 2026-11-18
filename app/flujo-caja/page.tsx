@@ -7,6 +7,7 @@ import { moneda } from "@/lib/crm";
 import { supabase } from "@/lib/supabase";
 import { cargarTodasLasPaginas } from "@/lib/cargar-paginas";
 import { exportarExcel } from "@/lib/exportar-excel";
+import { exportarFlujoCompleto } from "@/lib/exportar-flujo-completo";
 
 type Movimiento = { id: string; tipo: "Ingreso" | "Gasto" | "Transferencia"; categoria: string | null; descripcion: string | null; monto: number | string; fecha: string | null; cuenta: string | null; cuenta_id: string | null; cuenta_destino_id: string | null; metodo_pago: string | null; origen: string | null; origen_id: string | null; pedido_id: string | null; created_at: string | null };
 type Cuenta = { id: string; nombre: string; tipo: "Caja" | "Banco" | "POS" | "Tarjeta de crédito" | "Billetera digital"; saldo_inicial: number | string; fecha_saldo_inicial: string; activa: boolean; notas: string | null; sucursal_id: string | null };
@@ -27,6 +28,7 @@ export default function FlujoCajaPage() {
   const [edicion, setEdicion] = useState({ tipo: "Gasto" as Movimiento["tipo"], categoria: "", descripcion: "", monto: "", fecha: "", cuenta_id: "", cuenta_destino_id: "", metodo_pago: "Efectivo" });
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
   const [descargandoCuenta, setDescargandoCuenta] = useState<string | null>(null);
+  const [descargandoCompleto, setDescargandoCompleto] = useState(false);
 
   async function cargar() { setCargando(true); setError(""); const [movimientosRespuesta, cuentasRespuesta, facturasRespuesta] = await Promise.all([cargarTodasLasPaginas((inicio, fin) => supabase.from("movimientos_caja").select("id,tipo,categoria,descripcion,monto,fecha,cuenta,cuenta_id,cuenta_destino_id,metodo_pago,origen,origen_id,pedido_id,created_at").order("fecha", { ascending: false }).order("created_at", { ascending: false }).order("id").range(inicio, fin)), supabase.from("cuentas_financieras").select("id,nombre,tipo,saldo_inicial,fecha_saldo_inicial,activa,notas,sucursal_id").order("created_at"), cargarTodasLasPaginas((inicio, fin) => supabase.from("facturas_compra_lineas").select("factura_id,compra_ingrediente_id").not("compra_ingrediente_id", "is", null).order("id").range(inicio, fin))]); const consultaError = movimientosRespuesta.error || cuentasRespuesta.error; if (consultaError) { console.error(consultaError); setError("No se pudo cargar el flujo de caja."); } else { setMovimientos((movimientosRespuesta.data || []) as Movimiento[]); setCuentasData((cuentasRespuesta.data || []) as Cuenta[]); } if (!facturasRespuesta.error) setFacturasPorCompra(Object.fromEntries((facturasRespuesta.data || []).filter((item) => item.compra_ingrediente_id).map((item) => [item.compra_ingrediente_id, item.factura_id]))); setCargando(false); }
   useEffect(() => { const timer = window.setTimeout(() => void cargar(), 0); return () => window.clearTimeout(timer); }, []);
@@ -110,6 +112,15 @@ export default function FlujoCajaPage() {
     } catch (errorDescarga) { setError(`No se pudo completar el estado de cuenta: ${errorDescarga instanceof Error ? errorDescarga.message : "error desconocido"}`); }
     finally { setDescargandoCuenta(null); }
   }
+  async function descargarTodo() {
+    setDescargandoCompleto(true); setError(""); setAviso("");
+    try {
+      const resultado = await exportarFlujoCompleto();
+      setAviso(`Excel completo descargado: ${resultado.movimientos} movimientos y ${resultado.cuentas} cuentas.`);
+    } catch (errorDescarga) {
+      setError(`No se pudo descargar el Excel completo: ${errorDescarga instanceof Error ? errorDescarga.message : "error desconocido"}`);
+    } finally { setDescargandoCompleto(false); }
+  }
   const limpiar = () => { setPeriodo("Mes"); setDesde(""); setHasta(""); setTipoFiltro("Todos"); setCuentaFiltro("Todas"); setOrigenFiltro("Todos"); setBusqueda(""); };
 
   return <main className="min-h-screen bg-slate-100 px-4 py-7 sm:px-7 lg:px-10">
@@ -120,7 +131,7 @@ export default function FlujoCajaPage() {
 <h1 className="mt-2 text-4xl font-black text-slate-950">Flujo de caja</h1>
 <p className="mt-2 text-sm text-slate-600">Controla dinero recibido, gastos, compras de ingredientes y movimientos por cuenta o medio de pago.</p>
 </div>
-<button disabled={cargando} onClick={() => void cargar()} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-60">{cargando ? "Actualizando…" : "Actualizar"}</button>
+<div className="flex flex-wrap gap-2"><button type="button" disabled={descargandoCompleto || cargando} onClick={() => void descargarTodo()} className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white disabled:opacity-60">{descargandoCompleto ? "Preparando Excel…" : "Descargar todo en Excel"}</button><button disabled={cargando} onClick={() => void cargar()} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-60">{cargando ? "Actualizando…" : "Actualizar"}</button></div>
 </header>
     {(error || aviso) && <p className={`mb-5 rounded-xl p-4 text-sm font-semibold ${error ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>{error || aviso}</p>}
     <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
