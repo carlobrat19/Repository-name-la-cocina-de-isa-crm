@@ -5,10 +5,11 @@ import { supabase } from "@/lib/supabase";
 
 export type InsumoFactura = { id: string; nombre: string; unidad_base: "g" | "ml" | "unidad" };
 
-export default function CrearInsumoFactura({ descripcion, existentes, alCrear }: {
+export default function CrearInsumoFactura({ descripcion, existentes, alCrear, notaCreacion }: {
   descripcion: string;
   existentes: InsumoFactura[];
   alCrear: (insumo: InsumoFactura) => Promise<void> | void;
+  notaCreacion?: string;
 }) {
   const [abierto, setAbierto] = useState(false);
   const [nombre, setNombre] = useState("");
@@ -30,7 +31,7 @@ export default function CrearInsumoFactura({ descripcion, existentes, alCrear }:
       unidad_base: unidad,
       stock_actual: 0,
       costo_referencia: 0,
-      notas: `Creado al revisar artículo de factura: ${descripcion.trim()}`,
+      notas: notaCreacion || `Creado al revisar artículo de factura: ${descripcion.trim()}`,
     }).select("id,nombre,unidad_base").single();
     if (guardarError || !data) {
       setError(guardarError?.code === "23505" ? "Ese insumo ya existe. Actualiza el catálogo y selecciónalo." : guardarError?.message || "No se pudo crear el insumo.");

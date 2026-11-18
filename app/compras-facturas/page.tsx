@@ -11,6 +11,7 @@ import RevisarFactura from "@/components/compras-facturas/RevisarFactura";
 import CrearInsumoFactura from "@/components/compras-facturas/CrearInsumoFactura";
 import IngresarFacturaInventario from "@/components/compras-facturas/IngresarFacturaInventario";
 import PagoFacturaCompra, { registrarPagoFactura, type PagoFactura, type CuentaPagoFactura } from "@/components/compras-facturas/PagoFacturaCompra";
+import CompraDirecta from "@/components/compras-facturas/CompraDirecta";
 import type { FacturaPdfFel } from "@/lib/leer-pdf-fel";
 
 type Proveedor = { id: string; nombre: string; nit: string | null; contacto: string | null; telefono: string | null; correo: string | null };
@@ -50,7 +51,8 @@ export default function ComprasFacturasPage() {
   const [ingredientes, setIngredientes] = useState<Ingrediente[]>([]);
   const [compras, setCompras] = useState<Compra[]>([]);
   const [pagosFacturas, setPagosFacturas] = useState<PagoFactura[]>([]);
-  const [cuentasPago, setCuentasPago] = useState<CuentaPagoFactura[]>([]);
+  const [cuentasPago, setCuentasPago] = useState<(CuentaPagoFactura & { tipo: string })[]>([]);
+  const [pestana, setPestana] = useState<"facturas" | "compras">("facturas");
   const [equivalencias, setEquivalencias] = useState<Equivalencia[]>([]);
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -98,7 +100,7 @@ export default function ComprasFacturasPage() {
       supabase.from("compras_ingredientes").select("id,ingrediente_id,cantidad,total,created_at").eq("tipo", "compra").order("created_at", { ascending: false }).limit(500),
       supabase.from("equivalencias_proveedor_ingrediente").select("id,proveedor_id,descripcion,ingrediente_id"),
       supabase.from("pagos_facturas_compra").select("id,factura_id,monto,fecha,cuenta_id,metodo_pago,referencia").order("fecha", { ascending: false }).limit(2000),
-      supabase.from("cuentas_financieras").select("id,nombre,activa").order("nombre"),
+      supabase.from("cuentas_financieras").select("id,nombre,tipo,activa").order("nombre"),
     ]);
     const principal = proveedoresR.error || facturasR.error || lineasR.error || equivalenciasR.error || pagosR.error || cuentasR.error;
     if (principal) setError(`No se pudieron cargar las facturas: ${principal.message}`);
@@ -108,7 +110,7 @@ export default function ComprasFacturasPage() {
       setLineasGuardadas((lineasR.data || []) as LineaGuardada[]);
       setEquivalencias((equivalenciasR.data || []) as Equivalencia[]);
       setPagosFacturas((pagosR.data || []) as PagoFactura[]);
-      setCuentasPago((cuentasR.data || []) as CuentaPagoFactura[]);
+      setCuentasPago((cuentasR.data || []) as (CuentaPagoFactura & { tipo: string })[]);
     }
     if (ingredientesR.error || comprasR.error) setAviso("No tienes acceso al catálogo de ingredientes o a sus compras. Puedes documentar facturas, pero no vincularlas hasta tener ese permiso.");
     else { setIngredientes((ingredientesR.data || []) as Ingrediente[]); setCompras((comprasR.data || []) as Compra[]); }
@@ -329,6 +331,8 @@ export default function ComprasFacturasPage() {
 
   return <main className="min-h-screen bg-slate-100 px-4 py-7 sm:px-7 lg:px-10"><div className="mx-auto max-w-[1600px] space-y-6">
     <header className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[.22em] text-orange-600">Finanzas y control</p><h1 className="mt-2 text-4xl font-black text-slate-950">Compras y facturas</h1><p className="mt-2 text-sm text-slate-600">Documenta comprobantes y proveedores sin duplicar las compras que ya registras.</p></div><button type="button" onClick={() => void cargar()} disabled={cargando} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold"><RefreshCw size={16}/>{cargando ? "Actualizando…" : "Actualizar"}</button></header>
+    <div role="tablist" aria-label="Modo de compras" className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"><button type="button" role="tab" aria-selected={pestana === "facturas"} onClick={() => setPestana("facturas")} className={`rounded-xl px-5 py-3 text-sm font-bold ${pestana === "facturas" ? "bg-slate-950 text-white" : "text-slate-600"}`}>Facturas y comprobantes</button><button type="button" role="tab" aria-selected={pestana === "compras"} onClick={() => setPestana("compras")} className={`rounded-xl px-5 py-3 text-sm font-bold ${pestana === "compras" ? "bg-emerald-700 text-white" : "text-slate-600"}`}>Compras directas</button></div>
+    {pestana === "compras" ? <CompraDirecta usuarioId={usuarioId} proveedores={proveedores} ingredientes={ingredientes} cuentas={cuentasPago} alGuardar={cargar}/> : <>
     <nav aria-label="Opciones de Compras y facturas" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">{[
       { href: "#importar-zip", titulo: "Importar ZIP", detalle: "Facturas de la SAT" },
       { href: "#revisar-factura", titulo: "Revisar factura", detalle: "Vincular compras" },
@@ -377,5 +381,6 @@ export default function ComprasFacturasPage() {
     </div>
     <span id="historial-facturas" className="block scroll-mt-5"/>
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 p-5"><div><h2 className="text-xl font-black">Historial de facturas de compra</h2><p className="mt-1 text-sm text-slate-500">{filtradas.length} comprobantes · {dinero(totalFiltrado)} en el rango. Documentar no equivale a pagar.</p></div><FileText className="text-orange-500"/></div>{facturaEnlace && <div className="flex items-center justify-between bg-orange-50 px-4 py-2 text-xs font-bold text-orange-900"><span>Mostrando la factura vinculada a la compra.</span><button type="button" onClick={() => { setFacturaEnlace(""); window.history.replaceState(null, "", "/compras-facturas"); }} className="underline">Ver todas</button></div>}<div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4"><input aria-label="Buscar proveedor o factura" placeholder="Proveedor, NIT o factura" value={busqueda} onChange={(event) => setBusqueda(event.target.value)} className="rounded-xl border border-slate-200 p-3 text-sm"/><select aria-label="Filtrar proveedor" value={filtroProveedor} onChange={(event) => setFiltroProveedor(event.target.value)} className="rounded-xl border border-slate-200 bg-white p-3 text-sm"><option value="">Todos los proveedores</option>{proveedores.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select><input aria-label="Desde" type="date" value={desde} onChange={(event) => setDesde(event.target.value)} className="rounded-xl border border-slate-200 p-3 text-sm"/><input aria-label="Hasta" type="date" value={hasta} onChange={(event) => setHasta(event.target.value)} className="rounded-xl border border-slate-200 p-3 text-sm"/></div><div className="grid gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-4">{porProveedor.map((item) => <div key={item.nombre} className="rounded-xl bg-slate-50 p-3"><p className="text-xs font-bold text-slate-500">{item.nombre} · {item.cantidad} facturas</p><p className="mt-1 text-lg font-black">{dinero(item.total)}</p></div>)}</div><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-4">Fecha / factura</th><th className="p-4">Proveedor</th><th className="p-4">Categoría</th><th className="p-4">Vinculación</th><th className="p-4 text-right">Total</th><th className="p-4">Archivo</th></tr></thead><tbody>{filtradas.map((factura) => { const propias = lineasGuardadas.filter((linea) => linea.factura_id === factura.id); const vinculadas = propias.filter((linea) => linea.compra_ingrediente_id).length; return <tr key={factura.id} className="border-t border-slate-100"><td className="p-4"><b>{factura.numero || "Sin número"}</b><p className="text-xs text-slate-500">{factura.fecha}</p></td><td className="p-4">{proveedores.find((item) => item.id === factura.proveedor_id)?.nombre || "Proveedor"}</td><td className="p-4">{factura.categoria}</td><td className="p-4 text-xs">{propias.length} líneas · {vinculadas} compras vinculadas</td><td className="p-4 text-right font-black">{dinero(factura.total)}</td><td className="p-4">{factura.comprobante_path ? <button type="button" onClick={() => void abrirComprobante(factura.comprobante_path!)} className="font-bold text-orange-700 underline">Ver comprobante</button> : <span className="text-slate-400">Sin archivo</span>}</td></tr>; })}{!filtradas.length && <tr><td colSpan={6} className="p-8 text-center text-slate-500">Aún no hay facturas para estos filtros.</td></tr>}</tbody></table></div></section>
+  </>}
   </div></main>;
 }
